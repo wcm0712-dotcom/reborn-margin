@@ -956,3 +956,54 @@ input {
     transition: none !important;
   }
 }
+.field-save-btn {
+  flex: 0 0 auto;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 12px;
+  padding: 7px 9px;
+  background: linear-gradient(145deg, #ffffff, #f8fafc);
+  color: #475569;
+  font-size: 11px;
+  font-weight: 900;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.05);
+}
+
+.field-save-btn:active {
+  transform: scale(0.96);
+}
+
+.field-save-btn.saved {
+  background: linear-gradient(145deg, #ecfdf5, #d1fae5);
+  color: #047857;
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.box-size-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.box-size-btn {
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 15px;
+  padding: 10px 0;
+  background: linear-gradient(145deg, #ffffff, #f8fafc);
+  color: #334155;
+  font-size: 14px;
+  font-weight: 900;
+  box-shadow: 0 7px 16px rgba(15, 23, 42, 0.05);
+}
+
+.box-size-btn.active {
+  background: linear-gradient(145deg, #ecfdf5, #d1fae5);
+  color: #047857;
+  border-color: rgba(16, 185, 129, 0.45);
+  box-shadow: 0 9px 18px rgba(16, 185, 129, 0.12);
+}
+
+#boxSize {
+  cursor: default;
+  color: #047857;
+}
