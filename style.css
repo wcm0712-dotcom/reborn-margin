@@ -817,3 +817,29 @@ input {
     transition: none !important;
   }
 }
+.business-mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 6px;
+  border-radius: 20px;
+  background: rgba(248, 250, 252, 0.9);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+}
+
+.business-mode-btn {
+  border: 0;
+  border-radius: 15px;
+  padding: 12px 6px;
+  background: transparent;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.business-mode-btn.active {
+  background: linear-gradient(145deg, #fff1f5, #ffffff);
+  color: #be185d;
+  box-shadow: 0 8px 18px rgba(190, 24, 93, 0.1);
+}
