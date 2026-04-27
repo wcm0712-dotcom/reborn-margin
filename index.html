@@ -42,9 +42,7 @@
     <section class="intro">
       <div>
         <div class="eyebrow">📊 REBORN Margin Calculator</div>
-
         <h2>판매 전, 실제 마진을 정확하게 확인하세요.</h2>
-
         <p>
           원가·수량·판매가·박스비·배송비·수수료·부가세를 반영해
           실제 순이익과 마진율을 계산합니다. 저장 버튼을 누르면 다음 실행 시에도 값이 유지됩니다.
@@ -100,11 +98,7 @@
           </div>
 
           <div class="product-action-row">
-            <button
-              type="button"
-              id="clearProductSearchBtn"
-              class="small-action-btn secondary"
-            >
+            <button type="button" id="clearProductSearchBtn" class="small-action-btn secondary">
               검색 초기화
             </button>
           </div>
@@ -144,26 +138,24 @@
         </label>
 
         <label class="field">
+          <div class="field-title">박스비</div>
 
-          <label class="field">
-  <div class="field-title">박스비</div>
+          <div id="boxSizeOptions" class="box-size-row">
+            <button type="button" class="box-size-btn" data-size="대">대</button>
+            <button type="button" class="box-size-btn" data-size="중">중</button>
+            <button type="button" class="box-size-btn" data-size="소">소</button>
+          </div>
 
-  <div id="boxSizeOptions" class="box-size-row">
-    <button type="button" class="box-size-btn" data-size="대">대</button>
-    <button type="button" class="box-size-btn" data-size="중">중</button>
-    <button type="button" class="box-size-btn" data-size="소">소</button>
-  </div>
+          <div class="field-row">
+            <input id="boxFee" type="number" inputmode="decimal" value="0" readonly />
+            <input id="boxSize" type="hidden" value="" />
+            <span class="suffix">원</span>
+            <button type="button" id="changeBoxBtn" class="box-change-btn">변경</button>
+            <button type="button" class="field-save-btn" data-save="boxSize">저장</button>
+          </div>
 
-  <div class="field-row">
-    <input id="boxFee" type="number" inputmode="decimal" value="0" readonly />
-    <input id="boxSize" type="hidden" value="" />
-    <span class="suffix">원</span>
-    <button type="button" id="changeBoxBtn" class="box-change-btn">변경</button>
-    <button type="button" class="field-save-btn" data-save="boxSize">저장</button>
-  </div>
-
-  <div class="hint">대 480원 · 중 380원 · 소 250원 / 변경 버튼을 누르면 다시 선택할 수 있습니다.</div>
-</label>
+          <div class="hint">대 480원 · 중 380원 · 소 250원 / 변경 버튼을 누르면 다시 선택할 수 있습니다.</div>
+        </label>
 
         <label class="field">
           <div class="field-title">택배비</div>
