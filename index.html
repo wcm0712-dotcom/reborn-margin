@@ -10,7 +10,14 @@
   />
 
   <title>RE:BORN Margin Calculator</title>
-  <link rel="stylesheet" href="./style.css?v=reborn-fixed-box-02" />
+  <script>
+    (function () {
+      var css = document.createElement("link");
+      css.rel = "stylesheet";
+      css.href = "./style.css?v=" + Date.now();
+      document.head.appendChild(css);
+    })();
+  </script>
 </head>
 
 <body class="premium-app">
@@ -274,37 +281,12 @@
       REBORN Margin Calculator · 내부 업무용 계산 도구
     </div>
   </main>
-
-  <script src="./script.js?v=reborn-fixed-box-03"></script>
+  <script>
+    (function () {
+      var script = document.createElement("script");
+      script.src = "./script.js?v=" + Date.now();
+      document.body.appendChild(script);
+    })();
+  </script>
 </body>
 </html>
-
-
-/* ===== 자동반영/박스비 안전 보강 ===== */
-.box-field {
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-.box-field .suffix,
-#boxFee {
-  pointer-events: none;
-}
-
-#boxFee {
-  cursor: default;
-}
-
-input[type="number"] {
-  -moz-appearance: textfield;
-}
-
-input[type="number"]::-webkit-outer-spin-button,
-input[type="number"]::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-button {
-  -webkit-tap-highlight-color: transparent;
-}
