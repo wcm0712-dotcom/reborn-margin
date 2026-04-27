@@ -1,290 +1,232 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-  <style>
-  body {
-    background: black !important;
-  }
 
-  h1, h2, h3, p, span, strong, div {
-    <h2>디자인 반영 테스트입니다.</h2>
-  }
-</style>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <meta
-    name="description"
-    content="RE:BORN , 판매가, 배송비, 박스비, 쿠팡 수수료, 부가세, 선정산 패널티를 반영해 순이익과 마진율을 계산합니다."
-  />
+  <div class="badge">실시간 자동 계산</div>
+  <div class="ribbon-badge">RIBBON COMPANY</div>
+</div>
 
-  <title>RE:BORN Margin Calculator</title>
-  <link rel="stylesheet" href="./style.css?v=apple-final-20260427-01" />
-</head>
-
-<body class="premium-app">
-  <div id="rebornSplash">
-    <div class="splash-inner">
-      <div class="splash-mark"></div>
-      <div class="splash-title">RE:BORN</div>
-      <div class="splash-subtitle">Margin Calculator</div>
+    <div class="intro-pills">
+      <span>실시간 계산</span>
+      <span>모바일 최적화</span>
+      <span>저장 기능</span>
     </div>
   </div>
+</section>
 
-  <header>
-    <div class="nav">
-      <div class="brand">
-        <div class="logo" aria-label="RE:BORN 로고">
-          <span class="ribbon-icon"></span>
-        </div>
-        <div>
-          <h1>RE:BORN</h1>
-        </div>
-      </div>
+<section class="content">
+  <div class="panel">
 
-      <div class="badge">실시간 자동 계산</div>
-      <div class="ribbon-badge">RIBBON COMPANY</div>
+    <div class="business-mode-tabs" id="businessModeTabs">
+      <button type="button" class="business-mode-btn active" data-mode="본점">본점</button>
+      <button type="button" class="business-mode-btn" data-mode="대리점">대리점</button>
+      <button type="button" class="business-mode-btn" data-mode="대리점 공급가">대리점 공급가</button>
     </div>
-  </header>
 
-  <main>
-    <section class="intro">
-      <div>
-        <div class="eyebrow">📊 REBORN Margin Calculator</div>
-        <h2>판매 전, 실제 마진을 정확하게 확인하세요.</h2>
-        <p>
-          원가·수량·판매가·박스비·배송비·수수료·부가세를 반영해
-          실제 순이익과 마진율을 계산합니다. 저장 버튼을 누르면 다음 실행 시에도 값이 유지됩니다.
-        </p>
-
-        <div class="intro-pills">
-          <span>실시간 계산</span>
-          <span>모바일 최적화</span>
-          <span>저장 기능</span>
-        </div>
-      </div>
-    </section>
-
-    <section class="content">
-      <div class="panel">
-
-        <div class="business-mode-tabs" id="businessModeTabs">
-          <button type="button" class="business-mode-btn active" data-mode="본점">본점</button>
-          <button type="button" class="business-mode-btn" data-mode="대리점">대리점</button>
-          <button type="button" class="business-mode-btn" data-mode="대리점 공급가">대리점 공급가</button>
-        </div>
-
-        <div class="panel-top">
-          <h3>입력값</h3>
-        </div>
-
-        <p class="panel-desc">
-          상품을 선택하거나 값을 입력하면 자동 계산됩니다. 저장 버튼을 누르면 다음 실행 시 유지됩니다.
-        </p>
-
-        <div class="product-tools">
-          <div class="product-search-box">
-            <span class="search-icon">🔍</span>
-            <input
-              id="productSearch"
-              class="product-search"
-              type="text"
-              placeholder="상품명을 입력해 검색하세요"
-              autocomplete="off"
-              aria-label="상품명 검색"
-            />
-          </div>
-
-          <div class="product-select-row">
-            <div class="product-picker-wrap">
-              <select id="productSelect" class="product-picker" aria-label="품목 선택">
-                <option value="">품목 선택</option>
-              </select>
-            </div>
-
-            <button
-              type="button"
-              id="addFavoriteBtn"
-              class="favorite-add-btn"
-              aria-label="즐겨찾기 추가"
-              title="선택한 상품 즐겨찾기 추가"
-            >
-              ☆
-            </button>
-          </div>
-
-          <div class="product-action-row">
-            <button type="button" id="clearProductSearchBtn" class="small-action-btn secondary">
-              검색 초기화
-            </button>
-          </div>
-
-          <div id="favoriteList" class="quick-list favorite-area"></div>
-          <div id="recentList" class="quick-list recent-area"></div>
-        </div>
-
-        <label class="field">
-          <div class="field-title">원가(낱개)</div>
-          <div class="field-row">
-            <input id="unitCost" type="number" inputmode="decimal" value="0" />
-            <span class="suffix">원</span>
-            <button type="button" class="field-save-btn" data-save="unitCost">저장</button>
-          </div>
-          <div class="hint">상품 1개당 매입 원가입니다.</div>
-        </label>
-
-        <label class="field">
-          <div class="field-title">판매수량</div>
-          <div class="field-row">
-            <input id="quantity" type="number" inputmode="decimal" value="0" />
-            <span class="suffix">개</span>
-            <button type="button" class="field-save-btn" data-save="quantity">저장</button>
-          </div>
-          <div class="hint">한 주문에 판매하는 총 수량입니다.</div>
-        </label>
-
-        <label class="field">
-          <div class="field-title">판매가</div>
-          <div class="field-row">
-            <input id="salePrice" type="number" inputmode="decimal" value="0" />
-            <span class="suffix">원</span>
-            <button type="button" class="field-save-btn" data-save="salePrice">저장</button>
-          </div>
-          <div class="hint">쿠팡에 등록된 최종 판매가입니다.</div>
-        </label>
-
-        <label class="field">
-          <div class="field-title">박스비</div>
-
-          <div id="boxSizeOptions" class="box-size-row">
-            <button type="button" class="box-size-btn" data-size="대">대</button>
-            <button type="button" class="box-size-btn" data-size="중">중</button>
-            <button type="button" class="box-size-btn" data-size="소">소</button>
-          </div>
-
-          <div class="field-row">
-            <input id="boxFee" type="number" inputmode="decimal" value="0" readonly />
-            <input id="boxSize" type="hidden" value="" />
-            <span class="suffix">원</span>
-            <button type="button" id="changeBoxBtn" class="box-change-btn">변경</button>
-            <button type="button" class="field-save-btn" data-save="boxSize">저장</button>
-          </div>
-
-          <div class="hint">대 480원 · 중 380원 · 소 250원 / 변경 버튼을 누르면 다시 선택할 수 있습니다.</div>
-        </label>
-
-        <label class="field">
-          <div class="field-title">택배비</div>
-          <div class="field-row">
-            <input id="shippingFee" type="number" inputmode="decimal" value="2400" />
-            <span class="suffix">원</span>
-            <button type="button" class="field-save-btn" data-save="shippingFee">저장</button>
-          </div>
-          <div class="hint">주문 1건에 들어가는 총 배송비입니다.</div>
-        </label>
-
-        <label class="field">
-          <div class="field-title">쿠팡 수수료율</div>
-          <div class="field-row">
-            <input id="coupangFeeRate" type="number" inputmode="decimal" value="12" />
-            <span class="suffix">%</span>
-            <button type="button" class="field-save-btn" data-save="coupangFeeRate">저장</button>
-          </div>
-          <div class="hint">판매가 기준으로 차감되는 수수료율입니다.</div>
-        </label>
-
-        <label class="field">
-          <div class="field-title">부가세율</div>
-          <div class="field-row">
-            <input id="vatRate" type="number" inputmode="decimal" value="10" />
-            <span class="suffix">%</span>
-            <button type="button" class="field-save-btn" data-save="vatRate">저장</button>
-          </div>
-          <div class="hint">부가세를 제외하고 싶으면 0을 입력하세요.</div>
-        </label>
-
-        <label class="field">
-          <div class="field-title">선정산 패널티율</div>
-          <div class="field-row">
-            <input id="earlySettlementRate" type="number" inputmode="decimal" value="1.2" />
-            <span class="suffix">%</span>
-            <button type="button" class="field-save-btn" data-save="earlySettlementRate">저장</button>
-          </div>
-          <div class="hint">선정산 이용 시 적용되는 차감률입니다.</div>
-        </label>
-      </div>
-
-      <div class="panel">
-        <h3>자동 계산 결과</h3>
-
-        <p class="panel-desc">
-          비용 항목별로 나누어 마진 구조를 확인할 수 있습니다.
-        </p>
-
-        <div class="results">
-          <div class="result-card">
-            <span>총원가</span>
-            <strong id="totalProductCost">0원</strong>
-            <p>낱개 원가 × 판매수량</p>
-          </div>
-
-          <div class="result-card">
-            <span>박스비</span>
-            <strong id="boxFeeResult">0원</strong>
-            <p>선택한 박스 크기 기준</p>
-          </div>
-
-          <div class="result-card">
-            <span>쿠팡수수료</span>
-            <strong id="coupangFee">0원</strong>
-            <p>판매가 × 쿠팡 수수료율</p>
-          </div>
-
-          <div class="result-card">
-            <span>선정산 패널티</span>
-            <strong id="earlySettlementFee">0원</strong>
-            <p>판매가 × 선정산 패널티율</p>
-          </div>
-
-          <div class="result-card">
-            <span>부가세</span>
-            <strong id="vat">0원</strong>
-            <p>판매가 × 부가세율</p>
-          </div>
-
-          <div class="result-card">
-            <span>총 비용</span>
-            <strong id="totalCost">0원</strong>
-            <p>원가 + 박스비 + 배송비 + 수수료 + 세금</p>
-          </div>
-
-          <div class="result-card highlight" id="profitCard">
-            <span>순이익</span>
-            <strong id="profit">0원</strong>
-            <p>판매가 - 총 비용</p>
-          </div>
-
-          <div class="result-card highlight" id="marginCard">
-            <span>마진율</span>
-            <strong id="marginRate">0.00%</strong>
-            <p>순이익 ÷ 판매가</p>
-          </div>
-        </div>
-
-        <div class="tips">
-          <strong>실무 체크 포인트</strong>
-          · 순이익이 0원 이하이면 판매가를 올리거나 배송비 구조를 조정해야 합니다.<br />
-          · 박스비는 대/중/소 선택값으로 자동 계산됩니다.<br />
-          · 자주 쓰는 입력값은 저장 버튼을 눌러 유지할 수 있습니다.
-        </div>
-      </div>
-    </section>
-
-    <div class="footer-note">
-      REBORN Margin Calculator · 내부 업무용 계산 도구
+    <div class="panel-top">
+      <h3>입력값</h3>
     </div>
-  </main>
 
-  <script src="./script.js?v=apple-final-20260427-01"></script>
-</body>
-</html>
+    <p class="panel-desc">
+      상품을 선택하거나 값을 입력하면 자동 계산됩니다. 저장 버튼을 누르면 다음 실행 시 유지됩니다.
+    </p>
+
+    <div class="product-tools">
+      <div class="product-search-box">
+        <span class="search-icon">🔍</span>
+        <input
+          id="productSearch"
+          class="product-search"
+          type="text"
+          placeholder="상품명을 입력해 검색하세요"
+          autocomplete="off"
+          aria-label="상품명 검색"
+        />
+      </div>
+
+      <div class="product-select-row">
+        <div class="product-picker-wrap">
+          <select id="productSelect" class="product-picker" aria-label="품목 선택">
+            <option value="">품목 선택</option>
+          </select>
+        </div>
+
+        <button
+          type="button"
+          id="addFavoriteBtn"
+          class="favorite-add-btn"
+          aria-label="즐겨찾기 추가"
+          title="선택한 상품 즐겨찾기 추가"
+        >
+          ☆
+        </button>
+      </div>
+
+      <div class="product-action-row">
+        <button type="button" id="clearProductSearchBtn" class="small-action-btn secondary">
+          검색 초기화
+        </button>
+      </div>
+
+      <div id="favoriteList" class="quick-list favorite-area"></div>
+      <div id="recentList" class="quick-list recent-area"></div>
+    </div>
+
+    <label class="field">
+      <div class="field-title">원가(낱개)</div>
+      <div class="field-row">
+        <input id="unitCost" type="number" inputmode="decimal" value="0" />
+        <span class="suffix">원</span>
+        <button type="button" class="field-save-btn" data-save="unitCost">저장</button>
+      </div>
+      <div class="hint">상품 1개당 매입 원가입니다.</div>
+    </label>
+
+    <label class="field">
+      <div class="field-title">판매수량</div>
+      <div class="field-row">
+        <input id="quantity" type="number" inputmode="decimal" value="0" />
+        <span class="suffix">개</span>
+        <button type="button" class="field-save-btn" data-save="quantity">저장</button>
+      </div>
+      <div class="hint">한 주문에 판매하는 총 수량입니다.</div>
+    </label>
+
+    <label class="field">
+      <div class="field-title">판매가</div>
+      <div class="field-row">
+        <input id="salePrice" type="number" inputmode="decimal" value="0" />
+        <span class="suffix">원</span>
+        <button type="button" class="field-save-btn" data-save="salePrice">저장</button>
+      </div>
+      <div class="hint">쿠팡에 등록된 최종 판매가입니다.</div>
+    </label>
+
+    <label class="field">
+      <div class="field-title">박스비</div>
+
+      <div id="boxSizeOptions" class="box-size-row">
+        <button type="button" class="box-size-btn" data-size="대">대</button>
+        <button type="button" class="box-size-btn" data-size="중">중</button>
+        <button type="button" class="box-size-btn" data-size="소">소</button>
+      </div>
+
+      <div class="field-row">
+        <input id="boxFee" type="number" inputmode="decimal" value="0" readonly />
+        <input id="boxSize" type="hidden" value="" />
+        <span class="suffix">원</span>
+        <button type="button" id="changeBoxBtn" class="box-change-btn">변경</button>
+        <button type="button" class="field-save-btn" data-save="boxSize">저장</button>
+      </div>
+
+      <div class="hint">대 480원 · 중 380원 · 소 250원 / 변경 버튼을 누르면 다시 선택할 수 있습니다.</div>
+    </label>
+
+    <label class="field">
+      <div class="field-title">택배비</div>
+      <div class="field-row">
+        <input id="shippingFee" type="number" inputmode="decimal" value="2400" />
+        <span class="suffix">원</span>
+        <button type="button" class="field-save-btn" data-save="shippingFee">저장</button>
+      </div>
+      <div class="hint">주문 1건에 들어가는 총 배송비입니다.</div>
+    </label>
+
+    <label class="field">
+      <div class="field-title">쿠팡 수수료율</div>
+      <div class="field-row">
+        <input id="coupangFeeRate" type="number" inputmode="decimal" value="12" />
+        <span class="suffix">%</span>
+        <button type="button" class="field-save-btn" data-save="coupangFeeRate">저장</button>
+      </div>
+      <div class="hint">판매가 기준으로 차감되는 수수료율입니다.</div>
+    </label>
+
+    <label class="field">
+      <div class="field-title">부가세율</div>
+      <div class="field-row">
+        <input id="vatRate" type="number" inputmode="decimal" value="10" />
+        <span class="suffix">%</span>
+        <button type="button" class="field-save-btn" data-save="vatRate">저장</button>
+      </div>
+      <div class="hint">부가세를 제외하고 싶으면 0을 입력하세요.</div>
+    </label>
+
+    <label class="field">
+      <div class="field-title">선정산 패널티율</div>
+      <div class="field-row">
+        <input id="earlySettlementRate" type="number" inputmode="decimal" value="1.2" />
+        <span class="suffix">%</span>
+        <button type="button" class="field-save-btn" data-save="earlySettlementRate">저장</button>
+      </div>
+      <div class="hint">선정산 이용 시 적용되는 차감률입니다.</div>
+    </label>
+  </div>
+
+  <div class="panel">
+    <h3>자동 계산 결과</h3>
+
+    <p class="panel-desc">
+      비용 항목별로 나누어 마진 구조를 확인할 수 있습니다.
+    </p>
+
+    <div class="results">
+      <div class="result-card">
+        <span>총원가</span>
+        <strong id="totalProductCost">0원</strong>
+        <p>낱개 원가 × 판매수량</p>
+      </div>
+
+      <div class="result-card">
+        <span>박스비</span>
+        <strong id="boxFeeResult">0원</strong>
+        <p>선택한 박스 크기 기준</p>
+      </div>
+
+      <div class="result-card">
+        <span>쿠팡수수료</span>
+        <strong id="coupangFee">0원</strong>
+        <p>판매가 × 쿠팡 수수료율</p>
+      </div>
+
+      <div class="result-card">
+        <span>선정산 패널티</span>
+        <strong id="earlySettlementFee">0원</strong>
+        <p>판매가 × 선정산 패널티율</p>
+      </div>
+
+      <div class="result-card">
+        <span>부가세</span>
+        <strong id="vat">0원</strong>
+        <p>판매가 × 부가세율</p>
+      </div>
+
+      <div class="result-card">
+        <span>총 비용</span>
+        <strong id="totalCost">0원</strong>
+        <p>원가 + 박스비 + 배송비 + 수수료 + 세금</p>
+      </div>
+
+      <div class="result-card highlight" id="profitCard">
+        <span>순이익</span>
+        <strong id="profit">0원</strong>
+        <p>판매가 - 총 비용</p>
+      </div>
+
+      <div class="result-card highlight" id="marginCard">
+        <span>마진율</span>
+        <strong id="marginRate">0.00%</strong>
+        <p>순이익 ÷ 판매가</p>
+      </div>
+    </div>
+
+    <div class="tips">
+      <strong>실무 체크 포인트</strong>
+      · 순이익이 0원 이하이면 판매가를 올리거나 배송비 구조를 조정해야 합니다.<br />
+      · 박스비는 대/중/소 선택값으로 자동 계산됩니다.<br />
+      · 자주 쓰는 입력값은 저장 버튼을 눌러 유지할 수 있습니다.
+    </div>
+  </div>
+</section>
+
+<div class="footer-note">
+  REBORN Margin Calculator · 내부 업무용 계산 도구
+</div>
