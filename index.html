@@ -3,17 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <meta
-    name="description"
-    content="RE:BORN 전용 쿠팡 판매 마진 계산기. 원가, 판매가, 배송비, 박스비, 쿠팡 수수료, 부가세, 선정산 패널티를 반영해 순이익과 마진율을 계산합니다."
-  />
-
-  <title>RE:BORN Margin Calculator</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta name="description" content="RE:BORN 전용 쿠팡 판매 마진 계산기. 원가, 판매가, 배송비, 박스비, 쿠팡 수수료, 부가세, 선정산 패널티를 반영해 순이익과 마진율을 계산합니다." />
+  <title>RE:BORN Margin Calculator · Theme Final</title>
+  <script>
+    (function () {
+      var saved = localStorage.getItem("reborn_theme_mode") || "dark";
+      var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      var resolved = saved === "auto" ? (prefersDark ? "dark" : "light") : saved;
+      document.documentElement.dataset.theme = resolved;
+      document.documentElement.dataset.themeMode = saved;
+    })();
+  </script>
+  <link rel="stylesheet" href="./style.css" />
 </head>
-
-<body class="premium-app">
+<body class="premium-app reborn-polished">
   <div id="rebornSplash">
     <div class="splash-inner">
       <div class="splash-mark"></div>
@@ -32,33 +35,66 @@
           <h1>RE:BORN</h1>
         </div>
       </div>
+      <nav class="mini-nav" aria-label="계산기 주요 기능">
+        <a href="#inputs">입력</a>
+        <a href="#results">결과</a>
+        <a href="#checks">체크</a>
+      </nav>
+
+      <div class="theme-switcher" aria-label="화면 모드 선택">
+        <button type="button" class="theme-btn active" data-theme-choice="dark" aria-pressed="true">다크</button>
+        <button type="button" class="theme-btn" data-theme-choice="light" aria-pressed="false">라이트</button>
+        <button type="button" class="theme-btn" data-theme-choice="auto" aria-pressed="false">자동</button>
+      </div>
 
       <div class="badge">실시간 자동 계산</div>
-      <div class="ribbon-badge">RIBBON COMPANY</div>
     </div>
   </header>
 
   <main>
-    <section class="intro">
+    <section class="intro hero-watchlike">
       <div>
-        <div class="eyebrow">📊 REBORN Margin Calculator</div>
-        <h2>판매 전, 실제 마진을 정확하게 확인하세요.</h2>
+        <div class="eyebrow"><span></span> RE:BORN Margin Studio</div>
+        <h2>판매 전, 마진의 흐름을 한눈에.</h2>
         <p>
-          원가·수량·판매가·박스비·배송비·수수료·부가세를 반영해
-          실제 순이익과 마진율을 계산합니다. 저장 버튼을 누르면 다음 실행 시에도 값이 유지됩니다.
+          원가·판매가·배송비·수수료·부가세·선정산 패널티를 한 화면에서 정리해
+          실제 순이익과 마진율을 빠르게 확인하는 내부 업무용 계산 도구입니다.
         </p>
 
+        <div class="hero-actions" aria-label="빠른 안내">
+          <a href="#inputs" class="hero-link primary">바로 계산하기</a>
+          <a href="#results" class="hero-link">결과 보기</a>
+        </div>
+
         <div class="intro-pills">
-          <span>실시간 계산</span>
-          <span>모바일 최적화</span>
-          <span>저장 기능</span>
+          <span>Live Calculation</span>
+          <span>Saved Inputs</span>
+          <span>Mobile Ready</span>
+        </div>
+      </div>
+
+      <div class="hero-device" aria-hidden="true">
+        <div class="device-card main-metric">
+          <span>순이익</span>
+          <strong id="heroProfitMirror">자동 계산</strong>
+        </div>
+        <div class="device-orbit orbit-one"></div>
+        <div class="device-orbit orbit-two"></div>
+        <div class="device-screen">
+          <div class="screen-topline"></div>
+          <div class="screen-ring"><span></span></div>
+          <div class="screen-copy">Margin<br />Control</div>
+          <div class="screen-bars"><i></i><i></i><i></i></div>
+        </div>
+        <div class="device-card sub-metric">
+          <span>마진율</span>
+          <strong id="heroMarginMirror">0.00%</strong>
         </div>
       </div>
     </section>
 
     <section class="content">
-      <div class="panel">
-
+      <div class="panel input-panel" id="inputs">
         <div class="business-mode-tabs" id="businessModeTabs">
           <button type="button" class="business-mode-btn active" data-mode="본점">본점</button>
           <button type="button" class="business-mode-btn" data-mode="대리점">대리점</button>
@@ -69,21 +105,19 @@
           <h3>입력값</h3>
         </div>
 
-        <p class="panel-desc">
-          상품을 선택하거나 값을 입력하면 자동 계산됩니다. 저장 버튼을 누르면 다음 실행 시 유지됩니다.
-        </p>
+        <p class="panel-desc">상품을 선택하거나 값을 입력하면 자동 계산됩니다. 저장 버튼을 누르면 다음 실행 시 유지됩니다.</p>
 
-        <div class="product-tools">
+        <div class="input-helper-bar" aria-label="빠른 작업">
+          <button type="button" id="restoreDefaultsBtn" class="helper-action-btn">기본값 복원</button>
+          <button type="button" id="clearInputsBtn" class="helper-action-btn">입력 초기화</button>
+          <button type="button" id="jumpResultsBtn" class="helper-action-btn dark">결과 보기</button>
+        </div>
+
+        <div class="product-tools" aria-label="상품 선택 영역">
+          <div class="section-label product-label"><span>상품 선택</span><small>검색 · 품목 · 즐겨찾기</small></div>
           <div class="product-search-box">
             <span class="search-icon">🔍</span>
-            <input
-              id="productSearch"
-              class="product-search"
-              type="text"
-              placeholder="상품명을 입력해 검색하세요"
-              autocomplete="off"
-              aria-label="상품명 검색"
-            />
+            <input id="productSearch" class="product-search" type="text" placeholder="상품명을 입력해 검색하세요" autocomplete="off" aria-label="상품명 검색" />
           </div>
 
           <div class="product-select-row">
@@ -92,27 +126,18 @@
                 <option value="">품목 선택</option>
               </select>
             </div>
-
-            <button
-              type="button"
-              id="addFavoriteBtn"
-              class="favorite-add-btn"
-              aria-label="즐겨찾기 추가"
-              title="선택한 상품 즐겨찾기 추가"
-            >
-              ☆
-            </button>
+            <button type="button" id="addFavoriteBtn" class="favorite-add-btn" aria-label="즐겨찾기 추가" title="선택한 상품 즐겨찾기 추가">☆</button>
           </div>
 
           <div class="product-action-row">
-            <button type="button" id="clearProductSearchBtn" class="small-action-btn secondary">
-              검색 초기화
-            </button>
+            <button type="button" id="clearProductSearchBtn" class="small-action-btn secondary">검색 초기화</button>
           </div>
 
           <div id="favoriteList" class="quick-list favorite-area"></div>
           <div id="recentList" class="quick-list recent-area"></div>
         </div>
+
+        <div class="section-label input-label"><span>계산 입력</span><small>원가 · 수량 · 비용</small></div>
 
         <label class="field">
           <div class="field-title">원가(낱개)</div>
@@ -144,15 +169,13 @@
           <div class="hint">쿠팡에 등록된 최종 판매가입니다.</div>
         </label>
 
-        <label class="field">
+        <div class="field box-field" role="group" aria-label="박스비">
           <div class="field-title">박스비</div>
-
           <div id="boxSizeOptions" class="box-size-row">
             <button type="button" class="box-size-btn" data-size="대">대</button>
             <button type="button" class="box-size-btn" data-size="중">중</button>
             <button type="button" class="box-size-btn" data-size="소">소</button>
           </div>
-
           <div class="field-row">
             <input id="boxFee" type="number" inputmode="decimal" value="0" readonly />
             <input id="boxSize" type="hidden" value="" />
@@ -160,9 +183,8 @@
             <button type="button" id="changeBoxBtn" class="box-change-btn">변경</button>
             <button type="button" class="field-save-btn" data-save="boxSize">저장</button>
           </div>
-
           <div class="hint">대 480원 · 중 380원 · 소 250원 / 변경 버튼을 누르면 다시 선택할 수 있습니다.</div>
-        </label>
+        </div>
 
         <label class="field">
           <div class="field-title">택배비</div>
@@ -205,77 +227,62 @@
         </label>
       </div>
 
-      <div class="panel">
+      <div class="panel result-panel" id="results">
+        <div class="panel-kicker result-kicker">Summary</div>
         <h3>자동 계산 결과</h3>
-
-        <p class="panel-desc">
-          비용 항목별로 나누어 마진 구조를 확인할 수 있습니다.
-        </p>
-
+        <p class="panel-desc">비용 항목별로 나누어 마진 구조를 확인할 수 있습니다.</p>
+        <div class="result-status-line" aria-live="polite">
+          <span id="profitStatusLabel" class="idle">대기</span>
+          <strong id="quickDecision" class="idle">원가·수량·판매가 입력 후 자동 판단됩니다.</strong>
+        </div>
         <div class="results">
-          <div class="result-card">
-            <span>총원가</span>
-            <strong id="totalProductCost">0원</strong>
-            <p>낱개 원가 × 판매수량</p>
-          </div>
-
-          <div class="result-card">
-            <span>박스비</span>
-            <strong id="boxFeeResult">0원</strong>
-            <p>선택한 박스 크기 기준</p>
-          </div>
-
-          <div class="result-card">
-            <span>쿠팡수수료</span>
-            <strong id="coupangFee">0원</strong>
-            <p>판매가 × 쿠팡 수수료율</p>
-          </div>
-
-          <div class="result-card">
-            <span>선정산 패널티</span>
-            <strong id="earlySettlementFee">0원</strong>
-            <p>판매가 × 선정산 패널티율</p>
-          </div>
-
-          <div class="result-card">
-            <span>부가세</span>
-            <strong id="vat">0원</strong>
-            <p>판매가 × 부가세율</p>
-          </div>
-
-          <div class="result-card">
-            <span>총 비용</span>
-            <strong id="totalCost">0원</strong>
-            <p>원가 + 박스비 + 배송비 + 수수료 + 세금</p>
-          </div>
-
-          <div class="result-card highlight" id="profitCard">
-            <span>순이익</span>
-            <strong id="profit">0원</strong>
-            <p>판매가 - 총 비용</p>
-          </div>
-
-          <div class="result-card highlight" id="marginCard">
-            <span>마진율</span>
-            <strong id="marginRate">0.00%</strong>
-            <p>순이익 ÷ 판매가</p>
-          </div>
+          <div class="result-card"><span>총원가</span><strong id="totalProductCost">0원</strong><p>낱개 원가 × 판매수량</p></div>
+          <div class="result-card"><span>박스비</span><strong id="boxFeeResult">0원</strong><p>선택한 박스 크기 기준</p></div>
+          <div class="result-card"><span>쿠팡수수료</span><strong id="coupangFee">0원</strong><p>판매가 × 쿠팡 수수료율</p></div>
+          <div class="result-card"><span>선정산 패널티</span><strong id="earlySettlementFee">0원</strong><p>판매가 × 선정산 패널티율</p></div>
+          <div class="result-card"><span>부가세</span><strong id="vat">0원</strong><p>판매가 × 부가세율</p></div>
+          <div class="result-card"><span>총 비용</span><strong id="totalCost">0원</strong><p>원가 + 박스비 + 배송비 + 수수료 + 세금</p></div>
+          <div class="result-card highlight" id="profitCard"><span>순이익</span><strong id="profit">0원</strong><p>판매가 - 총 비용</p></div>
+          <div class="result-card highlight" id="marginCard"><span>마진율</span><strong id="marginRate">0.00%</strong><p>순이익 ÷ 판매가</p></div>
+          <div class="result-card"><span>손익분기 판매가</span><strong id="breakEvenPrice">0원</strong><p>이 가격보다 낮으면 손실 가능성</p></div>
+          <div class="result-card"><span>마진 10% 권장가</span><strong id="targetSalePrice">0원</strong><p>안전 마진을 보고 정하는 기준</p></div>
         </div>
 
-        <div class="tips">
-          <strong>실무 체크 포인트</strong>
-          · 순이익이 0원 이하이면 판매가를 올리거나 배송비 구조를 조정해야 합니다.<br />
-          · 박스비는 대/중/소 선택값으로 자동 계산됩니다.<br />
-          · 자주 쓰는 입력값은 저장 버튼을 눌러 유지할 수 있습니다.
+        <div class="tips" id="checks">
+          <div class="tips-head">
+            <strong>실무 체크 포인트</strong>
+            <span>Decision guide</span>
+          </div>
+          <ul class="check-list">
+            <li>순이익이 0원 이하이면 손익분기 판매가와 권장가를 먼저 확인하십시오.</li>
+            <li>자주 쓰는 상품은 즐겨찾기와 최근 사용 목록으로 빠르게 다시 불러올 수 있습니다.</li>
+            <li>박스비는 변경 버튼을 눌렀을 때만 대/중/소가 다시 나타납니다.</li>
+          </ul>
+        </div>
+
+        <div class="insight-grid" aria-label="운영 판단 보조 카드">
+          <div class="insight-card primary">
+            <span>판단 기준</span>
+            <strong>자동 판단 표시</strong>
+            <p>손실·주의·양호 상태를 결과 상단에서 바로 확인할 수 있습니다.</p>
+          </div>
+          <div class="insight-card">
+            <span>운영 기준</span>
+            <strong>반복 상품은 최근 사용</strong>
+            <p>상품을 선택하면 최근 사용 목록에 남아 다음 계산 때 빠르게 불러올 수 있습니다.</p>
+          </div>
+          <div class="insight-card">
+            <span>비용 체크</span>
+            <strong>손익분기 확인</strong>
+            <p>판매가를 정할 때 손익분기 판매가를 먼저 보면 가격 실수를 줄일 수 있습니다.</p>
+          </div>
         </div>
       </div>
     </section>
 
-    <div class="footer-note">
-      REBORN Margin Calculator · 내부 업무용 계산 도구
-    </div>
+    <div class="footer-note">REBORN Margin Calculator · 내부 업무용 계산 도구</div>
   </main>
 
-  <script src="script.js"></script>
+  <script src="./script.js"></script>
 </body>
 </html>
