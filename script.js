@@ -206,4 +206,28 @@ function init() {
   calculate();
 }
 
-document.addEventListener("DOMContentLoaded", init);
+function hideSplash() {
+  const splash = document.getElementById("rebornSplash");
+
+  if (!splash) return;
+
+  setTimeout(() => {
+    splash.classList.add("hide");
+
+    setTimeout(() => {
+      if (splash.parentNode) {
+        splash.parentNode.removeChild(splash);
+      }
+    }, 400);
+  }, 1000);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  hideSplash();
+
+  try {
+    init();
+  } catch (error) {
+    console.error("RE:BORN 초기화 오류:", error);
+  }
+});
