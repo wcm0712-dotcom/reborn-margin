@@ -54,7 +54,6 @@ body {
   overflow-x: hidden;
 }
 
-/* 은은한 전체 패턴 */
 body::before {
   content: "";
   position: fixed;
@@ -69,7 +68,6 @@ body::before {
   mask-image: linear-gradient(180deg, rgba(0,0,0,0.72), rgba(0,0,0,0.16));
 }
 
-/* 부드러운 빛 번짐 */
 body::after {
   content: "";
   position: fixed;
@@ -103,31 +101,51 @@ button:active {
   transform: scale(0.975);
 }
 
-/* 상단 브랜드 영역 */
+/* =========================
+   APPLE-LIKE PREMIUM HEADER
+========================= */
+
 header {
   position: sticky;
   top: 0;
-  z-index: 10;
-  background:
-    radial-gradient(circle at 12% 0%, rgba(217, 196, 223, 0.58), transparent 34%),
-    radial-gradient(circle at 86% 10%, rgba(238, 179, 198, 0.34), transparent 35%),
-    linear-gradient(135deg, rgba(250, 244, 249, 0.94), rgba(255, 250, 252, 0.86));
-  border-bottom: 1px solid rgba(217, 196, 223, 0.58);
-  backdrop-filter: blur(24px);
-  box-shadow: 0 8px 26px rgba(54, 42, 48, 0.055);
+  z-index: 100;
   overflow: hidden;
+
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 250, 253, 0.54)),
+    radial-gradient(circle at 4% 0%, rgba(217, 196, 223, 0.48), transparent 32%),
+    radial-gradient(circle at 78% 0%, rgba(238, 179, 198, 0.24), transparent 34%);
+  backdrop-filter: blur(28px) saturate(165%);
+  -webkit-backdrop-filter: blur(28px) saturate(165%);
+
+  border-bottom: 1px solid rgba(70, 60, 67, 0.08);
+  box-shadow:
+    0 10px 30px rgba(54, 42, 48, 0.045),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
 }
 
 header::before {
   content: "";
   position: absolute;
   inset: 0;
-  background-image:
-    radial-gradient(circle at 18px 18px, rgba(255,255,255,0.52) 1px, transparent 1.6px),
-    linear-gradient(110deg, transparent 0%, rgba(255,255,255,0.28) 48%, transparent 62%);
-  background-size: 34px 34px, 100% 100%;
-  opacity: 0.36;
   pointer-events: none;
+  opacity: 0.42;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.72), transparent 46%),
+    radial-gradient(circle at 18px 18px, rgba(255,255,255,0.42) 1px, transparent 1.8px);
+  background-size: 100% 100%, 36px 36px;
+}
+
+header::after {
+  content: "";
+  position: absolute;
+  left: -18%;
+  top: 0;
+  width: 18%;
+  height: 100%;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.34), transparent);
+  animation: headerGlint 7.5s ease-in-out infinite;
 }
 
 .nav {
@@ -135,7 +153,8 @@ header::before {
   z-index: 1;
   max-width: 1120px;
   margin: 0 auto;
-  padding: 15px 20px;
+  padding: 12px 20px;
+
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -145,29 +164,50 @@ header::before {
 .brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 11px;
 }
 
 .logo {
-  width: 43px;
-  height: 43px;
-  border-radius: 16px;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+
   background:
-    radial-gradient(circle at 30% 20%, rgba(255,255,255,0.96), transparent 42%),
-    linear-gradient(145deg, #fff8fb, #eadbf0 44%, #f8d7e2);
-  border: 1px solid rgba(239, 209, 220, 0.95);
+    radial-gradient(circle at 28% 20%, rgba(255,255,255,0.98), transparent 44%),
+    linear-gradient(145deg, rgba(255,255,255,0.95), rgba(247, 238, 244, 0.92) 46%, rgba(235, 218, 241, 0.85));
+  border: 1px solid rgba(70, 60, 67, 0.08);
+
   display: grid;
   place-items: center;
+
   box-shadow:
-    0 16px 34px rgba(143, 90, 120, 0.18),
-    inset 0 1px 0 rgba(255,255,255,0.86);
+    0 8px 18px rgba(54, 42, 48, 0.08),
+    inset 0 1px 0 rgba(255,255,255,0.9);
+
   position: relative;
-  animation: luxuryFloat 5.2s ease-in-out infinite;
+  animation: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.logo:hover {
+  transform: translateY(-1px) scale(1.025);
+  box-shadow:
+    0 12px 24px rgba(54, 42, 48, 0.1),
+    inset 0 1px 0 rgba(255,255,255,0.92);
+}
+
+.logo::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: 11px;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255,255,255,0.42), transparent 48%);
 }
 
 .ribbon-icon {
-  width: 18px;
-  height: 22px;
+  width: 17px;
+  height: 21px;
   position: relative;
   z-index: 1;
 }
@@ -177,9 +217,10 @@ header::before {
   content: "";
   position: absolute;
   width: 100%;
-  height: 6px;
-  background: linear-gradient(135deg, #eeb3c6, #b98fc7);
+  height: 5.5px;
   border-radius: 999px;
+  background: linear-gradient(135deg, #efb8c9, #c6a5dc 56%, #a5cfc1);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.42);
 }
 
 .ribbon-icon::before {
@@ -194,35 +235,39 @@ header::before {
 
 .brand h1 {
   margin: 0;
-  font-size: 22px;
-  font-weight: 900;
-  letter-spacing: -0.055em;
-  color: var(--brand-dark);
+  font-size: 18px;
+  font-weight: 760;
+  letter-spacing: -0.025em;
+  color: #1d1d1f;
 }
 
 .badge,
 .ribbon-badge {
-  background: rgba(255, 255, 255, 0.58);
-  color: #675d63;
-  border: 1px solid rgba(217, 196, 223, 0.52);
-  box-shadow: 0 8px 22px rgba(54, 42, 48, 0.045);
+  background: rgba(255, 255, 255, 0.54);
+  color: #6e6e73;
+  border: 1px solid rgba(70, 60, 67, 0.07);
+  box-shadow:
+    0 8px 22px rgba(54, 42, 48, 0.035),
+    inset 0 1px 0 rgba(255,255,255,0.65);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
 }
 
 .badge {
-  padding: 9px 14px;
+  padding: 7px 12px;
   border-radius: 999px;
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 11.5px;
+  font-weight: 650;
   white-space: nowrap;
 }
 
 .ribbon-badge {
   margin-left: 12px;
-  padding: 8px 12px;
+  padding: 7px 11px;
   border-radius: 999px;
-  font-size: 11px;
-  font-weight: 850;
-  letter-spacing: 0.08em;
+  font-size: 10.5px;
+  font-weight: 680;
+  letter-spacing: 0.075em;
 }
 
 main {
@@ -254,7 +299,6 @@ main {
   pointer-events: none;
 }
 
-/* 고급스러운 아주 얇은 문양 */
 .intro::after,
 .panel::after {
   content: "";
@@ -865,6 +909,22 @@ input {
   color: #746b70;
 }
 
+@keyframes headerGlint {
+  0%, 32% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+
+  45% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateX(760%);
+    opacity: 0;
+  }
+}
+
 @keyframes fadeUp {
   from {
     opacity: 0;
@@ -949,7 +1009,7 @@ input {
 
 @media (max-width: 420px) {
   .nav {
-    padding: 13px 15px;
+    padding: 12px 15px;
   }
 
   main {
@@ -958,7 +1018,12 @@ input {
   }
 
   .brand h1 {
-    font-size: 21px;
+    font-size: 18px;
+  }
+
+  .logo {
+    width: 36px;
+    height: 36px;
   }
 
   .panel,
