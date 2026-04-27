@@ -86,7 +86,6 @@ const $ = (id) => document.getElementById(id);
 function num(value) {
   const raw = String(value ?? "").replace(/,/g, "").trim();
   if (raw === "") return 0;
-
   const n = Number(raw);
   return Number.isFinite(n) ? n : 0;
 }
@@ -155,9 +154,7 @@ function hideSplash() {
   }, 1000);
 }
 
-/* =========================
-   상품 데이터
-========================= */
+/* 상품 */
 
 function initProducts() {
   allProducts = [];
@@ -174,9 +171,7 @@ function initProducts() {
   });
 }
 
-/* =========================
-   품목 선택 커스텀 UI
-========================= */
+/* 품목 선택 UI */
 
 function injectCategoryPickerStyle() {
   if (document.getElementById("rebornCategoryPickerStyle")) return;
@@ -492,9 +487,7 @@ function renderHiddenSelect() {
   });
 }
 
-/* =========================
-   상품 적용
-========================= */
+/* 상품 적용 */
 
 function applyProduct(product) {
   if (!product) return;
@@ -511,9 +504,7 @@ function applyProduct(product) {
   calculate();
 }
 
-/* =========================
-   박스비
-========================= */
+/* 박스비 */
 
 function applyBoxSize(size, shouldCalculate = true, hideAfterSelect = true) {
   const boxFee = $("boxFee");
@@ -564,16 +555,23 @@ function setupBoxButtons() {
   });
 
   const boxFee = $("boxFee");
+  const changeBoxBtn = $("changeBoxBtn");
 
   if (boxFee) {
     boxFee.addEventListener("click", showBoxUI);
     boxFee.addEventListener("focus", showBoxUI);
   }
+
+  if (changeBoxBtn) {
+    changeBoxBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      showBoxUI();
+    });
+  }
 }
 
-/* =========================
-   저장 기능
-========================= */
+/* 저장 */
 
 function saveInputValue(target) {
   const saved = getObj(STORAGE.savedInputs);
@@ -637,9 +635,7 @@ function setupSaveButtons() {
   });
 }
 
-/* =========================
-   즐겨찾기
-========================= */
+/* 즐겨찾기 */
 
 function isFavorite(product) {
   if (!product) return false;
@@ -721,9 +717,7 @@ function updateFavoriteButton() {
   }
 }
 
-/* =========================
-   계산
-========================= */
+/* 계산 */
 
 function calculate() {
   const cost = num(safeValue("unitCost"));
@@ -775,9 +769,7 @@ function updateProfitStyle(profit) {
   });
 }
 
-/* =========================
-   입력 편의
-========================= */
+/* 입력 편의 */
 
 function applyDefaults() {
   Object.keys(defaultValues).forEach((id) => {
@@ -842,9 +834,7 @@ function setupInputs() {
   });
 }
 
-/* =========================
-   이벤트
-========================= */
+/* 이벤트 */
 
 function setupProductEvents() {
   const search = $("productSearch");
@@ -900,9 +890,7 @@ function setupProductEvents() {
   }
 }
 
-/* =========================
-   초기화
-========================= */
+/* 초기화 */
 
 function init() {
   initProducts();
