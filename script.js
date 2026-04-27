@@ -3,10 +3,6 @@
    SAFE FINAL script.js
 ========================= */
 
-/* =========================
-   상품 데이터
-========================= */
-
 const productCategories = [
   ["누룽지", [
     ["찹쌀 누룽지 스위트", 2200],
@@ -52,10 +48,6 @@ const productCategories = [
   ]]
 ];
 
-/* =========================
-   기본값
-========================= */
-
 const defaultValues = {
   shippingFee: "2400",
   coupangFeeRate: "12",
@@ -80,10 +72,7 @@ const STORAGE = {
 
 let allProducts = [];
 let selectedProduct = null;
-
-/* =========================
-   유틸
-========================= */
+let recentVisible = false;
 
 const $ = (id) => document.getElementById(id);
 
@@ -94,8 +83,7 @@ function safeText(id, value) {
 
 function safeValue(id) {
   const el = $(id);
-  if (!el) return "";
-  return el.value;
+  return el ? el.value : "";
 }
 
 function num(value) {
@@ -133,10 +121,6 @@ function setArr(key, val) {
   localStorage.setItem(key, JSON.stringify(val));
 }
 
-/* =========================
-   스플래시 제거
-========================= */
-
 function hideSplash() {
   const splash = $("rebornSplash");
   if (!splash) return;
@@ -145,16 +129,12 @@ function hideSplash() {
     splash.classList.add("hide");
 
     setTimeout(() => {
-      if (splash && splash.parentNode) {
+      if (splash.parentNode) {
         splash.parentNode.removeChild(splash);
       }
     }, 400);
   }, 1000);
 }
-
-/* =========================
-   상품 정리
-========================= */
 
 function initProducts() {
   allProducts = [];
@@ -170,10 +150,6 @@ function initProducts() {
     });
   });
 }
-
-/* =========================
-   상품 렌더링
-========================= */
 
 function renderProducts(keyword = "") {
   const select = $("productSelect");
@@ -227,10 +203,6 @@ function syncSelect(product) {
   if (exists) select.value = product.key;
 }
 
-/* =========================
-   상품 선택
-========================= */
-
 function selectProduct(product) {
   if (!product) return;
 
@@ -246,10 +218,6 @@ function selectProduct(product) {
   calculate();
 }
 
-/* =========================
-   최근 선택
-========================= */
-
 function saveRecent(product) {
   if (!product) return;
 
@@ -259,13 +227,15 @@ function saveRecent(product) {
   list = list.slice(0, 6);
 
   setArr(STORAGE.recent, list);
-  renderRecent();
+
+  if (recentVisible) {
+    renderRecent();
+  }
 }
 
 function removeRecent(key) {
   let list = getArr(STORAGE.recent);
   list = list.filter((item) => item.key !== key);
-
   setArr(STORAGE.recent, list);
   renderRecent();
 }
@@ -275,13 +245,26 @@ function clearRecent() {
   renderRecent();
 }
 
+function hideRecent() {
+  const box = $("recentList");
+  if (box) box.innerHTML = "";
+  recentVisible = false;
+}
+
+function showRecent() {
+  recentVisible = true;
+  renderRecent();
+}
+
 function renderRecent() {
   const box = $("recentList");
   if (!box) return;
 
-  const list = getArr(STORAGE.recent);
   box.innerHTML = "";
 
+  if (!recentVisible) return;
+
+  const list = getArr(STORAGE.recent);
   if (!list.length) return;
 
   const titleRow = document.createElement("div");
@@ -325,10 +308,6 @@ function renderRecent() {
     box.appendChild(item);
   });
 }
-
-/* =========================
-   즐겨찾기
-========================= */
 
 function isFavorite(product) {
   if (!product) return false;
@@ -401,22 +380,18 @@ function updateFavoriteButton() {
 
   if (!product) {
     btn.textContent = "☆";
-    btn.title = "상품을 먼저 선택하세요";
+    btn.title = "최근 선택 보기";
     return;
   }
 
   if (isFavorite(product)) {
     btn.textContent = "★";
-    btn.title = "즐겨찾기에서 제거";
+    btn.title = "즐겨찾기에서 제거 / 최근 선택 보기";
   } else {
     btn.textContent = "☆";
-    btn.title = "즐겨찾기 추가";
+    btn.title = "즐겨찾기 추가 / 최근 선택 보기";
   }
 }
-
-/* =========================
-   계산
-========================= */
 
 function calculate() {
   const cost = num(safeValue("unitCost"));
@@ -473,10 +448,6 @@ function updateProfitStyle(profit) {
     el.classList.add(profit >= 0 ? "profit-text" : "loss-text");
   });
 }
-
-/* =========================
-   입력 편의 기능
-========================= */
 
 function applyDefaults() {
   Object.keys(defaultValues).forEach((id) => {
@@ -541,10 +512,6 @@ function setupInputs() {
   });
 }
 
-/* =========================
-   이벤트 연결
-========================= */
-
 function setupProductEvents() {
   const search = $("productSearch");
   const select = $("productSelect");
@@ -582,6 +549,8 @@ function setupProductEvents() {
 
   if (favoriteBtn) {
     favoriteBtn.addEventListener("click", () => {
+      showRecent();
+
       const product = selectedProduct || getProductByKey(select?.value);
 
       if (!product) {
@@ -607,17 +576,13 @@ function setupProductEvents() {
   }
 }
 
-/* =========================
-   초기화
-========================= */
-
 function init() {
   initProducts();
   applyDefaults();
 
   renderProducts();
-  renderRecent();
   renderFavorites();
+  hideRecent();
 
   setupProductEvents();
   setupInputs();
