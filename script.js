@@ -18,13 +18,13 @@ const productCategories = [
     ["브이콘 100g", 825]
   ]],
   ["에낙", [
-    ["에낙 치킨&스파", 4916.6],
+    ["에낙 치킨&스파", 4916.6]
   ]],
   ["꽈배기", [
-    ["명가 참깨&흑당", 4200],
+    ["명가 참꺠&흑당", 4200]
   ]],
   ["네모스낵", [
-    ["네모스낵 치킨&불&매콤", 172.2],
+    ["네모스낵 치킨&불&매콤", 172.2]
   ]],
   ["그 외 과자", [
     ["황금 고구마칩", 3500],
@@ -76,26 +76,9 @@ let allProducts = [];
 let selectedProduct = null;
 let openedCategory = "";
 let pickerOpen = false;
-let businessMode = storageGet(STORAGE.businessMode) || "본점";
+let businessMode = localStorage.getItem(STORAGE.businessMode) || "본점";
 
 const $ = (id) => document.getElementById(id);
-
-function storageGet(key) {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function storageSet(key, value) {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // 일부 WebView/시크릿 모드에서 저장소가 막혀도 계산기는 계속 동작하게 둡니다.
-  }
-}
-
 
 function num(value) {
   const raw = String(value ?? "").replace(/,/g, "").trim();
@@ -124,31 +107,34 @@ function safeValue(id) {
 }
 
 function normalizeText(value) {
-  return String(value || "").trim().toLowerCase().replace(/\s+/g, "");
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "");
 }
 
 function getArr(key) {
   try {
-    return JSON.parse(storageGet(key) || "[]");
+    return JSON.parse(localStorage.getItem(key) || "[]");
   } catch {
     return [];
   }
 }
 
 function setArr(key, value) {
-  storageSet(key, JSON.stringify(value));
+  localStorage.setItem(key, JSON.stringify(value));
 }
 
 function getObj(key) {
   try {
-    return JSON.parse(storageGet(key) || "{}");
+    return JSON.parse(localStorage.getItem(key) || "{}");
   } catch {
     return {};
   }
 }
 
 function setObj(key, value) {
-  storageSet(key, JSON.stringify(value));
+  localStorage.setItem(key, JSON.stringify(value));
 }
 
 function hideSplash() {
@@ -162,8 +148,8 @@ function hideSplash() {
       if (splash.parentNode) {
         splash.parentNode.removeChild(splash);
       }
-    }, 420);
-  }, 900);
+    }, 400);
+  }, 1000);
 }
 
 function setupBusinessModeTabs() {
@@ -174,7 +160,7 @@ function setupBusinessModeTabs() {
 
     btn.addEventListener("click", () => {
       businessMode = btn.dataset.mode;
-      storageSet(STORAGE.businessMode, businessMode);
+      localStorage.setItem(STORAGE.businessMode, businessMode);
 
       buttons.forEach((button) => {
         button.classList.toggle("active", button.dataset.mode === businessMode);
@@ -200,7 +186,145 @@ function initProducts() {
   });
 }
 
+function injectCategoryPickerStyle() {
+  if (document.getElementById("rebornCategoryPickerStyle")) return;
+
+  const style = document.createElement("style");
+  style.id = "rebornCategoryPickerStyle";
+  style.textContent = `
+    .reborn-category-picker { position: relative; width: 100%; }
+
+    .reborn-picker-main {
+      width: 100%;
+      height: 50px;
+      border: 1px solid rgba(203, 213, 225, 0.86);
+      border-radius: 18px;
+      background: linear-gradient(145deg, #ffffff, #f8fafc);
+      color: #334155;
+      font-size: 14px;
+      font-weight: 850;
+      letter-spacing: -0.02em;
+      padding: 0 15px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 9px 22px rgba(15, 23, 42, 0.045);
+    }
+
+    .reborn-picker-main span:first-child {
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .reborn-picker-arrow {
+      color: #10b981;
+      font-size: 13px;
+      font-weight: 900;
+      margin-left: 8px;
+      transition: transform 0.18s ease, color 0.18s ease;
+    }
+
+    .reborn-category-picker.open .reborn-picker-arrow {
+      transform: rotate(180deg);
+      color: #059669;
+    }
+
+    .reborn-picker-panel {
+      display: none;
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.96);
+      border: 1px solid rgba(226, 232, 240, 0.95);
+      box-shadow: 0 18px 36px rgba(15, 23, 42, 0.09);
+    }
+
+    .reborn-category-picker.open .reborn-picker-panel {
+      display: block;
+    }
+
+    .reborn-category-btn {
+      width: 100%;
+      border: 0;
+      border-radius: 16px;
+      padding: 12px 13px;
+      margin-bottom: 7px;
+      background: linear-gradient(145deg, #fff7fb, #f8fafc);
+      color: #334155;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 14px;
+      font-weight: 900;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.7);
+    }
+
+    .reborn-category-btn.active {
+      background: linear-gradient(145deg, #ecfdf5, #fff8e7);
+      color: #065f46;
+      border: 1px solid rgba(167, 243, 208, 0.95);
+    }
+
+    .reborn-category-count {
+      font-size: 11px;
+      color: #10b981;
+      font-weight: 900;
+    }
+
+    .reborn-product-list {
+      display: grid;
+      gap: 7px;
+      margin: 2px 0 10px;
+      padding: 7px;
+      border-radius: 18px;
+      background: rgba(248, 250, 252, 0.88);
+    }
+
+    .reborn-product-btn {
+      width: 100%;
+      border: 1px solid rgba(226, 232, 240, 0.95);
+      border-radius: 15px;
+      padding: 11px 12px;
+      background: #ffffff;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      text-align: left;
+    }
+
+    .reborn-product-name {
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .reborn-product-price {
+      flex: 0 0 auto;
+      color: #059669;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .reborn-empty-products {
+      padding: 14px;
+      color: #94a3b8;
+      font-size: 13px;
+      font-weight: 800;
+      text-align: center;
+    }
+  `;
+
+  document.head.appendChild(style);
+}
+
 function createCategoryPicker() {
+  injectCategoryPickerStyle();
+
   const nativeSelect = $("productSelect");
   if (!nativeSelect) return;
 
@@ -432,8 +556,6 @@ function applyBoxSize(size, shouldCalculate = true, shouldHide = true) {
 }
 
 function setupBoxButtons() {
-  const boxUI = $("boxSizeOptions");
-
   document.querySelectorAll(".box-size-btn").forEach((btn) => {
     btn.addEventListener("click", (event) => {
       event.preventDefault();
@@ -457,21 +579,13 @@ function setupBoxButtons() {
   const boxFee = $("boxFee");
 
   if (boxFee) {
-    ["click", "pointerdown", "touchstart"].forEach((eventName) => {
-      boxFee.addEventListener(eventName, (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-      }, { passive: false });
+    boxFee.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
     });
 
     boxFee.addEventListener("focus", () => {
       boxFee.blur();
-    });
-  }
-
-  if (boxUI) {
-    boxUI.addEventListener("click", (event) => {
-      event.stopPropagation();
     });
   }
 }
@@ -810,8 +924,4 @@ document.addEventListener("DOMContentLoaded", () => {
   } catch (error) {
     console.error("RE:BORN 초기화 오류:", error);
   }
-});
-
-window.addEventListener("load", () => {
-  hideSplash();
 });
