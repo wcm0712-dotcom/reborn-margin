@@ -58,34 +58,40 @@
 
         <p class="panel-desc">상품을 검색하거나 선택하면 원가가 자동 입력됩니다.</p>
 
-        <div class="product-tools">
-          <input
-            id="productSearch"
-            class="product-search"
-            type="text"
-            placeholder="상품명 검색"
-            autocomplete="off"
-            aria-label="상품명 검색"
-          />
+       <div class="product-tools">
+  <div class="product-search-box">
+    <span class="search-icon">🔍</span>
+    <input
+      id="productSearch"
+      class="product-search"
+      type="text"
+      placeholder="상품명을 입력해 검색하세요"
+      autocomplete="off"
+      aria-label="상품명 검색"
+    />
+  </div>
 
-          <div class="product-picker-wrap">
-            <select id="productSelect" class="product-picker" aria-label="품목 선택">
-              <option value="">품목 선택</option>
-            </select>
-          </div>
+  <div class="product-select-row">
+    <div class="product-picker-wrap">
+      <select id="productSelect" class="product-picker" aria-label="품목 선택">
+        <option value="">품목 선택</option>
+      </select>
+    </div>
 
-          <div class="product-action-row">
-            <button type="button" id="addFavoriteBtn" class="small-action-btn">
-              즐겨찾기 추가
-            </button>
-            <button type="button" id="clearProductSearchBtn" class="small-action-btn secondary">
-              검색 초기화
-            </button>
-          </div>
+    <button type="button" id="addFavoriteBtn" class="favorite-add-btn">
+      ☆
+    </button>
+  </div>
 
-          <div id="favoriteList" class="quick-list"></div>
-          <div id="recentList" class="quick-list"></div>
-        </div>
+  <div class="product-action-row">
+    <button type="button" id="clearProductSearchBtn" class="small-action-btn secondary">
+      검색 초기화
+    </button>
+  </div>
+
+  <div id="favoriteList" class="quick-list favorite-area"></div>
+  <div id="recentList" class="quick-list recent-area"></div>
+</div>
 
         <label class="field">
           <div class="field-title">원가(낱개)</div>
