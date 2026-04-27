@@ -1,6 +1,6 @@
 /* =========================
    RE:BORN Margin Calculator
-   CATEGORY PICKER FINAL
+   BOX + SAVE FINAL
 ========================= */
 
 const productCategories = [
@@ -55,6 +55,12 @@ const defaultValues = {
   earlySettlementRate: "1.2"
 };
 
+const boxPrices = {
+  대: 480,
+  중: 380,
+  소: 250
+};
+
 const inputIds = [
   "unitCost",
   "quantity",
@@ -66,7 +72,8 @@ const inputIds = [
 ];
 
 const STORAGE = {
-  favorite: "reborn_favorite"
+  favorite: "reborn_favorite",
+  savedInputs: "reborn_saved_inputs"
 };
 
 let allProducts = [];
@@ -79,6 +86,7 @@ const $ = (id) => document.getElementById(id);
 function num(value) {
   const raw = String(value ?? "").replace(/,/g, "").trim();
   if (raw === "") return 0;
+
   const n = Number(raw);
   return Number.isFinite(n) ? n : 0;
 }
@@ -117,6 +125,18 @@ function getArr(key) {
 }
 
 function setArr(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+function getObj(key) {
+  try {
+    return JSON.parse(localStorage.getItem(key) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function setObj(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
@@ -410,10 +430,6 @@ function renderCategoryPicker() {
       const list = document.createElement("div");
       list.className = "reborn-product-list";
 
-      list.addEventListener("click", (event) => {
-        event.stopPropagation();
-      });
-
       products.forEach((product) => {
         const productBtn = document.createElement("button");
         productBtn.type = "button";
@@ -490,6 +506,93 @@ function applyProduct(product) {
   updatePickerLabel(product);
   updateFavoriteButton();
   calculate();
+}
+
+/* 박스비 */
+
+function applyBoxSize(size, shouldCalculate = true) {
+  const boxSize = $("boxSize");
+  const boxFee = $("boxFee");
+
+  if (!boxSize || !boxFee) return;
+
+  boxSize.value = size;
+  boxFee.value = boxPrices[size] || 0;
+
+  document.querySelectorAll(".box-size-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.size === size);
+  });
+
+  if (shouldCalculate) calculate();
+}
+
+function setupBoxButtons() {
+  document.querySelectorAll(".box-size-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const size = btn.dataset.size;
+      applyBoxSize(size);
+    });
+  });
+}
+
+/* 저장 기능 */
+
+function saveInputValue(target) {
+  const saved = getObj(STORAGE.savedInputs);
+
+  if (target === "boxSize") {
+    saved.boxSize = safeValue("boxSize");
+    saved.boxFee = safeValue("boxFee");
+  } else {
+    saved[target] = safeValue(target);
+  }
+
+  setObj(STORAGE.savedInputs, saved);
+  markSavedButton(target);
+}
+
+function restoreSavedInputs() {
+  const saved = getObj(STORAGE.savedInputs);
+
+  Object.keys(saved).forEach((id) => {
+    if (id === "boxSize") {
+      if (saved.boxSize) {
+        applyBoxSize(saved.boxSize, false);
+      }
+      return;
+    }
+
+    if (id === "boxFee") return;
+
+    const el = $(id);
+    if (el) {
+      el.value = saved[id];
+    }
+  });
+}
+
+function markSavedButton(target) {
+  const btn = document.querySelector(`.field-save-btn[data-save="${target}"]`);
+  if (!btn) return;
+
+  const original = "저장";
+
+  btn.textContent = "저장됨";
+  btn.classList.add("saved");
+
+  setTimeout(() => {
+    btn.textContent = original;
+    btn.classList.remove("saved");
+  }, 900);
+}
+
+function setupSaveButtons() {
+  document.querySelectorAll(".field-save-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const target = btn.dataset.save;
+      saveInputValue(target);
+    });
+  });
 }
 
 /* 즐겨찾기 */
@@ -580,6 +683,7 @@ function calculate() {
   const cost = num(safeValue("unitCost"));
   const qty = num(safeValue("quantity"));
   const sale = num(safeValue("salePrice"));
+  const boxFee = num(safeValue("boxFee"));
   const ship = num(safeValue("shippingFee"));
 
   const feeRate = num(safeValue("coupangFeeRate")) / 100;
@@ -591,11 +695,12 @@ function calculate() {
   const vatFee = sale * vatRate;
   const earlyFee = sale * earlyRate;
 
-  const total = productCost + ship + coupangFee + vatFee + earlyFee;
+  const total = productCost + boxFee + ship + coupangFee + vatFee + earlyFee;
   const profit = sale - total;
   const margin = sale > 0 ? (profit / sale) * 100 : 0;
 
   safeText("totalProductCost", won(productCost));
+  safeText("boxFeeResult", won(boxFee));
   safeText("coupangFee", won(coupangFee));
   safeText("earlySettlementFee", won(earlyFee));
   safeText("vat", won(vatFee));
@@ -750,6 +855,7 @@ function setupProductEvents() {
 function init() {
   initProducts();
   applyDefaults();
+  restoreSavedInputs();
 
   renderHiddenSelect();
   createCategoryPicker();
@@ -757,6 +863,8 @@ function init() {
 
   setupProductEvents();
   setupInputs();
+  setupBoxButtons();
+  setupSaveButtons();
 
   calculate();
   updateFavoriteButton();
