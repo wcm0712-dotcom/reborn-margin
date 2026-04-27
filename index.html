@@ -3,12 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="RE:BORN 전용 쿠팡 판매 마진 계산기. 원가, 판매가, 배송비, 쿠팡 수수료, 부가세, 선정산 패널티를 반영해 순이익과 마진율을 계산합니다." />
-  <title>RE:BORN</title>
+
+  <meta
+    name="description"
+    content="RE:BORN 전용 쿠팡 판매 마진 계산기. 원가, 판매가, 배송비, 쿠팡 수수료, 부가세, 선정산 패널티를 반영해 순이익과 마진율을 계산합니다."
+  />
+
+  <title>RE:BORN Margin Calculator</title>
+
   <link rel="stylesheet" href="style.css" />
 </head>
 
 <body class="premium-app">
+  <!-- Splash -->
   <div id="rebornSplash">
     <div class="splash-inner">
       <div class="splash-mark"></div>
@@ -17,12 +24,14 @@
     </div>
   </div>
 
+  <!-- Header -->
   <header>
     <div class="nav">
       <div class="brand">
         <div class="logo" aria-label="RE:BORN 로고">
           <span class="ribbon-icon"></span>
         </div>
+
         <div>
           <h1>RE:BORN</h1>
         </div>
@@ -34,14 +43,19 @@
   </header>
 
   <main>
+    <!-- Intro -->
     <section class="intro">
       <div>
         <div class="eyebrow">📊 REBORN Margin Calculator</div>
+
         <h2>판매 전, 실제 마진을 정확하게 확인하세요.</h2>
+
         <p>
-          RE:BORN 전용 계산기로 원가·수량·판매가·배송비·수수료·부가세를 한 번에 반영해 실제 순이익과 마진율을 계산합니다.
-          입력값을 수정하면 결과가 즉시 갱신되어 판매가 조정과 상품 운영 판단에 활용할 수 있습니다.
+          RE:BORN 전용 계산기로 원가·수량·판매가·배송비·수수료·부가세를 한 번에 반영해
+          실제 순이익과 마진율을 계산합니다. 입력값을 수정하면 결과가 즉시 갱신되어
+          판매가 조정과 상품 운영 판단에 활용할 수 있습니다.
         </p>
+
         <div class="intro-pills">
           <span>실시간 계산</span>
           <span>모바일 최적화</span>
@@ -50,49 +64,66 @@
       </div>
     </section>
 
+    <!-- Content -->
     <section class="content">
+      <!-- Input Panel -->
       <div class="panel">
         <div class="panel-top">
           <h3>입력값</h3>
         </div>
 
-        <p class="panel-desc">상품을 검색하거나 선택하면 원가가 자동 입력됩니다.</p>
+        <p class="panel-desc">
+          상품을 검색하거나 선택하면 원가가 자동 입력됩니다.
+        </p>
 
-       <div class="product-tools">
-  <div class="product-search-box">
-    <span class="search-icon">🔍</span>
-    <input
-      id="productSearch"
-      class="product-search"
-      type="text"
-      placeholder="상품명을 입력해 검색하세요"
-      autocomplete="off"
-      aria-label="상품명 검색"
-    />
-  </div>
+        <!-- Product Tools -->
+        <div class="product-tools">
+          <div class="product-search-box">
+            <span class="search-icon">🔍</span>
 
-  <div class="product-select-row">
-    <div class="product-picker-wrap">
-      <select id="productSelect" class="product-picker" aria-label="품목 선택">
-        <option value="">품목 선택</option>
-      </select>
-    </div>
+            <input
+              id="productSearch"
+              class="product-search"
+              type="text"
+              placeholder="상품명을 입력해 검색하세요"
+              autocomplete="off"
+              aria-label="상품명 검색"
+            />
+          </div>
 
-    <button type="button" id="addFavoriteBtn" class="favorite-add-btn">
-      ☆
-    </button>
-  </div>
+          <div class="product-select-row">
+            <div class="product-picker-wrap">
+              <select id="productSelect" class="product-picker" aria-label="품목 선택">
+                <option value="">품목 선택</option>
+              </select>
+            </div>
 
-  <div class="product-action-row">
-    <button type="button" id="clearProductSearchBtn" class="small-action-btn secondary">
-      검색 초기화
-    </button>
-  </div>
+            <button
+              type="button"
+              id="addFavoriteBtn"
+              class="favorite-add-btn"
+              aria-label="즐겨찾기 추가"
+              title="선택한 상품 즐겨찾기 추가"
+            >
+              ☆
+            </button>
+          </div>
 
-  <div id="favoriteList" class="quick-list favorite-area"></div>
-  <div id="recentList" class="quick-list recent-area"></div>
-</div>
+          <div class="product-action-row">
+            <button
+              type="button"
+              id="clearProductSearchBtn"
+              class="small-action-btn secondary"
+            >
+              검색 초기화
+            </button>
+          </div>
 
+          <div id="favoriteList" class="quick-list favorite-area"></div>
+          <div id="recentList" class="quick-list recent-area"></div>
+        </div>
+
+        <!-- Inputs -->
         <label class="field">
           <div class="field-title">원가(낱개)</div>
           <div class="field-row">
@@ -157,9 +188,13 @@
         </label>
       </div>
 
+      <!-- Result Panel -->
       <div class="panel">
         <h3>자동 계산 결과</h3>
-        <p class="panel-desc">비용 항목별로 나누어 마진 구조를 확인할 수 있습니다.</p>
+
+        <p class="panel-desc">
+          비용 항목별로 나누어 마진 구조를 확인할 수 있습니다.
+        </p>
 
         <div class="results">
           <div class="result-card">
