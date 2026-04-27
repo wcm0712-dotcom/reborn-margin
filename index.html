@@ -144,23 +144,25 @@
         </label>
 
         <label class="field">
-          <div class="field-title">박스비</div>
+  <div class="field-title">박스비</div>
 
-          <div id="boxSizeOptions" class="box-size-row">
-            <button type="button" class="box-size-btn" data-size="대" data-price="480">대</button>
-            <button type="button" class="box-size-btn" data-size="중" data-price="380">중</button>
-            <button type="button" class="box-size-btn" data-size="소" data-price="250">소</button>
-          </div>
+  <div id="boxSizeOptions" class="box-size-row">
+    <button type="button" class="box-size-btn" data-size="대" data-price="480">대</button>
+    <button type="button" class="box-size-btn" data-size="중" data-price="380">중</button>
+    <button type="button" class="box-size-btn" data-size="소" data-price="250">소</button>
+  </div>
 
-          <div class="field-row">
-            <input id="boxFee" type="number" inputmode="decimal" value="0" readonly />
-            <input id="boxSize" type="hidden" value="" />
-            <span class="suffix">원</span>
-            <button type="button" class="field-save-btn" data-save="boxSize">저장</button>
-          </div>
+  <div class="field-row">
+    <input id="boxFee" type="number" inputmode="decimal" value="0" readonly />
+    <input id="boxSize" type="hidden" value="" />
+    <span class="suffix">원</span>
 
-          <div class="hint">대 480원 · 중 380원 · 소 250원 / 박스비 칸을 누르면 다시 선택할 수 있습니다.</div>
-        </label>
+    <button type="button" id="changeBoxBtn" class="box-change-btn">변경</button>
+    <button type="button" class="field-save-btn" data-save="boxSize">저장</button>
+  </div>
+
+  <div class="hint">대 480원 · 중 380원 · 소 250원 / 변경 버튼을 누르면 다시 선택할 수 있습니다.</div>
+</label>
 
         <label class="field">
           <div class="field-title">택배비</div>
