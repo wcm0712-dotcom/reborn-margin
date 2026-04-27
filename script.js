@@ -3,99 +3,134 @@
    script.js 전체 교체본
 ========================= */
 
-/* 
-  상품 데이터 구조
-
-  아래 productCategories에 상품을 계속 추가하면 됨.
-
-  형식:
-  const productCategories = [
-    ["카테고리명", [
-      ["상품명", 원가],
-      ["상품명", 원가]
-    ]]
-  ];
-*/
+/* =========================
+   상품 데이터
+========================= */
 
 const productCategories = [
-  ["과자", [
-    ["브이콘 50g", 0],
-    ["브이콘 100g", 0],
-    ["싱싱 양파 100g", 0],
-    ["싱싱 양파 160g", 0],
-    ["감자알칩 일반", 0],
-    ["보리건빵", 0],
-    ["찹쌀 누룽지", 0]
+  ["누룽지", [
+    ["찹쌀 누룽지 스위트", 2200],
+    ["찹쌀 누룽지 무가당", 2200],
+    ["찹쌀 누룽지 츄러스", 2300]
   ]],
 
-  ["기타", [
-    ["테스트 상품", 0]
+  ["메밀칩", [
+    ["싱싱 양파 160g", 1650],
+    ["싱싱 양파 100g", 1000],
+    ["푸드킹 양파 160g", 1500]
+  ]],
+
+  ["브이콘", [
+    ["브이콘 50g", 412.5],
+    ["브이콘 100g", 825]
+  ]],
+
+  ["에낙", [
+    ["에낙 치킨", 4916.6],
+    ["에낙 스파이시", 4916.6]
+  ]],
+
+  ["꽈배기", [
+    ["명가 참깨", 4200],
+    ["명가 흑당", 4200]
+  ]],
+
+  ["네모스낵", [
+    ["네모스낵 치킨맛", 172.2],
+    ["네모스낵 불고기맛", 172.2],
+    ["네모스낵 매콤한맛", 172.2]
+  ]],
+
+  ["그 외 과자", [
+    ["황금 고구마칩", 3500],
+    ["촉촉한 고구마", 770],
+    ["촉촉한 밤", 1080],
+    ["감자알칩", 282.5],
+    ["차카니", 286.6],
+    ["라멘 뽀식이", 510],
+    ["바베큐맛 스낵", 500],
+    ["보리건빵", 125],
+    ["허니눈꽃 920g", 6800],
+    ["꾀돌이", 275]
+  ]],
+
+  ["생필품", [
+    ["코디(휴지)", 8500]
   ]]
 ];
 
 /* =========================
-   DOM 가져오기
+   기본 설정값
 ========================= */
 
-const $ = (id) => document.getElementById(id);
+const defaultValues = {
+  shippingFee: "2400",
+  coupangFeeRate: "12",
+  vatRate: "10",
+  earlySettlementRate: "1.2"
+};
 
-const rebornSplash = $("rebornSplash");
+const inputIds = [
+  "unitCost",
+  "quantity",
+  "salePrice",
+  "shippingFee",
+  "coupangFeeRate",
+  "vatRate",
+  "earlySettlementRate"
+];
 
-const productSearch = $("productSearch");
-const productSelect = $("productSelect");
-const addFavoriteBtn = $("addFavoriteBtn");
-const clearProductSearchBtn = $("clearProductSearchBtn");
-const favoriteList = $("favoriteList");
-const recentList = $("recentList");
-
-const unitCostInput = $("unitCost");
-const quantityInput = $("quantity");
-const salePriceInput = $("salePrice");
-const shippingFeeInput = $("shippingFee");
-const coupangFeeRateInput = $("coupangFeeRate");
-const vatRateInput = $("vatRate");
-const earlySettlementRateInput = $("earlySettlementRate");
-
-const totalProductCostEl = $("totalProductCost");
-const coupangFeeEl = $("coupangFee");
-const earlySettlementFeeEl = $("earlySettlementFee");
-const vatEl = $("vat");
-const totalCostEl = $("totalCost");
-const profitEl = $("profit");
-const marginRateEl = $("marginRate");
-
-const profitCard = $("profitCard");
-const marginCard = $("marginCard");
-
-/* =========================
-   기본 변수
-========================= */
-
-let allProducts = [];
-let selectedProduct = null;
-
-const STORAGE_KEYS = {
+const storageKeys = {
   recent: "reborn_recent_products",
   favorite: "reborn_favorite_products"
 };
 
+let allProducts = [];
+let selectedProduct = null;
+
 /* =========================
-   공통 함수
+   DOM 유틸
 ========================= */
 
-function toNumber(value) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : 0;
+const $ = (id) => document.getElementById(id);
+
+function getEl(id) {
+  return document.getElementById(id);
 }
 
-function formatWon(value) {
-  const number = Math.round(toNumber(value));
-  return `${number.toLocaleString("ko-KR")}원`;
+function setText(id, value) {
+  const el = getEl(id);
+  if (el) el.textContent = value;
 }
 
-function formatPercent(value) {
-  const number = toNumber(value);
-  return `${number.toFixed(2)}%`;
+function getNumber(id) {
+  const el = getEl(id);
+  if (!el) return 0;
+
+  const raw = String(el.value).trim().replace(/,/g, "");
+  if (raw === "") return 0;
+
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function getRate(id) {
+  return getNumber(id) / 100;
+}
+
+function money(value) {
+  return `${Math.round(Number(value) || 0).toLocaleString("ko-KR")}원`;
+}
+
+function pct(value) {
+  return `${(Number(value) || 0).toFixed(2)}%`;
+}
+
+function normalizeText(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "");
 }
 
 function safeJsonParse(value, fallback) {
@@ -114,29 +149,6 @@ function setStorageArray(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
-function normalizeText(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "");
-}
-
-function makeProductKey(product) {
-  return `${product.category}__${product.name}`;
-}
-
-/* =========================
-   스플래시
-========================= */
-
-function hideSplash() {
-  if (!rebornSplash) return;
-
-  setTimeout(() => {
-    rebornSplash.classList.add("hide");
-  }, 1000);
-}
-
 /* =========================
    상품 데이터 정리
 ========================= */
@@ -144,57 +156,50 @@ function hideSplash() {
 function flattenProducts() {
   allProducts = [];
 
-  productCategories.forEach((categoryGroup) => {
-    const categoryName = categoryGroup[0];
-    const products = categoryGroup[1];
-
-    products.forEach((product) => {
+  productCategories.forEach(([categoryName, products]) => {
+    products.forEach(([name, price]) => {
       allProducts.push({
+        key: `${categoryName}__${name}`,
         category: categoryName,
-        name: product[0],
-        price: toNumber(product[1]),
-        key: `${categoryName}__${product[0]}`
+        name,
+        price: Number(price)
       });
     });
   });
 }
 
 /* =========================
-   상품 드롭다운 렌더링
+   상품 선택창 렌더링
 ========================= */
 
 function renderProductOptions(keyword = "") {
+  const productSelect = $("productSelect");
   if (!productSelect) return;
 
   const normalizedKeyword = normalizeText(keyword);
 
   const filteredProducts = allProducts.filter((product) => {
-    const searchableText = normalizeText(`${product.category}${product.name}`);
-    return searchableText.includes(normalizedKeyword);
+    const target = normalizeText(`${product.category}${product.name}`);
+    return target.includes(normalizedKeyword);
   });
 
   const fragment = document.createDocumentFragment();
 
   const defaultOption = document.createElement("option");
   defaultOption.value = "";
-  defaultOption.textContent = filteredProducts.length > 0
-    ? "품목 선택"
-    : "검색 결과 없음";
+  defaultOption.textContent = filteredProducts.length > 0 ? "품목 선택" : "검색 결과 없음";
   fragment.appendChild(defaultOption);
 
   const grouped = {};
 
   filteredProducts.forEach((product) => {
-    if (!grouped[product.category]) {
-      grouped[product.category] = [];
-    }
-
+    if (!grouped[product.category]) grouped[product.category] = [];
     grouped[product.category].push(product);
   });
 
   Object.keys(grouped).forEach((categoryName) => {
-    const optgroup = document.createElement("optgroup");
-    optgroup.label = categoryName;
+    const group = document.createElement("optgroup");
+    group.label = categoryName;
 
     grouped[categoryName].forEach((product) => {
       const option = document.createElement("option");
@@ -205,18 +210,36 @@ function renderProductOptions(keyword = "") {
       option.dataset.price = product.price;
       option.dataset.category = product.category;
 
-      optgroup.appendChild(option);
+      group.appendChild(option);
     });
 
-    fragment.appendChild(optgroup);
+    fragment.appendChild(group);
   });
 
   productSelect.innerHTML = "";
   productSelect.appendChild(fragment);
 }
 
+function getSelectedProductFromSelect() {
+  const productSelect = $("productSelect");
+  if (!productSelect || !productSelect.value) return null;
+
+  return allProducts.find((product) => product.key === productSelect.value) || null;
+}
+
+function syncSelectWithProduct(product) {
+  const productSelect = $("productSelect");
+  if (!productSelect || !product) return;
+
+  const exists = Array.from(productSelect.options).some((option) => option.value === product.key);
+
+  if (exists) {
+    productSelect.value = product.key;
+  }
+}
+
 /* =========================
-   상품 선택
+   상품 적용
 ========================= */
 
 function applyProduct(product) {
@@ -224,19 +247,16 @@ function applyProduct(product) {
 
   selectedProduct = product;
 
+  const unitCostInput = $("unitCost");
   if (unitCostInput) {
     unitCostInput.value = product.price;
+    unitCostInput.dispatchEvent(new Event("input", { bubbles: true }));
+    unitCostInput.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
   saveRecentProduct(product);
   updateFavoriteButtonState();
   calculate();
-}
-
-function getSelectedProductFromSelect() {
-  if (!productSelect || !productSelect.value) return null;
-
-  return allProducts.find((product) => product.key === productSelect.value) || null;
 }
 
 /* =========================
@@ -246,7 +266,7 @@ function getSelectedProductFromSelect() {
 function saveRecentProduct(product) {
   if (!product) return;
 
-  let recent = getStorageArray(STORAGE_KEYS.recent);
+  let recent = getStorageArray(storageKeys.recent);
 
   recent = recent.filter((item) => item.key !== product.key);
 
@@ -259,14 +279,15 @@ function saveRecentProduct(product) {
 
   recent = recent.slice(0, 6);
 
-  setStorageArray(STORAGE_KEYS.recent, recent);
+  setStorageArray(storageKeys.recent, recent);
   renderRecentProducts();
 }
 
 function renderRecentProducts() {
+  const recentList = $("recentList");
   if (!recentList) return;
 
-  const recent = getStorageArray(STORAGE_KEYS.recent);
+  const recent = getStorageArray(storageKeys.recent);
 
   recentList.innerHTML = "";
 
@@ -281,7 +302,7 @@ function renderRecentProducts() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "quick-product-btn";
-    button.textContent = `${item.name} · ${item.price.toLocaleString("ko-KR")}원`;
+    button.textContent = `${item.name} · ${Number(item.price).toLocaleString("ko-KR")}원`;
 
     button.addEventListener("click", () => {
       applyProduct(item);
@@ -299,14 +320,14 @@ function renderRecentProducts() {
 function isFavorite(product) {
   if (!product) return false;
 
-  const favorites = getStorageArray(STORAGE_KEYS.favorite);
+  const favorites = getStorageArray(storageKeys.favorite);
   return favorites.some((item) => item.key === product.key);
 }
 
 function toggleFavoriteProduct(product) {
   if (!product) return;
 
-  let favorites = getStorageArray(STORAGE_KEYS.favorite);
+  let favorites = getStorageArray(storageKeys.favorite);
 
   const exists = favorites.some((item) => item.key === product.key);
 
@@ -321,16 +342,17 @@ function toggleFavoriteProduct(product) {
     });
   }
 
-  setStorageArray(STORAGE_KEYS.favorite, favorites);
+  setStorageArray(storageKeys.favorite, favorites);
 
   renderFavoriteProducts();
   updateFavoriteButtonState();
 }
 
 function renderFavoriteProducts() {
+  const favoriteList = $("favoriteList");
   if (!favoriteList) return;
 
-  const favorites = getStorageArray(STORAGE_KEYS.favorite);
+  const favorites = getStorageArray(storageKeys.favorite);
 
   favoriteList.innerHTML = "";
 
@@ -348,7 +370,7 @@ function renderFavoriteProducts() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "quick-product-btn";
-    button.textContent = `${item.name} · ${item.price.toLocaleString("ko-KR")}원`;
+    button.textContent = `${item.name} · ${Number(item.price).toLocaleString("ko-KR")}원`;
 
     button.addEventListener("click", () => {
       applyProduct(item);
@@ -366,12 +388,12 @@ function renderFavoriteProducts() {
 
     wrap.appendChild(button);
     wrap.appendChild(removeButton);
-
     favoriteList.appendChild(wrap);
   });
 }
 
 function updateFavoriteButtonState() {
+  const addFavoriteBtn = $("addFavoriteBtn");
   if (!addFavoriteBtn) return;
 
   const product = selectedProduct || getSelectedProductFromSelect();
@@ -391,115 +413,108 @@ function updateFavoriteButtonState() {
   }
 }
 
-function syncSelectWithProduct(product) {
-  if (!productSelect || !product) return;
-
-  const optionExists = Array.from(productSelect.options).some((option) => {
-    return option.value === product.key;
-  });
-
-  if (optionExists) {
-    productSelect.value = product.key;
-  }
-}
-
 /* =========================
    계산 로직
 ========================= */
 
 function calculate() {
-  const unitCost = toNumber(unitCostInput?.value);
-  const quantity = toNumber(quantityInput?.value);
-  const salePrice = toNumber(salePriceInput?.value);
-  const shippingFee = toNumber(shippingFeeInput?.value);
-  const coupangFeeRate = toNumber(coupangFeeRateInput?.value);
-  const vatRate = toNumber(vatRateInput?.value);
-  const earlySettlementRate = toNumber(earlySettlementRateInput?.value);
+  const unitCost = getNumber("unitCost");
+  const quantity = getNumber("quantity");
+  const salePrice = getNumber("salePrice");
+  const shippingFee = getNumber("shippingFee");
+
+  const coupangFeeRate = getRate("coupangFeeRate");
+  const vatRate = getRate("vatRate");
+  const earlySettlementRate = getRate("earlySettlementRate");
 
   const totalProductCost = unitCost * quantity;
-  const coupangFee = salePrice * (coupangFeeRate / 100);
-  const vat = salePrice * (vatRate / 100);
-  const earlySettlementFee = salePrice * (earlySettlementRate / 100);
+  const coupangFee = salePrice * coupangFeeRate;
+  const earlySettlementFee = salePrice * earlySettlementRate;
+  const vat = salePrice * vatRate;
 
   const totalCost =
     totalProductCost +
     shippingFee +
     coupangFee +
-    vat +
-    earlySettlementFee;
+    earlySettlementFee +
+    vat;
 
   const profit = salePrice - totalCost;
   const marginRate = salePrice > 0 ? (profit / salePrice) * 100 : 0;
 
-  if (totalProductCostEl) totalProductCostEl.textContent = formatWon(totalProductCost);
-  if (coupangFeeEl) coupangFeeEl.textContent = formatWon(coupangFee);
-  if (earlySettlementFeeEl) earlySettlementFeeEl.textContent = formatWon(earlySettlementFee);
-  if (vatEl) vatEl.textContent = formatWon(vat);
-  if (totalCostEl) totalCostEl.textContent = formatWon(totalCost);
-  if (profitEl) profitEl.textContent = formatWon(profit);
-  if (marginRateEl) marginRateEl.textContent = formatPercent(marginRate);
+  setText("quickProfit", money(profit));
+  setText("quickMargin", pct(marginRate));
+  setText("quickBreakEven", money(totalCost));
 
-  updateResultState(profit);
+  setText("summarySalePrice", money(salePrice));
+  setText("summaryTotalCost", money(totalCost));
+  setText("summaryProfit", money(profit));
+  setText("summaryMargin", pct(marginRate));
+
+  setText("totalProductCost", money(totalProductCost));
+  setText("coupangFee", money(coupangFee));
+  setText("earlySettlementFee", money(earlySettlementFee));
+  setText("vat", money(vat));
+  setText("totalCost", money(totalCost));
+  setText("profit", money(profit));
+  setText("marginRate", pct(marginRate));
+
+  updateProfitStyle(profit);
 }
 
-function updateResultState(profit) {
-  const cards = [profitCard, marginCard];
+function updateProfitStyle(profit) {
+  ["profitCard", "marginCard"].forEach((id) => {
+    const el = $(id);
+    if (!el) return;
 
-  cards.forEach((card) => {
-    if (!card) return;
-
-    card.classList.remove("profit", "loss");
-
-    if (profit > 0) {
-      card.classList.add("profit");
-    } else if (profit < 0) {
-      card.classList.add("loss");
-    }
+    el.classList.remove("profit", "loss");
+    el.classList.add(profit >= 0 ? "profit" : "loss");
   });
 
-  if (profitEl) {
-    profitEl.classList.remove("profit-text", "loss-text");
+  [
+    "quickProfit",
+    "quickMargin",
+    "summaryProfit",
+    "summaryMargin",
+    "profit",
+    "marginRate"
+  ].forEach((id) => {
+    const el = $(id);
+    if (!el) return;
 
-    if (profit > 0) {
-      profitEl.classList.add("profit-text");
-    } else if (profit < 0) {
-      profitEl.classList.add("loss-text");
+    el.classList.remove("profit-text", "loss-text");
+    el.classList.add(profit >= 0 ? "profit-text" : "loss-text");
+  });
+}
+
+/* =========================
+   기본값 적용
+========================= */
+
+function applyDefaultValues() {
+  Object.keys(defaultValues).forEach((id) => {
+    const el = $(id);
+    if (!el) return;
+
+    const currentValue = String(el.value).trim();
+
+    if (currentValue === "" || currentValue === "0") {
+      el.value = defaultValues[id];
     }
-  }
-
-  if (marginRateEl) {
-    marginRateEl.classList.remove("profit-text", "loss-text");
-
-    if (profit > 0) {
-      marginRateEl.classList.add("profit-text");
-    } else if (profit < 0) {
-      marginRateEl.classList.add("loss-text");
-    }
-  }
+  });
 }
 
 /* =========================
    입력 편의 기능
 ========================= */
 
-function setupAutoCalculate() {
-  const inputs = [
-    unitCostInput,
-    quantityInput,
-    salePriceInput,
-    shippingFeeInput,
-    coupangFeeRateInput,
-    vatRateInput,
-    earlySettlementRateInput
-  ];
+function setupInputEvents() {
+  const inputs = inputIds
+    .map((id) => $(id))
+    .filter(Boolean);
 
-  inputs.forEach((input) => {
-    if (!input) return;
-
-    input.addEventListener("input", () => {
-      removeLeadingZero(input);
-      calculate();
-    });
+  inputs.forEach((input, index) => {
+    input.setAttribute("enterkeyhint", index === inputs.length - 1 ? "done" : "next");
 
     input.addEventListener("focus", () => {
       if (input.value === "0") {
@@ -508,17 +523,36 @@ function setupAutoCalculate() {
     });
 
     input.addEventListener("blur", () => {
-      if (input.value.trim() === "") {
+      if (String(input.value).trim() === "") {
         input.value = "0";
       }
 
       calculate();
     });
 
+    input.addEventListener("input", () => {
+      removeLeadingZero(input);
+      calculate();
+    });
+
+    input.addEventListener("change", calculate);
+    input.addEventListener("keyup", calculate);
+
     input.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        focusNextInput(input, inputs);
+      if (event.key !== "Enter") return;
+
+      event.preventDefault();
+
+      const next = inputs[index + 1];
+
+      if (next) {
+        next.focus();
+
+        if (typeof next.select === "function") {
+          next.select();
+        }
+      } else {
+        input.blur();
       }
     });
   });
@@ -527,45 +561,37 @@ function setupAutoCalculate() {
 function removeLeadingZero(input) {
   if (!input) return;
 
-  const value = input.value;
+  const value = String(input.value);
 
   if (value.length > 1 && value.startsWith("0") && !value.startsWith("0.")) {
     input.value = value.replace(/^0+/, "");
   }
 }
 
-function focusNextInput(currentInput, inputList) {
-  const currentIndex = inputList.indexOf(currentInput);
-  const nextInput = inputList[currentIndex + 1];
-
-  if (nextInput) {
-    nextInput.focus();
-    nextInput.select();
-  } else {
-    currentInput.blur();
-  }
-}
-
 /* =========================
-   이벤트 연결
+   상품 관련 이벤트
 ========================= */
 
 function setupProductEvents() {
+  const productSearch = $("productSearch");
+  const productSelect = $("productSelect");
+  const clearProductSearchBtn = $("clearProductSearchBtn");
+  const addFavoriteBtn = $("addFavoriteBtn");
+
   if (productSearch) {
     productSearch.addEventListener("input", () => {
-      const keyword = productSearch.value;
-      renderProductOptions(keyword);
+      renderProductOptions(productSearch.value);
       selectedProduct = null;
       updateFavoriteButtonState();
     });
 
     productSearch.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
+      if (event.key !== "Enter") return;
 
-        if (productSelect) {
-          productSelect.focus();
-        }
+      event.preventDefault();
+
+      if (productSelect) {
+        productSelect.focus();
       }
     });
   }
@@ -574,20 +600,16 @@ function setupProductEvents() {
     clearProductSearchBtn.addEventListener("click", () => {
       if (productSearch) {
         productSearch.value = "";
+        productSearch.focus();
       }
-
-      renderProductOptions();
 
       if (productSelect) {
         productSelect.value = "";
       }
 
       selectedProduct = null;
+      renderProductOptions();
       updateFavoriteButtonState();
-
-      if (productSearch) {
-        productSearch.focus();
-      }
     });
   }
 
@@ -610,9 +632,7 @@ function setupProductEvents() {
       const product = selectedProduct || getSelectedProductFromSelect();
 
       if (!product) {
-        if (productSelect) {
-          productSelect.focus();
-        }
+        if (productSelect) productSelect.focus();
         return;
       }
 
@@ -622,19 +642,43 @@ function setupProductEvents() {
 }
 
 /* =========================
+   스플래시
+========================= */
+
+function setupSplash() {
+  window.addEventListener("load", () => {
+    setTimeout(() => {
+      const splash = $("rebornSplash");
+
+      if (!splash) return;
+
+      splash.classList.add("hide");
+
+      setTimeout(() => {
+        if (splash.parentNode) {
+          splash.parentNode.removeChild(splash);
+        }
+      }, 400);
+    }, 1000);
+  });
+}
+
+/* =========================
    초기 실행
 ========================= */
 
 function init() {
-  hideSplash();
-
   flattenProducts();
+
+  applyDefaultValues();
+
   renderProductOptions();
   renderFavoriteProducts();
   renderRecentProducts();
 
   setupProductEvents();
-  setupAutoCalculate();
+  setupInputEvents();
+  setupSplash();
 
   calculate();
   updateFavoriteButtonState();
