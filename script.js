@@ -81,9 +81,26 @@ let allProducts = [];
 let selectedProduct = null;
 let openedCategory = "";
 let pickerOpen = false;
-let businessMode = localStorage.getItem(STORAGE.businessMode) || "본점";
+let businessMode = storageGet(STORAGE.businessMode) || "본점";
 
 const $ = (id) => document.getElementById(id);
+
+function storageGet(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function storageSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // 일부 WebView/시크릿 모드에서 저장소가 막혀도 계산기는 계속 동작하게 둡니다.
+  }
+}
+
 
 function num(value) {
   const raw = String(value ?? "").replace(/,/g, "").trim();
@@ -117,26 +134,26 @@ function normalizeText(value) {
 
 function getArr(key) {
   try {
-    return JSON.parse(localStorage.getItem(key) || "[]");
+    return JSON.parse(storageGet(key) || "[]");
   } catch {
     return [];
   }
 }
 
 function setArr(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
+  storageSet(key, JSON.stringify(value));
 }
 
 function getObj(key) {
   try {
-    return JSON.parse(localStorage.getItem(key) || "{}");
+    return JSON.parse(storageGet(key) || "{}");
   } catch {
     return {};
   }
 }
 
 function setObj(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
+  storageSet(key, JSON.stringify(value));
 }
 
 function hideSplash() {
@@ -162,7 +179,7 @@ function setupBusinessModeTabs() {
 
     btn.addEventListener("click", () => {
       businessMode = btn.dataset.mode;
-      localStorage.setItem(STORAGE.businessMode, businessMode);
+      storageSet(STORAGE.businessMode, businessMode);
 
       buttons.forEach((button) => {
         button.classList.toggle("active", button.dataset.mode === businessMode);
@@ -420,6 +437,8 @@ function applyBoxSize(size, shouldCalculate = true, shouldHide = true) {
 }
 
 function setupBoxButtons() {
+  const boxUI = $("boxSizeOptions");
+
   document.querySelectorAll(".box-size-btn").forEach((btn) => {
     btn.addEventListener("click", (event) => {
       event.preventDefault();
@@ -443,13 +462,21 @@ function setupBoxButtons() {
   const boxFee = $("boxFee");
 
   if (boxFee) {
-    boxFee.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
+    ["click", "pointerdown", "touchstart"].forEach((eventName) => {
+      boxFee.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      }, { passive: false });
     });
 
     boxFee.addEventListener("focus", () => {
       boxFee.blur();
+    });
+  }
+
+  if (boxUI) {
+    boxUI.addEventListener("click", (event) => {
+      event.stopPropagation();
     });
   }
 }
