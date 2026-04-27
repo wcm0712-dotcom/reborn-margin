@@ -1032,3 +1032,28 @@ input {
     pointer-events: none;
   }
 }
+
+/* 박스비 영역 호환성 보강: label 기본 클릭 동작으로 '대(480원)'가 다시 선택되는 현상 방지 */
+.box-field {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.box-field .suffix,
+#boxFee {
+  pointer-events: none;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
