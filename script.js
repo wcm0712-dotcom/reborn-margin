@@ -68,8 +68,10 @@ const inputIds = [
 
 const STORAGE = {
   favorite: "reborn_favorite",
+  recent: "reborn_recent_products",
   savedInputs: "reborn_saved_inputs",
-  businessMode: "reborn_business_mode"
+  businessMode: "reborn_business_mode",
+  themeMode: "reborn_theme_mode"
 };
 
 let allProducts = [];
@@ -77,6 +79,7 @@ let selectedProduct = null;
 let openedCategory = "";
 let pickerOpen = false;
 let businessMode = localStorage.getItem(STORAGE.businessMode) || "본점";
+let themeMode = localStorage.getItem(STORAGE.themeMode) || "dark";
 
 const $ = (id) => document.getElementById(id);
 
@@ -94,6 +97,24 @@ function won(value) {
 
 function pct(value) {
   return `${num(value).toFixed(2)}%`;
+}
+
+function roundToTen(value) {
+  const n = num(value);
+  if (n <= 0) return 0;
+  return Math.ceil(n / 10) * 10;
+}
+
+function setResultStatus(tone, labelText, detailText) {
+  const label = $("profitStatusLabel");
+  const detail = $("quickDecision");
+  [label, detail].forEach((el) => {
+    if (!el) return;
+    el.classList.remove("idle", "good", "warn", "bad");
+    el.classList.add(tone);
+  });
+  if (label) label.textContent = labelText;
+  if (detail) detail.textContent = detailText;
 }
 
 function safeText(id, value) {
@@ -135,6 +156,61 @@ function getObj(key) {
 
 function setObj(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
+}
+
+
+function resolveThemeMode(mode) {
+  if (mode === "auto") {
+    const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    return prefersDark ? "dark" : "light";
+  }
+
+  return mode === "light" ? "light" : "dark";
+}
+
+function applyThemeMode(mode) {
+  const selectedMode = mode || "dark";
+  const resolvedTheme = resolveThemeMode(selectedMode);
+
+  themeMode = selectedMode;
+  localStorage.setItem(STORAGE.themeMode, selectedMode);
+
+  document.documentElement.dataset.theme = resolvedTheme;
+  document.documentElement.dataset.themeMode = selectedMode;
+
+  document.querySelectorAll(".theme-btn").forEach((btn) => {
+    const isActive = btn.dataset.themeChoice === selectedMode;
+    btn.classList.toggle("active", isActive);
+    btn.setAttribute("aria-pressed", isActive ? "true" : "false");
+  });
+}
+
+function setupThemeControls() {
+  const buttons = document.querySelectorAll(".theme-btn");
+  if (!buttons.length) return;
+
+  buttons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      applyThemeMode(btn.dataset.themeChoice || "dark");
+    });
+  });
+
+  applyThemeMode(themeMode);
+
+  if (window.matchMedia) {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const syncAutoTheme = () => {
+      if (themeMode === "auto") {
+        applyThemeMode("auto");
+      }
+    };
+
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", syncAutoTheme);
+    } else if (typeof media.addListener === "function") {
+      media.addListener(syncAutoTheme);
+    }
+  }
 }
 
 function hideSplash() {
@@ -338,11 +414,11 @@ function createCategoryPicker() {
   picker.className = "reborn-category-picker";
 
   picker.innerHTML = `
-    <button type="button" id="rebornPickerMain" class="reborn-picker-main">
+    <button type="button" id="rebornPickerMain" class="reborn-picker-main" aria-expanded="false" aria-controls="rebornPickerPanel">
       <span id="rebornPickerLabel">품목 선택</span>
-      <span class="reborn-picker-arrow">▼</span>
+      <span class="reborn-picker-arrow" aria-hidden="true">▼</span>
     </button>
-    <div id="rebornPickerPanel" class="reborn-picker-panel"></div>
+    <div id="rebornPickerPanel" class="reborn-picker-panel" role="listbox" aria-label="품목 목록"></div>
   `;
 
   nativeSelect.parentNode.appendChild(picker);
@@ -359,6 +435,7 @@ function createCategoryPicker() {
 
       pickerOpen = !pickerOpen;
       picker.classList.toggle("open", pickerOpen);
+      mainBtn.setAttribute("aria-expanded", String(pickerOpen));
 
       if (pickerOpen) {
         renderCategoryPicker();
@@ -369,6 +446,7 @@ function createCategoryPicker() {
   document.addEventListener("click", () => {
     pickerOpen = false;
     picker.classList.remove("open");
+    if (mainBtn) mainBtn.setAttribute("aria-expanded", "false");
   });
 
   renderCategoryPicker();
@@ -443,6 +521,7 @@ function renderCategoryPicker() {
         const productBtn = document.createElement("button");
         productBtn.type = "button";
         productBtn.className = "reborn-product-btn";
+        productBtn.setAttribute("role", "option");
         productBtn.innerHTML = `
           <span class="reborn-product-name">${product.name}</span>
           <span class="reborn-product-price">${product.price.toLocaleString("ko-KR")}원</span>
@@ -458,6 +537,8 @@ function renderCategoryPicker() {
 
           const picker = $("rebornCategoryPicker");
           if (picker) picker.classList.remove("open");
+          const mainBtn = $("rebornPickerMain");
+          if (mainBtn) mainBtn.setAttribute("aria-expanded", "false");
         });
 
         list.appendChild(productBtn);
@@ -510,8 +591,10 @@ function applyProduct(product) {
     unitCost.value = product.price;
   }
 
+  addRecentProduct(product);
   updatePickerLabel(product);
   updateFavoriteButton();
+  renderRecentProducts();
   calculate();
 }
 
@@ -520,7 +603,13 @@ function showBoxUI() {
   if (!boxUI) return;
 
   boxUI.classList.remove("box-hidden");
+  boxUI.removeAttribute("aria-hidden");
   boxUI.style.display = "grid";
+
+  document.querySelectorAll(".box-size-btn").forEach((btn) => {
+    btn.disabled = false;
+    btn.tabIndex = 0;
+  });
 }
 
 function hideBoxUI() {
@@ -528,7 +617,13 @@ function hideBoxUI() {
   if (!boxUI) return;
 
   boxUI.classList.add("box-hidden");
+  boxUI.setAttribute("aria-hidden", "true");
   boxUI.style.display = "none";
+
+  document.querySelectorAll(".box-size-btn").forEach((btn) => {
+    btn.disabled = true;
+    btn.tabIndex = -1;
+  });
 }
 
 function applyBoxSize(size, shouldCalculate = true, shouldHide = true) {
@@ -561,6 +656,9 @@ function setupBoxButtons() {
       event.preventDefault();
       event.stopPropagation();
 
+      const boxUI = $("boxSizeOptions");
+      if (!boxUI || boxUI.classList.contains("box-hidden") || btn.disabled) return;
+
       const size = btn.dataset.size;
       applyBoxSize(size, true, true);
     });
@@ -573,6 +671,15 @@ function setupBoxButtons() {
       event.preventDefault();
       event.stopPropagation();
       showBoxUI();
+    });
+  }
+
+  const boxField = document.querySelector(".box-field");
+  if (boxField) {
+    boxField.addEventListener("click", (event) => {
+      const target = event.target;
+      if (target && target.closest && target.closest(".box-size-btn, #changeBoxBtn, .field-save-btn")) return;
+      event.stopPropagation();
     });
   }
 
@@ -673,6 +780,106 @@ function toggleFavorite(product) {
   updateFavoriteButton();
 }
 
+function addRecentProduct(product) {
+  if (!product) return;
+
+  let list = getArr(STORAGE.recent).filter((item) => item.key !== product.key);
+  list.unshift({
+    key: product.key,
+    category: product.category,
+    name: product.name,
+    price: product.price
+  });
+  setArr(STORAGE.recent, list.slice(0, 6));
+}
+
+function removeRecentProduct(productKey) {
+  if (!productKey) return;
+
+  const list = getArr(STORAGE.recent).filter((item) => item.key !== productKey);
+  setArr(STORAGE.recent, list);
+  renderRecentProducts();
+}
+
+function clearRecentProducts() {
+  localStorage.removeItem(STORAGE.recent);
+  renderRecentProducts();
+}
+
+function renderRecentProducts() {
+  const box = $("recentList");
+  if (!box) return;
+
+  const list = getArr(STORAGE.recent).slice(0, 5);
+  box.innerHTML = "";
+
+  if (!list.length) {
+    box.style.display = "none";
+    return;
+  }
+
+  box.style.display = "block";
+  box.classList.add("recent-compact");
+
+  const header = document.createElement("div");
+  header.className = "recent-header";
+
+  const title = document.createElement("div");
+  title.className = "recent-title";
+  title.textContent = "최근 사용";
+
+  const clearAllBtn = document.createElement("button");
+  clearAllBtn.type = "button";
+  clearAllBtn.className = "recent-clear-all-btn";
+  clearAllBtn.textContent = "전체 삭제";
+  clearAllBtn.setAttribute("aria-label", "최근 사용 상품 전체 삭제");
+  clearAllBtn.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    clearRecentProducts();
+  });
+
+  header.appendChild(title);
+  header.appendChild(clearAllBtn);
+  box.appendChild(header);
+
+  const listWrap = document.createElement("div");
+  listWrap.className = "recent-chip-list";
+
+  list.forEach((product) => {
+    const item = document.createElement("div");
+    item.className = "recent-chip";
+
+    const applyBtn = document.createElement("button");
+    applyBtn.type = "button";
+    applyBtn.className = "recent-apply-btn";
+    applyBtn.title = `${product.name} 적용`;
+    applyBtn.innerHTML = `
+      <span class="recent-chip-name">${product.name}</span>
+      <span class="recent-chip-price">${num(product.price).toLocaleString("ko-KR")}원</span>
+    `;
+    applyBtn.addEventListener("click", () => applyProduct(product));
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "recent-remove-btn";
+    removeBtn.textContent = "×";
+    removeBtn.title = `${product.name} 최근 사용에서 삭제`;
+    removeBtn.setAttribute("aria-label", `${product.name} 최근 사용에서 삭제`);
+    removeBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      removeRecentProduct(product.key);
+    });
+
+    item.appendChild(applyBtn);
+    item.appendChild(removeBtn);
+    listWrap.appendChild(item);
+  });
+
+  box.appendChild(listWrap);
+}
+
 function renderFavorites() {
   const box = $("favoriteList");
   if (!box) return;
@@ -740,15 +947,19 @@ function calculate() {
   const feeRate = num(safeValue("coupangFeeRate")) / 100;
   const vatRate = num(safeValue("vatRate")) / 100;
   const earlyRate = num(safeValue("earlySettlementRate")) / 100;
+  const variableRate = feeRate + vatRate + earlyRate;
 
   const productCost = cost * qty;
+  const fixedCost = productCost + boxFee + ship;
   const coupangFee = sale * feeRate;
   const vatFee = sale * vatRate;
   const earlyFee = sale * earlyRate;
 
-  const total = productCost + boxFee + ship + coupangFee + vatFee + earlyFee;
+  const total = fixedCost + coupangFee + vatFee + earlyFee;
   const profit = sale - total;
   const margin = sale > 0 ? (profit / sale) * 100 : 0;
+  const breakEven = variableRate < 1 ? fixedCost / (1 - variableRate) : 0;
+  const targetSale = variableRate + 0.1 < 1 ? fixedCost / (1 - variableRate - 0.1) : 0;
 
   safeText("totalProductCost", won(productCost));
   safeText("boxFeeResult", won(boxFee));
@@ -758,6 +969,20 @@ function calculate() {
   safeText("totalCost", won(total));
   safeText("profit", won(profit));
   safeText("marginRate", pct(margin));
+  safeText("breakEvenPrice", won(roundToTen(breakEven)));
+  safeText("targetSalePrice", won(roundToTen(targetSale)));
+  safeText("heroProfitMirror", sale > 0 ? won(profit) : "자동 계산");
+  safeText("heroMarginMirror", sale > 0 ? pct(margin) : "0.00%");
+
+  if (!sale || !fixedCost) {
+    setResultStatus("idle", "대기", "원가·수량·판매가 입력 후 자동 판단됩니다.");
+  } else if (profit < 0) {
+    setResultStatus("bad", "손실", `손익분기 판매가보다 ${won(Math.abs(sale - breakEven))} 낮습니다.`);
+  } else if (margin < 10) {
+    setResultStatus("warn", "주의", "이익은 있지만 마진율 10% 미만입니다.");
+  } else {
+    setResultStatus("good", "양호", "현재 입력값 기준으로 판매 가능성이 높습니다.");
+  }
 
   updateProfitStyle(profit);
 }
@@ -890,14 +1115,50 @@ function setupProductEvents() {
     });
   }
 
-  const recentBox = $("recentList");
-  if (recentBox) {
-    recentBox.innerHTML = "";
-    recentBox.style.display = "none";
+  renderRecentProducts();
+}
+
+function restoreRecommendedDefaults() {
+  Object.entries(defaultValues).forEach(([id, value]) => {
+    const el = $(id);
+    if (el) el.value = value;
+  });
+  calculate();
+}
+
+function clearCoreInputs() {
+  ["unitCost", "quantity", "salePrice"].forEach((id) => {
+    const el = $(id);
+    if (el) el.value = "0";
+  });
+
+  selectedProduct = null;
+  const nativeSelect = $("productSelect");
+  if (nativeSelect) nativeSelect.value = "";
+  const pickerLabel = $("rebornPickerLabel");
+  if (pickerLabel) pickerLabel.textContent = "품목 선택";
+
+  updateFavoriteButton();
+  calculate();
+}
+
+function setupQuickActions() {
+  const restoreBtn = $("restoreDefaultsBtn");
+  const clearBtn = $("clearInputsBtn");
+  const jumpBtn = $("jumpResultsBtn");
+
+  if (restoreBtn) restoreBtn.addEventListener("click", restoreRecommendedDefaults);
+  if (clearBtn) clearBtn.addEventListener("click", clearCoreInputs);
+  if (jumpBtn) {
+    jumpBtn.addEventListener("click", () => {
+      const results = $("results");
+      if (results) results.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 }
 
 function init() {
+  setupThemeControls();
   initProducts();
   applyDefaults();
   restoreSavedInputs();
@@ -905,12 +1166,14 @@ function init() {
   renderHiddenSelect();
   createCategoryPicker();
   renderFavorites();
+  renderRecentProducts();
 
   setupBusinessModeTabs();
   setupProductEvents();
   setupInputs();
   setupBoxButtons();
   setupSaveButtons();
+  setupQuickActions();
 
   calculate();
   updateFavoriteButton();
