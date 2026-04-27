@@ -155,6 +155,10 @@ function hideSplash() {
   }, 1000);
 }
 
+/* =========================
+   상품 데이터
+========================= */
+
 function initProducts() {
   allProducts = [];
 
@@ -170,6 +174,10 @@ function initProducts() {
   });
 }
 
+/* =========================
+   품목 선택 커스텀 UI
+========================= */
+
 function injectCategoryPickerStyle() {
   if (document.getElementById("rebornCategoryPickerStyle")) return;
 
@@ -177,6 +185,7 @@ function injectCategoryPickerStyle() {
   style.id = "rebornCategoryPickerStyle";
   style.textContent = `
     .reborn-category-picker { position: relative; width: 100%; }
+
     .reborn-picker-main {
       width: 100%;
       height: 50px;
@@ -193,11 +202,13 @@ function injectCategoryPickerStyle() {
       justify-content: space-between;
       box-shadow: 0 9px 22px rgba(15, 23, 42, 0.045);
     }
+
     .reborn-picker-main span:first-child {
       overflow: hidden;
       white-space: nowrap;
       text-overflow: ellipsis;
     }
+
     .reborn-picker-arrow {
       color: #10b981;
       font-size: 13px;
@@ -205,10 +216,12 @@ function injectCategoryPickerStyle() {
       margin-left: 8px;
       transition: transform 0.18s ease, color 0.18s ease;
     }
+
     .reborn-category-picker.open .reborn-picker-arrow {
       transform: rotate(180deg);
       color: #059669;
     }
+
     .reborn-picker-panel {
       display: none;
       margin-top: 10px;
@@ -218,7 +231,11 @@ function injectCategoryPickerStyle() {
       border: 1px solid rgba(226, 232, 240, 0.95);
       box-shadow: 0 18px 36px rgba(15, 23, 42, 0.09);
     }
-    .reborn-category-picker.open .reborn-picker-panel { display: block; }
+
+    .reborn-category-picker.open .reborn-picker-panel {
+      display: block;
+    }
+
     .reborn-category-btn {
       width: 100%;
       border: 0;
@@ -234,16 +251,19 @@ function injectCategoryPickerStyle() {
       font-weight: 900;
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.7);
     }
+
     .reborn-category-btn.active {
       background: linear-gradient(145deg, #ecfdf5, #fff8e7);
       color: #065f46;
       border: 1px solid rgba(167, 243, 208, 0.95);
     }
+
     .reborn-category-count {
       font-size: 11px;
       color: #10b981;
       font-weight: 900;
     }
+
     .reborn-product-list {
       display: grid;
       gap: 7px;
@@ -252,6 +272,7 @@ function injectCategoryPickerStyle() {
       border-radius: 18px;
       background: rgba(248, 250, 252, 0.88);
     }
+
     .reborn-product-btn {
       width: 100%;
       border: 1px solid rgba(226, 232, 240, 0.95);
@@ -267,17 +288,20 @@ function injectCategoryPickerStyle() {
       gap: 10px;
       text-align: left;
     }
+
     .reborn-product-name {
       overflow: hidden;
       white-space: nowrap;
       text-overflow: ellipsis;
     }
+
     .reborn-product-price {
       flex: 0 0 auto;
       color: #059669;
       font-size: 12px;
       font-weight: 900;
     }
+
     .reborn-empty-products {
       padding: 14px;
       color: #94a3b8;
@@ -468,6 +492,10 @@ function renderHiddenSelect() {
   });
 }
 
+/* =========================
+   상품 적용
+========================= */
+
 function applyProduct(product) {
   if (!product) return;
 
@@ -483,7 +511,11 @@ function applyProduct(product) {
   calculate();
 }
 
-function applyBoxSize(size, shouldCalculate = true) {
+/* =========================
+   박스비
+========================= */
+
+function applyBoxSize(size, shouldCalculate = true, hideAfterSelect = true) {
   const boxFee = $("boxFee");
   const boxSize = $("boxSize");
   const boxUI = $("boxSizeOptions");
@@ -500,8 +532,13 @@ function applyBoxSize(size, shouldCalculate = true) {
   });
 
   if (boxUI) {
-    boxUI.classList.add("box-hidden");
-    boxUI.style.display = "none";
+    if (hideAfterSelect) {
+      boxUI.classList.add("box-hidden");
+      boxUI.style.display = "none";
+    } else {
+      boxUI.classList.remove("box-hidden");
+      boxUI.style.display = "grid";
+    }
   }
 
   if (shouldCalculate) calculate();
@@ -522,7 +559,7 @@ function setupBoxButtons() {
       event.preventDefault();
       event.stopPropagation();
 
-      applyBoxSize(btn.dataset.size);
+      applyBoxSize(btn.dataset.size, true, true);
     });
   });
 
@@ -533,6 +570,10 @@ function setupBoxButtons() {
     boxFee.addEventListener("focus", showBoxUI);
   }
 }
+
+/* =========================
+   저장 기능
+========================= */
 
 function saveInputValue(target) {
   const saved = getObj(STORAGE.savedInputs);
@@ -554,7 +595,7 @@ function restoreSavedInputs() {
   Object.keys(saved).forEach((id) => {
     if (id === "boxSize") {
       if (saved.boxSize) {
-        applyBoxSize(saved.boxSize, false);
+        applyBoxSize(saved.boxSize, false, false);
       }
       return;
     }
@@ -566,6 +607,12 @@ function restoreSavedInputs() {
       el.value = saved[id];
     }
   });
+
+  const boxUI = $("boxSizeOptions");
+  if (boxUI) {
+    boxUI.classList.remove("box-hidden");
+    boxUI.style.display = "grid";
+  }
 }
 
 function markSavedButton(target) {
@@ -589,6 +636,10 @@ function setupSaveButtons() {
     });
   });
 }
+
+/* =========================
+   즐겨찾기
+========================= */
 
 function isFavorite(product) {
   if (!product) return false;
@@ -670,6 +721,10 @@ function updateFavoriteButton() {
   }
 }
 
+/* =========================
+   계산
+========================= */
+
 function calculate() {
   const cost = num(safeValue("unitCost"));
   const qty = num(safeValue("quantity"));
@@ -719,6 +774,10 @@ function updateProfitStyle(profit) {
     el.classList.add(profit >= 0 ? "profit-text" : "loss-text");
   });
 }
+
+/* =========================
+   입력 편의
+========================= */
 
 function applyDefaults() {
   Object.keys(defaultValues).forEach((id) => {
@@ -783,6 +842,10 @@ function setupInputs() {
   });
 }
 
+/* =========================
+   이벤트
+========================= */
+
 function setupProductEvents() {
   const search = $("productSearch");
   const favoriteBtn = $("addFavoriteBtn");
@@ -836,6 +899,10 @@ function setupProductEvents() {
     recentBox.style.display = "none";
   }
 }
+
+/* =========================
+   초기화
+========================= */
 
 function init() {
   initProducts();
