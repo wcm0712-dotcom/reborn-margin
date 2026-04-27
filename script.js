@@ -1,6 +1,6 @@
 /* =========================
    RE:BORN Margin Calculator
-   SAFE FINAL script.js
+   CATEGORY PICKER FINAL
 ========================= */
 
 const productCategories = [
@@ -66,30 +66,19 @@ const inputIds = [
 ];
 
 const STORAGE = {
-  recent: "reborn_recent",
   favorite: "reborn_favorite"
 };
 
 let allProducts = [];
 let selectedProduct = null;
-let recentVisible = false;
+let openedCategory = "";
+let pickerOpen = false;
 
 const $ = (id) => document.getElementById(id);
-
-function safeText(id, value) {
-  const el = $(id);
-  if (el) el.textContent = value;
-}
-
-function safeValue(id) {
-  const el = $(id);
-  return el ? el.value : "";
-}
 
 function num(value) {
   const raw = String(value ?? "").replace(/,/g, "").trim();
   if (raw === "") return 0;
-
   const n = Number(raw);
   return Number.isFinite(n) ? n : 0;
 }
@@ -100,6 +89,16 @@ function won(value) {
 
 function pct(value) {
   return `${num(value).toFixed(2)}%`;
+}
+
+function safeText(id, value) {
+  const el = $(id);
+  if (el) el.textContent = value;
+}
+
+function safeValue(id) {
+  const el = $(id);
+  return el ? el.value : "";
 }
 
 function normalizeText(value) {
@@ -117,8 +116,8 @@ function getArr(key) {
   }
 }
 
-function setArr(key, val) {
-  localStorage.setItem(key, JSON.stringify(val));
+function setArr(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
 }
 
 function hideSplash() {
@@ -136,11 +135,15 @@ function hideSplash() {
   }, 1000);
 }
 
+/* =========================
+   상품 데이터 정리
+========================= */
+
 function initProducts() {
   allProducts = [];
 
-  productCategories.forEach(([category, list]) => {
-    list.forEach(([name, price]) => {
+  productCategories.forEach(([category, products]) => {
+    products.forEach(([name, price]) => {
       allProducts.push({
         key: `${category}__${name}`,
         category,
@@ -151,59 +154,315 @@ function initProducts() {
   });
 }
 
-function renderProducts(keyword = "") {
+function getProductByKey(key) {
+  return allProducts.find((product) => product.key === key) || null;
+}
+
+/* =========================
+   커스텀 품목 선택 UI
+========================= */
+
+function injectCategoryPickerStyle() {
+  if (document.getElementById("rebornCategoryPickerStyle")) return;
+
+  const style = document.createElement("style");
+  style.id = "rebornCategoryPickerStyle";
+  style.textContent = `
+    .reborn-category-picker {
+      position: relative;
+      width: 100%;
+    }
+
+    .reborn-picker-main {
+      width: 100%;
+      height: 50px;
+      border: 1px solid rgba(203, 213, 225, 0.86);
+      border-radius: 18px;
+      background: linear-gradient(145deg, #ffffff, #f8fafc);
+      color: #334155;
+      font-size: 14px;
+      font-weight: 850;
+      letter-spacing: -0.02em;
+      padding: 0 15px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 9px 22px rgba(15, 23, 42, 0.045);
+    }
+
+    .reborn-picker-main span:first-child {
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .reborn-picker-arrow {
+      color: #be185d;
+      font-size: 13px;
+      margin-left: 8px;
+    }
+
+    .reborn-picker-panel {
+      display: none;
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.96);
+      border: 1px solid rgba(226, 232, 240, 0.95);
+      box-shadow: 0 18px 36px rgba(15, 23, 42, 0.09);
+    }
+
+    .reborn-category-picker.open .reborn-picker-panel {
+      display: block;
+    }
+
+    .reborn-category-btn {
+      width: 100%;
+      border: 0;
+      border-radius: 16px;
+      padding: 12px 13px;
+      margin-bottom: 7px;
+      background: linear-gradient(145deg, #fff7fb, #f8fafc);
+      color: #334155;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 14px;
+      font-weight: 900;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.7);
+    }
+
+    .reborn-category-btn.active {
+      background: linear-gradient(145deg, #fff1f5, #fff8e7);
+      color: #831843;
+      border: 1px solid rgba(255, 209, 220, 0.9);
+    }
+
+    .reborn-category-count {
+      font-size: 11px;
+      color: #94a3b8;
+      font-weight: 900;
+    }
+
+    .reborn-product-list {
+      display: grid;
+      gap: 7px;
+      margin: 2px 0 10px;
+      padding: 7px;
+      border-radius: 18px;
+      background: rgba(248, 250, 252, 0.88);
+    }
+
+    .reborn-product-btn {
+      width: 100%;
+      border: 1px solid rgba(226, 232, 240, 0.95);
+      border-radius: 15px;
+      padding: 11px 12px;
+      background: #ffffff;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      text-align: left;
+    }
+
+    .reborn-product-name {
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .reborn-product-price {
+      flex: 0 0 auto;
+      color: #be185d;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .reborn-empty-products {
+      padding: 14px;
+      color: #94a3b8;
+      font-size: 13px;
+      font-weight: 800;
+      text-align: center;
+    }
+  `;
+
+  document.head.appendChild(style);
+}
+
+function createCategoryPicker() {
+  injectCategoryPickerStyle();
+
+  const nativeSelect = $("productSelect");
+  if (!nativeSelect) return;
+
+  nativeSelect.style.display = "none";
+
+  const existing = $("rebornCategoryPicker");
+  if (existing) existing.remove();
+
+  const picker = document.createElement("div");
+  picker.id = "rebornCategoryPicker";
+  picker.className = "reborn-category-picker";
+
+  picker.innerHTML = `
+    <button type="button" id="rebornPickerMain" class="reborn-picker-main">
+      <span id="rebornPickerLabel">품목 선택</span>
+      <span class="reborn-picker-arrow">▼</span>
+    </button>
+    <div id="rebornPickerPanel" class="reborn-picker-panel"></div>
+  `;
+
+  nativeSelect.parentNode.appendChild(picker);
+
+  const mainBtn = $("rebornPickerMain");
+
+  if (mainBtn) {
+    mainBtn.addEventListener("click", () => {
+      pickerOpen = !pickerOpen;
+      picker.classList.toggle("open", pickerOpen);
+      renderCategoryPicker();
+    });
+  }
+
+  document.addEventListener("click", (event) => {
+    if (!picker.contains(event.target)) {
+      pickerOpen = false;
+      picker.classList.remove("open");
+    }
+  });
+
+  renderCategoryPicker();
+}
+
+function renderCategoryPicker() {
+  const panel = $("rebornPickerPanel");
+  const search = $("productSearch");
+  if (!panel) return;
+
+  const keyword = normalizeText(search ? search.value : "");
+  panel.innerHTML = "";
+
+  const filteredProducts = allProducts.filter((product) => {
+    const target = normalizeText(`${product.category}${product.name}`);
+    return target.includes(keyword);
+  });
+
+  if (!filteredProducts.length) {
+    const empty = document.createElement("div");
+    empty.className = "reborn-empty-products";
+    empty.textContent = "검색 결과가 없습니다.";
+    panel.appendChild(empty);
+    return;
+  }
+
+  const categories = productCategories
+    .map(([category]) => category)
+    .filter((category) => {
+      return filteredProducts.some((product) => product.category === category);
+    });
+
+  categories.forEach((category) => {
+    const products = filteredProducts.filter((product) => product.category === category);
+
+    const categoryBtn = document.createElement("button");
+    categoryBtn.type = "button";
+    categoryBtn.className = "reborn-category-btn";
+    if (openedCategory === category || keyword) {
+      categoryBtn.classList.add("active");
+    }
+
+    categoryBtn.innerHTML = `
+      <span>${category}</span>
+      <span class="reborn-category-count">${products.length}개</span>
+    `;
+
+    categoryBtn.addEventListener("click", () => {
+      if (keyword) {
+        openedCategory = category;
+      } else {
+        openedCategory = openedCategory === category ? "" : category;
+      }
+
+      renderCategoryPicker();
+    });
+
+    panel.appendChild(categoryBtn);
+
+    if (openedCategory === category || keyword) {
+      const list = document.createElement("div");
+      list.className = "reborn-product-list";
+
+      products.forEach((product) => {
+        const productBtn = document.createElement("button");
+        productBtn.type = "button";
+        productBtn.className = "reborn-product-btn";
+        productBtn.innerHTML = `
+          <span class="reborn-product-name">${product.name}</span>
+          <span class="reborn-product-price">${product.price.toLocaleString("ko-KR")}원</span>
+        `;
+
+        productBtn.addEventListener("click", () => {
+          applyProduct(product);
+          pickerOpen = false;
+
+          const picker = $("rebornCategoryPicker");
+          if (picker) picker.classList.remove("open");
+        });
+
+        list.appendChild(productBtn);
+      });
+
+      panel.appendChild(list);
+    }
+  });
+}
+
+function updatePickerLabel(product) {
+  const label = $("rebornPickerLabel");
+  const nativeSelect = $("productSelect");
+
+  if (label && product) {
+    label.textContent = product.name;
+  }
+
+  if (nativeSelect && product) {
+    nativeSelect.value = product.key;
+  }
+}
+
+/* =========================
+   기존 select 동기화용
+========================= */
+
+function renderHiddenSelect() {
   const select = $("productSelect");
   if (!select) return;
-
-  const k = normalizeText(keyword);
-
-  const filtered = allProducts.filter((product) => {
-    const target = normalizeText(`${product.category}${product.name}`);
-    return target.includes(k);
-  });
 
   select.innerHTML = "";
 
   const first = document.createElement("option");
   first.value = "";
-  first.textContent = filtered.length ? "품목 선택" : "검색 결과 없음";
+  first.textContent = "품목 선택";
   select.appendChild(first);
 
-  const grouped = {};
-
-  filtered.forEach((product) => {
-    if (!grouped[product.category]) grouped[product.category] = [];
-    grouped[product.category].push(product);
-  });
-
-  Object.keys(grouped).forEach((category) => {
-    const group = document.createElement("optgroup");
-    group.label = category;
-
-    grouped[category].forEach((product) => {
-      const option = document.createElement("option");
-      option.value = product.key;
-      option.textContent = `${product.name} / ${product.price.toLocaleString("ko-KR")}원`;
-      group.appendChild(option);
-    });
-
-    select.appendChild(group);
+  allProducts.forEach((product) => {
+    const option = document.createElement("option");
+    option.value = product.key;
+    option.textContent = `${product.name} / ${product.price.toLocaleString("ko-KR")}원`;
+    select.appendChild(option);
   });
 }
 
-function getProductByKey(key) {
-  return allProducts.find((product) => product.key === key) || null;
-}
+/* =========================
+   상품 적용
+========================= */
 
-function syncSelect(product) {
-  const select = $("productSelect");
-  if (!select || !product) return;
-
-  const exists = Array.from(select.options).some((option) => option.value === product.key);
-  if (exists) select.value = product.key;
-}
-
-function selectProduct(product) {
+function applyProduct(product) {
   if (!product) return;
 
   selectedProduct = product;
@@ -213,101 +472,14 @@ function selectProduct(product) {
     unitCost.value = product.price;
   }
 
-  saveRecent(product);
+  updatePickerLabel(product);
   updateFavoriteButton();
   calculate();
 }
 
-function saveRecent(product) {
-  if (!product) return;
-
-  let list = getArr(STORAGE.recent);
-  list = list.filter((item) => item.key !== product.key);
-  list.unshift(product);
-  list = list.slice(0, 6);
-
-  setArr(STORAGE.recent, list);
-
-  if (recentVisible) {
-    renderRecent();
-  }
-}
-
-function removeRecent(key) {
-  let list = getArr(STORAGE.recent);
-  list = list.filter((item) => item.key !== key);
-  setArr(STORAGE.recent, list);
-  renderRecent();
-}
-
-function clearRecent() {
-  localStorage.removeItem(STORAGE.recent);
-  renderRecent();
-}
-
-function hideRecent() {
-  const box = $("recentList");
-  if (box) box.innerHTML = "";
-  recentVisible = false;
-}
-
-function showRecent() {
-  recentVisible = true;
-  renderRecent();
-}
-
-function renderRecent() {
-  const box = $("recentList");
-  if (!box) return;
-
-  box.innerHTML = "";
-
-  if (!recentVisible) return;
-
-  const list = getArr(STORAGE.recent);
-  if (!list.length) return;
-
-  const titleRow = document.createElement("div");
-  titleRow.className = "recent-title-row";
-
-  const title = document.createElement("div");
-  title.className = "section-title";
-  title.textContent = "최근 선택";
-
-  const clearBtn = document.createElement("button");
-  clearBtn.type = "button";
-  clearBtn.className = "clear-recent-btn";
-  clearBtn.textContent = "전체 삭제";
-  clearBtn.addEventListener("click", clearRecent);
-
-  titleRow.appendChild(title);
-  titleRow.appendChild(clearBtn);
-  box.appendChild(titleRow);
-
-  list.forEach((product) => {
-    const item = document.createElement("div");
-    item.className = "recent-item";
-
-    const productBtn = document.createElement("button");
-    productBtn.type = "button";
-    productBtn.className = "quick-product-btn";
-    productBtn.textContent = `${product.name} · ${num(product.price).toLocaleString("ko-KR")}원`;
-    productBtn.addEventListener("click", () => {
-      selectProduct(product);
-      syncSelect(product);
-    });
-
-    const removeBtn = document.createElement("button");
-    removeBtn.type = "button";
-    removeBtn.className = "remove-recent-btn";
-    removeBtn.textContent = "삭제";
-    removeBtn.addEventListener("click", () => removeRecent(product.key));
-
-    item.appendChild(productBtn);
-    item.appendChild(removeBtn);
-    box.appendChild(item);
-  });
-}
+/* =========================
+   즐겨찾기
+========================= */
 
 function isFavorite(product) {
   if (!product) return false;
@@ -355,8 +527,7 @@ function renderFavorites() {
     productBtn.className = "quick-product-btn";
     productBtn.textContent = `${product.name} · ${num(product.price).toLocaleString("ko-KR")}원`;
     productBtn.addEventListener("click", () => {
-      selectProduct(product);
-      syncSelect(product);
+      applyProduct(product);
     });
 
     const removeBtn = document.createElement("button");
@@ -375,23 +546,24 @@ function updateFavoriteButton() {
   const btn = $("addFavoriteBtn");
   if (!btn) return;
 
-  const select = $("productSelect");
-  const product = selectedProduct || getProductByKey(select?.value);
-
-  if (!product) {
+  if (!selectedProduct) {
     btn.textContent = "☆";
-    btn.title = "최근 선택 보기";
+    btn.title = "상품을 먼저 선택하세요";
     return;
   }
 
-  if (isFavorite(product)) {
+  if (isFavorite(selectedProduct)) {
     btn.textContent = "★";
-    btn.title = "즐겨찾기에서 제거 / 최근 선택 보기";
+    btn.title = "즐겨찾기에서 제거";
   } else {
     btn.textContent = "☆";
-    btn.title = "즐겨찾기 추가 / 최근 선택 보기";
+    btn.title = "즐겨찾기 추가";
   }
 }
+
+/* =========================
+   계산
+========================= */
 
 function calculate() {
   const cost = num(safeValue("unitCost"));
@@ -420,14 +592,6 @@ function calculate() {
   safeText("profit", won(profit));
   safeText("marginRate", pct(margin));
 
-  safeText("quickProfit", won(profit));
-  safeText("quickMargin", pct(margin));
-  safeText("quickBreakEven", won(total));
-  safeText("summarySalePrice", won(sale));
-  safeText("summaryTotalCost", won(total));
-  safeText("summaryProfit", won(profit));
-  safeText("summaryMargin", pct(margin));
-
   updateProfitStyle(profit);
 }
 
@@ -440,7 +604,7 @@ function updateProfitStyle(profit) {
     el.classList.add(profit >= 0 ? "profit" : "loss");
   });
 
-  ["profit", "marginRate", "quickProfit", "quickMargin", "summaryProfit", "summaryMargin"].forEach((id) => {
+  ["profit", "marginRate"].forEach((id) => {
     const el = $(id);
     if (!el) return;
 
@@ -448,6 +612,10 @@ function updateProfitStyle(profit) {
     el.classList.add(profit >= 0 ? "profit-text" : "loss-text");
   });
 }
+
+/* =========================
+   입력 편의 기능
+========================= */
 
 function applyDefaults() {
   Object.keys(defaultValues).forEach((id) => {
@@ -512,77 +680,74 @@ function setupInputs() {
   });
 }
 
+/* =========================
+   이벤트
+========================= */
+
 function setupProductEvents() {
   const search = $("productSearch");
-  const select = $("productSelect");
   const favoriteBtn = $("addFavoriteBtn");
-  const clearBtn = $("clearProductSearchBtn");
 
   if (search) {
     search.addEventListener("input", () => {
-      renderProducts(search.value);
-      selectedProduct = null;
-      updateFavoriteButton();
+      openedCategory = "";
+      pickerOpen = true;
+
+      const picker = $("rebornCategoryPicker");
+      if (picker) picker.classList.add("open");
+
+      renderCategoryPicker();
     });
 
     search.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
-        if (select) select.focus();
+
+        pickerOpen = true;
+        const picker = $("rebornCategoryPicker");
+        if (picker) picker.classList.add("open");
+
+        renderCategoryPicker();
       }
-    });
-  }
-
-  if (select) {
-    select.addEventListener("change", () => {
-      const product = getProductByKey(select.value);
-
-      if (!product) {
-        selectedProduct = null;
-        updateFavoriteButton();
-        return;
-      }
-
-      selectProduct(product);
     });
   }
 
   if (favoriteBtn) {
     favoriteBtn.addEventListener("click", () => {
-      showRecent();
-
-      const product = selectedProduct || getProductByKey(select?.value);
-
-      if (!product) {
-        if (select) select.focus();
-        return;
-      }
-
-      toggleFavorite(product);
+      if (!selectedProduct) return;
+      toggleFavorite(selectedProduct);
     });
   }
 
+  const clearBtn = $("clearProductSearchBtn");
   if (clearBtn) {
     clearBtn.addEventListener("click", () => {
       if (search) search.value = "";
-      if (select) select.value = "";
-
-      selectedProduct = null;
-      renderProducts();
-      updateFavoriteButton();
+      openedCategory = "";
+      renderCategoryPicker();
 
       if (search) search.focus();
     });
   }
+
+  const recentBox = $("recentList");
+  if (recentBox) {
+    recentBox.innerHTML = "";
+    recentBox.style.display = "none";
+  }
 }
+
+/* =========================
+   초기화
+========================= */
 
 function init() {
   initProducts();
   applyDefaults();
 
-  renderProducts();
+  renderHiddenSelect();
+  createCategoryPicker();
   renderFavorites();
-  hideRecent();
 
   setupProductEvents();
   setupInputs();
