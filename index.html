@@ -7,6 +7,7 @@
   <title>RE:BORN</title>
   <link rel="stylesheet" href="style.css" />
 </head>
+
 <body class="premium-app">
   <div id="rebornSplash">
     <div class="splash-inner">
@@ -15,6 +16,7 @@
       <div class="splash-subtitle">Margin Calculator</div>
     </div>
   </div>
+
   <header>
     <div class="nav">
       <div class="brand">
@@ -25,9 +27,9 @@
           <h1>RE:BORN</h1>
         </div>
       </div>
+
       <div class="badge">실시간 자동 계산</div>
       <div class="ribbon-badge">RIBBON COMPANY</div>
-
     </div>
   </header>
 
@@ -52,13 +54,38 @@
       <div class="panel">
         <div class="panel-top">
           <h3>입력값</h3>
+        </div>
+
+        <p class="panel-desc">상품을 검색하거나 선택하면 원가가 자동 입력됩니다.</p>
+
+        <div class="product-tools">
+          <input
+            id="productSearch"
+            class="product-search"
+            type="text"
+            placeholder="상품명 검색"
+            autocomplete="off"
+            aria-label="상품명 검색"
+          />
+
           <div class="product-picker-wrap">
             <select id="productSelect" class="product-picker" aria-label="품목 선택">
               <option value="">품목 선택</option>
             </select>
           </div>
+
+          <div class="product-action-row">
+            <button type="button" id="addFavoriteBtn" class="small-action-btn">
+              즐겨찾기 추가
+            </button>
+            <button type="button" id="clearProductSearchBtn" class="small-action-btn secondary">
+              검색 초기화
+            </button>
+          </div>
+
+          <div id="favoriteList" class="quick-list"></div>
+          <div id="recentList" class="quick-list"></div>
         </div>
-        <p class="panel-desc">숫자를 바꾸면 자동으로 다시 계산됩니다.</p>
 
         <label class="field">
           <div class="field-title">원가(낱개)</div>
@@ -180,12 +207,12 @@
         </div>
       </div>
     </section>
+
     <div class="footer-note">
       REBORN Margin Calculator · 내부 업무용 계산 도구
     </div>
   </main>
+
   <script src="script.js"></script>
-
-
 </body>
 </html>
