@@ -150,8 +150,8 @@ function hideSplash() {
       if (splash.parentNode) {
         splash.parentNode.removeChild(splash);
       }
-    }, 400);
-  }, 1000);
+    }, 420);
+  }, 900);
 }
 
 function setupBusinessModeTabs() {
@@ -788,4 +788,8 @@ document.addEventListener("DOMContentLoaded", () => {
   } catch (error) {
     console.error("RE:BORN 초기화 오류:", error);
   }
+});
+
+window.addEventListener("load", () => {
+  hideSplash();
 });
