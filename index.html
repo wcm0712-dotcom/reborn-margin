@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="RE:BORN 전용 쿠팡 판매 마진 계산기. 원가, 판매가, 배송비, 쿠팡 수수료, 부가세, 선정산 패널티를 반영해 순이익과 마진율을 계산합니다." />
+  <title>RE:BORN</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="premium-app">
+  <div id="rebornSplash">
+    <div class="splash-inner">
+      <div class="splash-mark"></div>
+      <div class="splash-title">RE:BORN</div>
+      <div class="splash-subtitle">Margin Calculator</div>
+    </div>
+  </div>
+  <header>
+    <div class="nav">
+      <div class="brand">
+        <div class="logo" aria-label="RE:BORN 로고">
+          <span class="ribbon-icon"></span>
+        </div>
+        <div>
+          <h1>RE:BORN</h1>
+        </div>
+      </div>
+      <div class="badge">실시간 자동 계산</div>
+      <div class="ribbon-badge">RIBBON COMPANY</div>
+
+    </div>
+  </header>
+
+  <main>
+    <section class="intro">
+      <div>
+        <div class="eyebrow">📊 REBORN Margin Calculator</div>
+        <h2>판매 전, 실제 마진을 정확하게 확인하세요.</h2>
+        <p>
+          RE:BORN 전용 계산기로 원가·수량·판매가·배송비·수수료·부가세를 한 번에 반영해 실제 순이익과 마진율을 계산합니다.
+          입력값을 수정하면 결과가 즉시 갱신되어 판매가 조정과 상품 운영 판단에 활용할 수 있습니다.
+        </p>
+        <div class="intro-pills">
+          <span>실시간 계산</span>
+          <span>모바일 최적화</span>
+          <span>쿠팡 수수료 반영</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="content">
+      <div class="panel">
+        <div class="panel-top">
+          <h3>입력값</h3>
+          <div class="product-picker-wrap">
+            <select id="productSelect" class="product-picker" aria-label="품목 선택">
+              <option value="">품목 선택</option>
+            </select>
+          </div>
+        </div>
+        <p class="panel-desc">숫자를 바꾸면 자동으로 다시 계산됩니다.</p>
+
+        <label class="field">
+          <div class="field-title">원가(낱개)</div>
+          <div class="field-row">
+            <input id="unitCost" type="number" inputmode="decimal" value="0" />
+            <span class="suffix">원</span>
+          </div>
+          <div class="hint">상품 1개당 매입 원가입니다.</div>
+        </label>
+
+        <label class="field">
+          <div class="field-title">판매수량</div>
+          <div class="field-row">
+            <input id="quantity" type="number" inputmode="decimal" value="0" />
+            <span class="suffix">개</span>
+          </div>
+          <div class="hint">한 주문에 판매하는 총 수량입니다.</div>
+        </label>
+
+        <label class="field">
+          <div class="field-title">판매가</div>
+          <div class="field-row">
+            <input id="salePrice" type="number" inputmode="decimal" value="0" />
+            <span class="suffix">원</span>
+          </div>
+          <div class="hint">쿠팡에 등록된 최종 판매가입니다.</div>
+        </label>
+
+        <label class="field">
+          <div class="field-title">택배비</div>
+          <div class="field-row">
+            <input id="shippingFee" type="number" inputmode="decimal" value="2400" />
+            <span class="suffix">원</span>
+          </div>
+          <div class="hint">주문 1건에 들어가는 총 배송비입니다.</div>
+        </label>
+
+        <label class="field">
+          <div class="field-title">쿠팡 수수료율</div>
+          <div class="field-row">
+            <input id="coupangFeeRate" type="number" inputmode="decimal" value="12" />
+            <span class="suffix">%</span>
+          </div>
+          <div class="hint">판매가 기준으로 차감되는 수수료율입니다.</div>
+        </label>
+
+        <label class="field">
+          <div class="field-title">부가세율</div>
+          <div class="field-row">
+            <input id="vatRate" type="number" inputmode="decimal" value="10" />
+            <span class="suffix">%</span>
+          </div>
+          <div class="hint">부가세를 제외하고 싶으면 0을 입력하세요.</div>
+        </label>
+
+        <label class="field">
+          <div class="field-title">선정산 패널티율</div>
+          <div class="field-row">
+            <input id="earlySettlementRate" type="number" inputmode="decimal" value="1.2" />
+            <span class="suffix">%</span>
+          </div>
+          <div class="hint">선정산 이용 시 적용되는 차감률입니다.</div>
+        </label>
+      </div>
+
+      <div class="panel">
+        <h3>자동 계산 결과</h3>
+        <p class="panel-desc">비용 항목별로 나누어 마진 구조를 확인할 수 있습니다.</p>
+
+        <div class="results">
+          <div class="result-card">
+            <span>총원가</span>
+            <strong id="totalProductCost">0원</strong>
+            <p>낱개 원가 × 판매수량</p>
+          </div>
+
+          <div class="result-card">
+            <span>쿠팡수수료</span>
+            <strong id="coupangFee">0원</strong>
+            <p>판매가 × 쿠팡 수수료율</p>
+          </div>
+
+          <div class="result-card">
+            <span>선정산 패널티</span>
+            <strong id="earlySettlementFee">0원</strong>
+            <p>판매가 × 선정산 패널티율</p>
+          </div>
+
+          <div class="result-card">
+            <span>부가세</span>
+            <strong id="vat">0원</strong>
+            <p>판매가 × 부가세율</p>
+          </div>
+
+          <div class="result-card">
+            <span>총 비용</span>
+            <strong id="totalCost">0원</strong>
+            <p>원가 + 배송비 + 수수료 + 세금</p>
+          </div>
+
+          <div class="result-card highlight" id="profitCard">
+            <span>순이익</span>
+            <strong id="profit">0원</strong>
+            <p>판매가 - 총 비용</p>
+          </div>
+
+          <div class="result-card highlight" id="marginCard">
+            <span>마진율</span>
+            <strong id="marginRate">0.00%</strong>
+            <p>순이익 ÷ 판매가</p>
+          </div>
+        </div>
+
+        <div class="tips">
+          <strong>실무 체크 포인트</strong>
+          · 순이익이 0원 이하이면 판매가를 올리거나 배송비 구조를 조정해야 합니다.<br />
+          · 수수료율이 상품 카테고리마다 다르면 쿠팡 수수료율만 변경해서 비교하세요.<br />
+          · 부가세를 제외하고 보고 싶다면 부가세율을 0으로 입력하면 됩니다.
+        </div>
+      </div>
+    </section>
+    <div class="footer-note">
+      REBORN Margin Calculator · 내부 업무용 계산 도구
+    </div>
+  </main>
+  <script src="script.js"></script>
+
+
+</body>
+</html>
