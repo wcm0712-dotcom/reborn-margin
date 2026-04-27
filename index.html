@@ -10,7 +10,7 @@
   />
 
   <title>RE:BORN Margin Calculator</title>
-  <link rel="stylesheet" href="./style.css?v=reborn-final-apple-soft-01" />
+  <link rel="stylesheet" href="./style.css?v=reborn-fixed-box-02" />
 </head>
 
 <body class="premium-app">
@@ -143,8 +143,8 @@
           <div class="hint">쿠팡에 등록된 최종 판매가입니다.</div>
         </label>
 
-        <label class="field">
-          <div class="field-title">박스비</div>
+        <div class="field box-field" role="group" aria-labelledby="boxFeeTitle">
+          <div class="field-title" id="boxFeeTitle">박스비</div>
 
           <div id="boxSizeOptions" class="box-size-row">
             <button type="button" class="box-size-btn" data-size="대">대</button>
@@ -153,15 +153,15 @@
           </div>
 
           <div class="field-row">
-            <input id="boxFee" type="number" inputmode="decimal" value="0" readonly />
+            <input id="boxFee" type="number" inputmode="decimal" value="0" readonly aria-label="선택된 박스비" />
             <input id="boxSize" type="hidden" value="" />
-            <span class="suffix">원</span>
+            <span class="suffix" aria-hidden="true">원</span>
             <button type="button" id="changeBoxBtn" class="box-change-btn">변경</button>
             <button type="button" class="field-save-btn" data-save="boxSize">저장</button>
           </div>
 
           <div class="hint">대 480원 · 중 380원 · 소 250원 / 변경 버튼을 누르면 다시 선택할 수 있습니다.</div>
-        </label>
+        </div>
 
         <label class="field">
           <div class="field-title">택배비</div>
@@ -275,6 +275,6 @@
     </div>
   </main>
 
-  <script src="./script.js?v=reborn-final-apple-soft-01"></script>
+  <script src="./script.js?v=reborn-fixed-box-02"></script>
 </body>
 </html>
