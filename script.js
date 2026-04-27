@@ -73,13 +73,15 @@ const inputIds = [
 
 const STORAGE = {
   favorite: "reborn_favorite",
-  savedInputs: "reborn_saved_inputs"
+  savedInputs: "reborn_saved_inputs",
+  businessMode: "reborn_business_mode"
 };
 
 let allProducts = [];
 let selectedProduct = null;
 let openedCategory = "";
 let pickerOpen = false;
+let businessMode = localStorage.getItem(STORAGE.businessMode) || "본점";
 
 const $ = (id) => document.getElementById(id);
 
@@ -153,6 +155,25 @@ function hideSplash() {
       }
     }, 400);
   }, 1000);
+}
+
+function setupBusinessModeTabs() {
+  const buttons = document.querySelectorAll(".business-mode-btn");
+
+  buttons.forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.mode === businessMode);
+
+    btn.addEventListener("click", () => {
+      businessMode = btn.dataset.mode;
+      localStorage.setItem(STORAGE.businessMode, businessMode);
+
+      buttons.forEach((button) => {
+        button.classList.toggle("active", button.dataset.mode === businessMode);
+      });
+
+      calculate();
+    });
+  });
 }
 
 function initProducts() {
@@ -890,6 +911,7 @@ function init() {
   createCategoryPicker();
   renderFavorites();
 
+  setupBusinessModeTabs();
   setupProductEvents();
   setupInputs();
   setupBoxButtons();
