@@ -86,6 +86,7 @@ const $ = (id) => document.getElementById(id);
 function num(value) {
   const raw = String(value ?? "").replace(/,/g, "").trim();
   if (raw === "") return 0;
+
   const n = Number(raw);
   return Number.isFinite(n) ? n : 0;
 }
@@ -154,8 +155,6 @@ function hideSplash() {
   }, 1000);
 }
 
-/* 상품 */
-
 function initProducts() {
   allProducts = [];
 
@@ -170,8 +169,6 @@ function initProducts() {
     });
   });
 }
-
-/* 품목 선택 UI */
 
 function injectCategoryPickerStyle() {
   if (document.getElementById("rebornCategoryPickerStyle")) return;
@@ -487,8 +484,6 @@ function renderHiddenSelect() {
   });
 }
 
-/* 상품 적용 */
-
 function applyProduct(product) {
   if (!product) return;
 
@@ -504,12 +499,25 @@ function applyProduct(product) {
   calculate();
 }
 
-/* 박스비 */
+function showBoxUI() {
+  const boxUI = $("boxSizeOptions");
+  if (!boxUI) return;
 
-function applyBoxSize(size, shouldCalculate = true, hideAfterSelect = true) {
+  boxUI.classList.remove("box-hidden");
+  boxUI.style.display = "grid";
+}
+
+function hideBoxUI() {
+  const boxUI = $("boxSizeOptions");
+  if (!boxUI) return;
+
+  boxUI.classList.add("box-hidden");
+  boxUI.style.display = "none";
+}
+
+function applyBoxSize(size, shouldCalculate = true, shouldHide = true) {
   const boxFee = $("boxFee");
   const boxSize = $("boxSize");
-  const boxUI = $("boxSizeOptions");
 
   if (!boxFee || !boxSize) return;
 
@@ -522,25 +530,12 @@ function applyBoxSize(size, shouldCalculate = true, hideAfterSelect = true) {
     btn.classList.toggle("active", btn.dataset.size === size);
   });
 
-  if (boxUI) {
-    if (hideAfterSelect) {
-      boxUI.classList.add("box-hidden");
-      boxUI.style.display = "none";
-    } else {
-      boxUI.classList.remove("box-hidden");
-      boxUI.style.display = "grid";
-    }
+  if (shouldHide) {
+    hideBoxUI();
   }
 
-  if (shouldCalculate) calculate();
-}
-
-function showBoxUI() {
-  const boxUI = $("boxSizeOptions");
-
-  if (boxUI) {
-    boxUI.classList.remove("box-hidden");
-    boxUI.style.display = "grid";
+  if (shouldCalculate) {
+    calculate();
   }
 }
 
@@ -550,17 +545,12 @@ function setupBoxButtons() {
       event.preventDefault();
       event.stopPropagation();
 
-      applyBoxSize(btn.dataset.size, true, true);
+      const size = btn.dataset.size;
+      applyBoxSize(size, true, true);
     });
   });
 
-  const boxFee = $("boxFee");
   const changeBoxBtn = $("changeBoxBtn");
-
-  if (boxFee) {
-    boxFee.addEventListener("click", showBoxUI);
-    boxFee.addEventListener("focus", showBoxUI);
-  }
 
   if (changeBoxBtn) {
     changeBoxBtn.addEventListener("click", (event) => {
@@ -569,9 +559,20 @@ function setupBoxButtons() {
       showBoxUI();
     });
   }
-}
 
-/* 저장 */
+  const boxFee = $("boxFee");
+
+  if (boxFee) {
+    boxFee.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+
+    boxFee.addEventListener("focus", () => {
+      boxFee.blur();
+    });
+  }
+}
 
 function saveInputValue(target) {
   const saved = getObj(STORAGE.savedInputs);
@@ -593,7 +594,7 @@ function restoreSavedInputs() {
   Object.keys(saved).forEach((id) => {
     if (id === "boxSize") {
       if (saved.boxSize) {
-        applyBoxSize(saved.boxSize, false, false);
+        applyBoxSize(saved.boxSize, false, true);
       }
       return;
     }
@@ -606,10 +607,8 @@ function restoreSavedInputs() {
     }
   });
 
-  const boxUI = $("boxSizeOptions");
-  if (boxUI) {
-    boxUI.classList.remove("box-hidden");
-    boxUI.style.display = "grid";
+  if (!saved.boxSize) {
+    showBoxUI();
   }
 }
 
@@ -634,8 +633,6 @@ function setupSaveButtons() {
     });
   });
 }
-
-/* 즐겨찾기 */
 
 function isFavorite(product) {
   if (!product) return false;
@@ -717,8 +714,6 @@ function updateFavoriteButton() {
   }
 }
 
-/* 계산 */
-
 function calculate() {
   const cost = num(safeValue("unitCost"));
   const qty = num(safeValue("quantity"));
@@ -768,8 +763,6 @@ function updateProfitStyle(profit) {
     el.classList.add(profit >= 0 ? "profit-text" : "loss-text");
   });
 }
-
-/* 입력 편의 */
 
 function applyDefaults() {
   Object.keys(defaultValues).forEach((id) => {
@@ -834,8 +827,6 @@ function setupInputs() {
   });
 }
 
-/* 이벤트 */
-
 function setupProductEvents() {
   const search = $("productSearch");
   const favoriteBtn = $("addFavoriteBtn");
@@ -889,8 +880,6 @@ function setupProductEvents() {
     recentBox.style.display = "none";
   }
 }
-
-/* 초기화 */
 
 function init() {
   initProducts();
