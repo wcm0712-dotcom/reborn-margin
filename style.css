@@ -11,13 +11,10 @@
   --brand-line: #ffd1dc;
 
   --gold: #c9a24d;
-  --gold-soft: #fff8e7;
-
   --green: #059669;
   --red: #e11d48;
 
   --shadow: 0 22px 55px rgba(15, 23, 42, 0.08);
-  --soft-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
   --radius: 26px;
 }
 
@@ -312,8 +309,6 @@ main {
   line-height: 1.55;
 }
 
-/* 상품 검색 / 품목 선택 / 즐겨찾기 */
-
 .product-tools {
   margin: 18px 0 22px;
   padding: 14px;
@@ -332,8 +327,7 @@ main {
   margin-bottom: 16px;
   padding: 4px;
   border-radius: 20px;
-  background:
-    linear-gradient(145deg, #ffffff, #f8fafc);
+  background: linear-gradient(145deg, #ffffff, #f8fafc);
   border: 1px solid rgba(203, 213, 225, 0.86);
   box-shadow:
     0 10px 24px rgba(15, 23, 42, 0.055),
@@ -403,8 +397,7 @@ main {
   height: 50px;
   border: 1px solid rgba(203, 213, 225, 0.86);
   border-radius: 18px;
-  background:
-    linear-gradient(145deg, #ffffff, #f8fafc);
+  background: linear-gradient(145deg, #ffffff, #f8fafc);
   color: #334155;
   font-size: 14px;
   font-weight: 850;
@@ -465,8 +458,7 @@ main {
   border-radius: 999px;
   font-size: 13px;
   font-weight: 850;
-  background:
-    linear-gradient(145deg, #ffffff, #f1f5f9);
+  background: linear-gradient(145deg, #ffffff, #f1f5f9);
   color: #475569;
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
   transition: transform 0.16s ease, box-shadow 0.16s ease;
@@ -479,6 +471,7 @@ main {
 }
 
 .quick-list {
+  width: 100%;
   margin-top: 12px;
 }
 
@@ -503,8 +496,7 @@ main {
   border: 1px solid rgba(226, 232, 240, 0.92);
   padding: 9px 13px;
   border-radius: 999px;
-  background:
-    linear-gradient(145deg, #ffffff, #f8fafc);
+  background: linear-gradient(145deg, #ffffff, #f8fafc);
   color: #334155;
   font-size: 13px;
   font-weight: 800;
@@ -517,28 +509,67 @@ main {
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
 }
 
-.favorite-item {
+.favorite-item,
+.recent-item {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 5px;
   border-radius: 999px;
-  background:
-    linear-gradient(145deg, rgba(255, 248, 231, 0.9), rgba(255, 241, 245, 0.72));
-  border: 1px solid rgba(255, 228, 236, 0.9);
+  border: 1px solid rgba(226, 232, 240, 0.9);
 }
 
-.remove-favorite-btn {
+.favorite-item {
+  background:
+    linear-gradient(145deg, rgba(255, 248, 231, 0.9), rgba(255, 241, 245, 0.72));
+  border-color: rgba(255, 228, 236, 0.9);
+}
+
+.recent-item {
+  background: rgba(248, 250, 252, 0.9);
+}
+
+.remove-favorite-btn,
+.remove-recent-btn {
   border: none;
   padding: 7px 9px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.92);
-  color: #b45309;
   font-size: 12px;
   font-weight: 900;
 }
 
-/* 입력 필드 */
+.remove-favorite-btn {
+  color: #b45309;
+}
+
+.remove-recent-btn {
+  color: #64748b;
+}
+
+.recent-title-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.recent-title-row .section-title {
+  width: auto;
+  margin: 0;
+}
+
+.clear-recent-btn {
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: linear-gradient(145deg, #ffffff, #f8fafc);
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 900;
+}
 
 .field {
   display: block;
@@ -613,8 +644,6 @@ input {
   font-size: 10px;
   line-height: 1.5;
 }
-
-/* 결과 카드 */
 
 .results {
   display: grid;
@@ -707,8 +736,6 @@ input {
   line-height: 1.6;
 }
 
-/* 스플래시 */
-
 #rebornSplash {
   position: fixed;
   inset: 0;
@@ -784,8 +811,6 @@ input {
   letter-spacing: 0.03em;
 }
 
-/* 애니메이션 */
-
 @keyframes fadeUp {
   from {
     opacity: 0;
@@ -835,8 +860,6 @@ input {
     transform: scale(1) translateY(0);
   }
 }
-
-/* 반응형 */
 
 @media (max-width: 860px) {
   .ribbon-badge,
@@ -906,6 +929,18 @@ input {
   .favorite-add-btn {
     width: 50px;
     height: 48px;
+  }
+
+  .recent-item,
+  .favorite-item {
+    max-width: 100%;
+  }
+
+  .quick-product-btn {
+    max-width: 210px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .result-card strong {
