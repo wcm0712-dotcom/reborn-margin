@@ -922,3 +922,17 @@ input {
 .box-size-row.box-hidden {
   display: none !important;
 }
+.box-change-btn {
+  flex: 0 0 auto;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 12px;
+  padding: 7px 9px;
+  background: linear-gradient(145deg, #ecfdf5, #d1fae5);
+  color: #047857;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.box-size-row.box-hidden {
+  display: none !important;
+}
