@@ -10,7 +10,6 @@
   />
 
   <title>RE:BORN Margin Calculator</title>
-
   <link rel="stylesheet" href="style.css" />
 </head>
 
@@ -29,7 +28,6 @@
         <div class="logo" aria-label="RE:BORN 로고">
           <span class="ribbon-icon"></span>
         </div>
-
         <div>
           <h1>RE:BORN</h1>
         </div>
@@ -73,7 +71,6 @@
         <div class="product-tools">
           <div class="product-search-box">
             <span class="search-icon">🔍</span>
-
             <input
               id="productSearch"
               class="product-search"
@@ -149,20 +146,20 @@
         <label class="field">
           <div class="field-title">박스비</div>
 
-          <div class="box-size-row">
+          <div id="boxSizeOptions" class="box-size-row">
             <button type="button" class="box-size-btn" data-size="대" data-price="480">대</button>
             <button type="button" class="box-size-btn" data-size="중" data-price="380">중</button>
             <button type="button" class="box-size-btn" data-size="소" data-price="250">소</button>
           </div>
 
           <div class="field-row">
-            <input id="boxSize" type="text" value="" placeholder="대 / 중 / 소 선택" readonly />
-            <input id="boxFee" type="hidden" value="0" />
-            <span class="suffix">박스</span>
+            <input id="boxFee" type="number" inputmode="decimal" value="0" readonly />
+            <input id="boxSize" type="hidden" value="" />
+            <span class="suffix">원</span>
             <button type="button" class="field-save-btn" data-save="boxSize">저장</button>
           </div>
 
-          <div class="hint">대 480원 · 중 380원 · 소 250원입니다.</div>
+          <div class="hint">대 480원 · 중 380원 · 소 250원 / 박스비 칸을 누르면 다시 선택할 수 있습니다.</div>
         </label>
 
         <label class="field">
