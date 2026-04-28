@@ -6,6 +6,25 @@
   const UNDO_KEY = "reborn.wms.undo.v1";
   const ORDER_CACHE_KEY = "reborn.wms.lastOrderAnalysis.v3";
 
+  const SUPABASE_CONFIG = {
+    enabled: true,
+    url: "https://zbjnoputejbviwbxulxo.supabase.co",
+    key: "sb_publishable_y9Z5PQtDR5oIDqWYYndKew_3NyoLniY",
+    appStateTable: "app_state",
+    appStateRowId: "main",
+    backupTable: "inventory_backups",
+    movementTable: "stock_movements",
+    orderStatsTable: "order_stats",
+    defaultSyncIntervalMs: 60 * 1000
+  };
+  const ADMIN_AUTH_CONFIG = {
+    enabled: true,
+    lockWmsEditingUntilLogin: true
+  };
+  let adminSession = null;
+
+  const SYNC_INTERVAL_KEY = "reborn.wms.sync.interval.v1";
+
   const BOX_PRICES = { large: 480, medium: 380, small: 250 };
   const BOX_SKU_BY_SIZE = { large: "박스 대", medium: "박스 중", small: "박스 소" };
   const BOX_LABEL = { large: "대 박스", medium: "중 박스", small: "소 박스", none: "박스 없음" };
@@ -242,18 +261,22 @@
   }
 
   function saveState(reason = "저장", options = {}) {
-    const { trackUndo = true } = options;
+    const { trackUndo = true, cloud = true } = options;
     if (trackUndo) pushUndoSnapshot(reason);
     state.updatedAt = new Date().toISOString();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    addBackup(reason);
+    addBackup(reason, { cloud });
     renderAll();
+    if (cloud) queueSupabaseAppStateSave(reason);
   }
 
-  function addBackup(reason) {
+  function addBackup(reason, options = {}) {
+    const { cloud = true } = options;
+    const backup = { at: new Date().toISOString(), reason, state: safeClone(state) };
     const backups = loadBackups();
-    backups.unshift({ at: new Date().toISOString(), reason, state });
+    backups.unshift(backup);
     localStorage.setItem(BACKUP_KEY, JSON.stringify(backups.slice(0, 30)));
+    if (cloud) queueSupabaseBackupSave(backup);
   }
 
   function loadBackups() {
@@ -311,6 +334,420 @@
     addBackup("이전값 복구");
     renderAll();
     alert(`이전값을 불러왔습니다.\n${formatDateTime(snapshot.at)} · ${snapshot.reason || "저장 전 상태"}`);
+  }
+
+
+  function safeClone(value) {
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch {
+      return value;
+    }
+  }
+
+  let supabaseClient = null;
+  let supabaseSaveTimer = null;
+  let supabaseSaveReason = "저장";
+  let supabaseSyncTimer = null;
+  let supabaseBusy = false;
+  let lastSupabaseSavePromise = Promise.resolve();
+
+  function isEditorSession() {
+    return !ADMIN_AUTH_CONFIG.enabled || !ADMIN_AUTH_CONFIG.lockWmsEditingUntilLogin || Boolean(adminSession?.user);
+  }
+
+  function setAdminAuthStatus(text, tone = "muted") {
+    const status = $("adminAuthStatus");
+    if (!status) return;
+    status.textContent = text || "";
+    status.dataset.tone = tone;
+  }
+
+  function updateEditorLock() {
+    const editable = isEditorSession();
+    document.body.classList.toggle("view-only-mode", !editable);
+
+    const lockSelectors = [
+      "#savePallets", "#saveBoxStock", "#quickInboundExample",
+      "#addStockMoveRow", "#clearStockMoveRows", "#applyStockMove",
+      "#orderFile", "#parseOrderFile", "#applyOrderDeductions",
+      "#importBackup", "#resetWms", "#restorePreviousWms", "#moveMemo",
+      "#palletGrid input", "#boxStockGrid input",
+      "#stockMoveRows input", "#stockMoveRows select", "#stockMoveRows button"
+    ];
+
+    document.querySelectorAll(lockSelectors.join(",")).forEach((el) => {
+      el.disabled = !editable;
+      el.setAttribute("aria-disabled", String(!editable));
+    });
+
+    const loginButton = $("adminLogin");
+    const logoutButton = $("adminLogout");
+    const emailInput = $("adminEmail");
+    const passwordInput = $("adminPassword");
+
+    if (loginButton) loginButton.hidden = editable;
+    if (logoutButton) logoutButton.hidden = !editable;
+    if (emailInput) emailInput.hidden = editable;
+    if (passwordInput) {
+      passwordInput.hidden = editable;
+      if (editable) passwordInput.value = "";
+    }
+
+    if (editable) {
+      const email = adminSession?.user?.email || "관리자";
+      setAdminAuthStatus(`${email} 계정으로 로그인되어 재고 수정이 가능합니다.`, "ok");
+    } else {
+      setAdminAuthStatus("관리자 로그인 전에는 입고, 주문 차감, 박스/파렛 수정, 복구/초기화가 잠깁니다.", "warn");
+    }
+  }
+
+  function requireEditor(action = "수정") {
+    if (isEditorSession()) return true;
+    setAdminAuthStatus(`${action}은 관리자 로그인 후 가능합니다.`, "warn");
+    alert(`${action}은 관리자 로그인 후 가능합니다.`);
+    updateEditorLock();
+    return false;
+  }
+
+  async function initAdminAuth() {
+    if (!ADMIN_AUTH_CONFIG.enabled) {
+      updateEditorLock();
+      return;
+    }
+
+    updateEditorLock();
+    const client = getSupabaseClient();
+    if (!client?.auth) {
+      setAdminAuthStatus("Supabase 연결 전이라 수정 권한 확인을 할 수 없습니다.", "warn");
+      return;
+    }
+
+    $("adminLogin")?.addEventListener("click", async () => {
+      const email = ($("adminEmail")?.value || "").trim();
+      const password = $("adminPassword")?.value || "";
+      if (!email || !password) {
+        setAdminAuthStatus("관리자 이메일과 비밀번호를 입력하세요.", "warn");
+        return;
+      }
+
+      setAdminAuthStatus("로그인 확인 중입니다.", "muted");
+      const { data, error } = await client.auth.signInWithPassword({ email, password });
+      if (error) {
+        adminSession = null;
+        updateEditorLock();
+        setAdminAuthStatus("로그인 실패: 이메일/비밀번호 또는 Supabase Auth 설정을 확인하세요.", "bad");
+        return;
+      }
+      adminSession = data?.session || null;
+      updateEditorLock();
+      syncFromSupabase({ forcePull: true, silent: false });
+    });
+
+    $("adminLogout")?.addEventListener("click", async () => {
+      await client.auth.signOut();
+      adminSession = null;
+      updateEditorLock();
+      syncFromSupabase({ forcePull: true, silent: true });
+    });
+
+    const { data } = await client.auth.getSession();
+    adminSession = data?.session || null;
+    updateEditorLock();
+
+    client.auth.onAuthStateChange((_event, session) => {
+      adminSession = session || null;
+      updateEditorLock();
+    });
+  }
+
+  function hasLocalSavedState() {
+    try {
+      return Boolean(localStorage.getItem(STORAGE_KEY));
+    } catch {
+      return false;
+    }
+  }
+
+  function getSupabaseClient() {
+    if (!SUPABASE_CONFIG.enabled) return null;
+    if (supabaseClient) return supabaseClient;
+    if (!window.supabase?.createClient) return null;
+    if (!SUPABASE_CONFIG.url || !SUPABASE_CONFIG.key) return null;
+    supabaseClient = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.key);
+    return supabaseClient;
+  }
+
+  function setSyncStatus(kind, text, detail) {
+    const dot = $("syncStatusDot");
+    const label = $("syncStatusText");
+    const desc = $("syncStatusDetail");
+    if (dot) dot.className = `sync-dot ${kind || "muted"}`;
+    if (label) label.textContent = text || "동기화 대기";
+    if (desc) desc.textContent = detail || "";
+  }
+
+  function setSyncBusy(isBusy) {
+    supabaseBusy = isBusy;
+    const button = $("syncNow");
+    if (button) {
+      button.disabled = isBusy;
+      button.textContent = isBusy ? "동기화 중..." : "지금 동기화";
+    }
+  }
+
+  function setSyncTimes({ lastAt, remoteAt } = {}) {
+    if (lastAt) setText("syncLastAt", formatDateTime(lastAt));
+    if (remoteAt) setText("syncRemoteAt", formatDateTime(remoteAt));
+  }
+
+  function toTimeValue(value) {
+    const date = new Date(value || 0);
+    const time = date.getTime();
+    return Number.isFinite(time) ? time : 0;
+  }
+
+  function extractRemoteState(row) {
+    const payload = row?.data;
+    if (!payload || typeof payload !== "object") return null;
+    const candidate = payload.state && typeof payload.state === "object" ? payload.state : payload;
+    if (!candidate.stock || !candidate.pallets) return null;
+    const normalized = normalizeState(candidate);
+    if (row?.updated_at && toTimeValue(row.updated_at) > toTimeValue(normalized.updatedAt)) {
+      normalized.updatedAt = row.updated_at;
+    }
+    return normalized;
+  }
+
+  function buildAppStatePayload(reason) {
+    return {
+      ...safeClone(state),
+      cloudMeta: {
+        reason: reason || "저장",
+        savedAt: new Date().toISOString(),
+        source: "reborn-margin-wms"
+      }
+    };
+  }
+
+  async function saveSupabaseAppState(reason = "저장") {
+    if (ADMIN_AUTH_CONFIG.enabled && !isEditorSession()) {
+      setSyncStatus("warn", "읽기 전용", "관리자 로그인 전에는 Supabase DB에 저장하지 않습니다. 화면은 DB 최신값을 불러오는 용도로만 작동합니다.");
+      return false;
+    }
+
+    const client = getSupabaseClient();
+    if (!client) {
+      setSyncStatus("warn", "브라우저 저장", "Supabase 라이브러리 또는 설정을 찾지 못해 localStorage로 작동 중입니다.");
+      return false;
+    }
+
+    const now = new Date().toISOString();
+    setSyncStatus("saving", "저장 중", `${reason} 내용을 Supabase에 저장하고 있습니다.`);
+    setSyncBusy(true);
+
+    try {
+      const payload = buildAppStatePayload(reason);
+      const { error } = await client
+        .from(SUPABASE_CONFIG.appStateTable)
+        .upsert({
+          id: SUPABASE_CONFIG.appStateRowId,
+          data: payload,
+          updated_at: now
+        }, { onConflict: "id" });
+
+      if (error) throw error;
+      setSyncTimes({ lastAt: now, remoteAt: now });
+      setSyncStatus("ok", "최신 상태", "Supabase와 브라우저 저장값이 동기화되었습니다.");
+      return true;
+    } catch (error) {
+      console.warn("Supabase app_state 저장 실패", error);
+      setSyncStatus("bad", "DB 저장 실패", "인터넷 또는 Supabase 설정 문제로 브라우저 저장값만 유지 중입니다.");
+      return false;
+    } finally {
+      setSyncBusy(false);
+    }
+  }
+
+  function queueSupabaseAppStateSave(reason = "저장") {
+    if (!SUPABASE_CONFIG.enabled) return;
+    if (ADMIN_AUTH_CONFIG.enabled && !isEditorSession()) return;
+    supabaseSaveReason = reason || supabaseSaveReason || "저장";
+    clearTimeout(supabaseSaveTimer);
+    supabaseSaveTimer = setTimeout(() => {
+      lastSupabaseSavePromise = lastSupabaseSavePromise.finally(() => saveSupabaseAppState(supabaseSaveReason));
+    }, 450);
+  }
+
+  async function insertSupabaseRecord(tableName, fullRecord, minimalRecord) {
+    if (ADMIN_AUTH_CONFIG.enabled && !isEditorSession()) return false;
+    const client = getSupabaseClient();
+    if (!client || !tableName) return false;
+    try {
+      const { error } = await client.from(tableName).insert(fullRecord);
+      if (!error) return true;
+
+      const fallback = minimalRecord || { data: fullRecord };
+      const retry = await client.from(tableName).insert(fallback);
+      if (retry.error) throw retry.error;
+      return true;
+    } catch (error) {
+      console.warn(`${tableName} Supabase 기록 실패`, error);
+      return false;
+    }
+  }
+
+  function queueSupabaseBackupSave(backup) {
+    if (!SUPABASE_CONFIG.enabled || !backup) return;
+    setTimeout(() => {
+      insertSupabaseRecord(
+        SUPABASE_CONFIG.backupTable,
+        {
+          reason: backup.reason || "백업",
+          data: backup,
+          created_at: backup.at || new Date().toISOString()
+        },
+        { data: backup }
+      );
+    }, 0);
+  }
+
+  function queueSupabaseMovementSave(record) {
+    if (!SUPABASE_CONFIG.enabled || !record) return;
+    setTimeout(() => {
+      insertSupabaseRecord(
+        SUPABASE_CONFIG.movementTable,
+        {
+          type: record.type || "기록",
+          memo: record.memo || "",
+          qty_text: record.qtyText || "",
+          data: record,
+          created_at: record.at || new Date().toISOString()
+        },
+        { data: record }
+      );
+    }, 0);
+  }
+
+  function queueSupabaseOrderStatSave(record) {
+    if (!SUPABASE_CONFIG.enabled || !record) return;
+    setTimeout(() => {
+      insertSupabaseRecord(
+        SUPABASE_CONFIG.orderStatsTable,
+        {
+          order_rows: record.orderRows || 0,
+          payment_group_count: record.paymentGroupCount || 0,
+          payment_unique_sum: record.paymentUniqueSum || 0,
+          data: record,
+          created_at: record.at || new Date().toISOString()
+        },
+        { data: record }
+      );
+    }, 0);
+  }
+
+  async function syncFromSupabase(options = {}) {
+    const { forcePull = false, silent = false } = options;
+    if (supabaseBusy) return;
+
+    const client = getSupabaseClient();
+    if (!client) {
+      setSyncStatus("warn", "브라우저 저장", "Supabase CDN을 불러오지 못했거나 연결 정보가 없어 localStorage로 작동 중입니다.");
+      return;
+    }
+
+    if (!silent) setSyncStatus("checking", "확인 중", "Supabase에 저장된 최신 재고를 확인하고 있습니다.");
+    setSyncBusy(true);
+
+    try {
+      const { data, error } = await client
+        .from(SUPABASE_CONFIG.appStateTable)
+        .select("data,updated_at")
+        .eq("id", SUPABASE_CONFIG.appStateRowId)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      const remoteState = extractRemoteState(data);
+      const remoteAt = data?.updated_at || remoteState?.updatedAt || "";
+      const localAt = state?.updatedAt || "";
+
+      if (!remoteState) {
+        if (isEditorSession()) {
+          setSyncStatus("saving", "DB 초기 저장", "Supabase에 아직 유효한 재고 상태가 없어 현재 브라우저 값을 올립니다.");
+          setSyncBusy(false);
+          await saveSupabaseAppState("DB 초기 저장");
+        } else {
+          setSyncStatus("warn", "읽기 전용", "DB에 아직 유효한 재고가 없습니다. 관리자 로그인 후 초기 저장이 가능합니다.");
+        }
+        return;
+      }
+
+      const shouldApplyRemote = forcePull || !hasLocalSavedState() || toTimeValue(remoteAt) > toTimeValue(localAt) || (ADMIN_AUTH_CONFIG.enabled && !isEditorSession());
+
+      if (shouldApplyRemote) {
+        state = normalizeState(remoteState);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        renderAll();
+        setSyncTimes({ lastAt: new Date().toISOString(), remoteAt: remoteAt || state.updatedAt });
+        setSyncStatus("ok", "최신 상태", "Supabase의 최신 재고를 불러와 화면에 반영했습니다.");
+      } else {
+        setSyncTimes({ lastAt: new Date().toISOString(), remoteAt: remoteAt || localAt });
+        setSyncStatus("ok", "최신 상태", "현재 브라우저 재고가 DB와 같거나 더 최신입니다.");
+        if (toTimeValue(localAt) > toTimeValue(remoteAt) && isEditorSession()) {
+          setSyncBusy(false);
+          await saveSupabaseAppState("로컬 최신 상태 동기화");
+          return;
+        }
+      }
+    } catch (error) {
+      console.warn("Supabase 동기화 실패", error);
+      setSyncStatus("bad", "동기화 실패", "Supabase 연결에 실패했습니다. 현재 화면은 브라우저 저장값으로 계속 작동합니다.");
+    } finally {
+      setSyncBusy(false);
+    }
+  }
+
+  function getStoredSyncInterval() {
+    try {
+      const saved = Number(localStorage.getItem(SYNC_INTERVAL_KEY));
+      if ([0, 60000, 300000, 600000, 1800000, 3600000].includes(saved)) return saved;
+    } catch {
+      // ignore
+    }
+    return SUPABASE_CONFIG.defaultSyncIntervalMs;
+  }
+
+  function setAutoSyncInterval(ms) {
+    clearInterval(supabaseSyncTimer);
+    supabaseSyncTimer = null;
+    const interval = Number(ms) || 0;
+    try { localStorage.setItem(SYNC_INTERVAL_KEY, String(interval)); } catch { /* ignore */ }
+    if (interval > 0) {
+      supabaseSyncTimer = setInterval(() => syncFromSupabase({ silent: true }), interval);
+    }
+  }
+
+  function initSupabaseSync() {
+    const select = $("syncIntervalSelect");
+    const savedInterval = getStoredSyncInterval();
+    if (select) {
+      select.value = String(savedInterval);
+      select.addEventListener("change", () => setAutoSyncInterval(select.value));
+    }
+
+    $("syncNow")?.addEventListener("click", () => syncFromSupabase({ forcePull: false }));
+
+    if (!getSupabaseClient()) {
+      setSyncStatus("warn", "브라우저 저장", "Supabase 라이브러리를 아직 불러오지 못해 localStorage로 작동 중입니다.");
+      setAutoSyncInterval(0);
+      if (select) select.value = "0";
+      return;
+    }
+
+    setSyncStatus("checking", "연결 확인", "Supabase 연결을 확인하고 최신 재고를 불러옵니다.");
+    setAutoSyncInterval(savedInterval);
+    syncFromSupabase({ silent: false });
   }
 
   function setText(id, text) {
@@ -589,6 +1026,7 @@
     renderOrderChart();
     renderHistory();
     renderBackups();
+    updateEditorLock();
   }
 
   function renderPalletInputs(rebuild = true) {
@@ -1156,6 +1594,7 @@
       openInventoryItemDetail(row.dataset.inventorySku);
     });
     $("savePallets")?.addEventListener("click", () => {
+      if (!requireEditor("파렛 보유 현황 수정")) return;
       document.querySelectorAll("[data-pallet-key]").forEach((input) => {
         state.pallets[input.dataset.palletKey] = cleanNumber(input.value);
       });
@@ -1164,6 +1603,7 @@
     });
 
     $("saveBoxStock")?.addEventListener("click", () => {
+      if (!requireEditor("박스 재고 수정")) return;
       const changed = [];
       document.querySelectorAll("#boxStockGrid .box-stock-item").forEach((item) => {
         const sku = item.dataset.boxSku;
@@ -1188,12 +1628,27 @@
       pushHistory("박스수정", `${changed.length}개 박스 재고 직접 수정`, changed.join(" / "));
       saveState("박스 재고 직접 수정 저장");
     });
-    $("quickInboundExample")?.addEventListener("click", fillInboundExample);
-    $("addStockMoveRow")?.addEventListener("click", () => addStockMoveRow());
-    $("clearStockMoveRows")?.addEventListener("click", clearStockMoveRows);
-    $("applyStockMove")?.addEventListener("click", applyStockMove);
+    $("quickInboundExample")?.addEventListener("click", () => {
+      if (!requireEditor("입고 예시 입력")) return;
+      fillInboundExample();
+    });
+    $("addStockMoveRow")?.addEventListener("click", () => {
+      if (!requireEditor("입고 행 추가")) return;
+      addStockMoveRow();
+    });
+    $("clearStockMoveRows")?.addEventListener("click", () => {
+      if (!requireEditor("입고 입력 초기화")) return;
+      clearStockMoveRows();
+    });
+    $("applyStockMove")?.addEventListener("click", () => {
+      if (!requireEditor("입고 적용")) return;
+      applyStockMove();
+    });
     $("parseOrderFile")?.addEventListener("click", parseOrderFile);
-    $("applyOrderDeductions")?.addEventListener("click", applyLastOrderDeductions);
+    $("applyOrderDeductions")?.addEventListener("click", () => {
+      if (!requireEditor("엑셀 주문 차감 적용")) return;
+      applyLastOrderDeductions();
+    });
     $("historyTable")?.addEventListener("click", (event) => {
       const trigger = event.target.closest(".history-detail-trigger, .history-row");
       if (!trigger) return;
@@ -1211,8 +1666,17 @@
       }
     });
     $("exportBackup")?.addEventListener("click", exportBackup);
-    $("importBackup")?.addEventListener("change", importBackup);
-    $("restorePreviousWms")?.addEventListener("click", restorePreviousState);
+    $("importBackup")?.addEventListener("change", (event) => {
+      if (!requireEditor("백업 파일 불러오기")) {
+        event.target.value = "";
+        return;
+      }
+      importBackup(event);
+    });
+    $("restorePreviousWms")?.addEventListener("click", () => {
+      if (!requireEditor("이전값 복구")) return;
+      restorePreviousState();
+    });
     $("resetWms")?.addEventListener("click", () => {
       if (!confirm("WMS 재고를 초기값으로 복구할까요? 현재 브라우저 저장값은 백업 후 초기화됩니다.")) return;
       addBackup("초기화 전 백업");
@@ -1277,15 +1741,17 @@
 
   function pushHistory(type, memo, qtyText, details = []) {
     state.history = state.history || [];
-    state.history.unshift({
+    const record = {
       id: createHistoryId(),
       at: new Date().toISOString(),
       type,
       memo,
       qtyText,
       details
-    });
+    };
+    state.history.unshift(record);
     state.history = state.history.slice(0, 500);
+    queueSupabaseMovementSave(record);
   }
 
   function createHistoryId() {
@@ -1712,12 +2178,14 @@
       if (state.stock[sku]) state.stock[sku].units -= units;
     });
     archiveOldOrderStats();
-    state.orderStats.unshift({
+    const orderStatRecord = {
       at: new Date().toISOString(),
       orderRows: analysis.orderRows,
       paymentGroupCount: analysis.paymentGroupCount,
       paymentUniqueSum: analysis.paymentUniqueSum
-    });
+    };
+    state.orderStats.unshift(orderStatRecord);
+    queueSupabaseOrderStatSave(orderStatRecord);
     state.orderStats = state.orderStats.slice(0, 2000);
     const detailItems = analysis.deductions.map(({ sku, units }) => ({
       sku,
@@ -1784,5 +2252,7 @@
     initRouting();
     initMarginCalculator();
     initWms();
+    initSupabaseSync();
+    initAdminAuth();
   });
 })();
