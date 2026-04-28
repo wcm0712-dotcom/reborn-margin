@@ -1,280 +1,361 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="RE:BORN 전용 쿠팡 판매 마진 계산기. 원가, 판매가, 배송비, 박스비, 쿠팡 수수료, 부가세, 선정산 패널티를 반영해 순이익과 마진율을 계산합니다." />
-  <title>RE:BORN Margin Calculator · Mobile Dark Final</title>
-  <script>
-    (function () {
-      document.documentElement.dataset.theme = "dark";
-      document.documentElement.dataset.themeMode = "dark";
-    })();
-  </script>
-  <link rel="stylesheet" href="./style.css?v=reborn-mobile-dark-final-01" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f1220" />
+  <title>리본컴퍼니 관리 시스템</title>
+  <link rel="stylesheet" href="./style.css?v=reborn-wms-v9-order-graph-20260429-01" />
 </head>
-<body class="premium-app reborn-polished">
-  <div id="rebornSplash">
-    <div class="splash-inner">
-      <div class="splash-mark"></div>
-      <div class="splash-title">RE:BORN</div>
-      <div class="splash-subtitle">Margin Calculator</div>
-    </div>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <button class="brand" type="button" data-route="margin" aria-label="리본컴퍼니 홈">
+        <span class="brand-mark">R</span>
+        <span>
+          <strong>리본컴퍼니</strong>
+          <small>Margin · WMS</small>
+        </span>
+      </button>
+
+      <nav class="category-nav" aria-label="카테고리">
+        <button type="button" class="category-btn active" data-route="margin">마진계산기</button>
+        <button type="button" class="category-btn" data-route="wms">WMS재고</button>
+      </nav>
+    </header>
+
+    <main>
+      <section id="page-margin" class="page active" aria-label="마진계산기">
+        <div class="page-head">
+          <p class="eyebrow">RE:BORN SELLER TOOL</p>
+          <h1>마진계산기</h1>
+          <p class="lead">상품 원가, 택배비, 박스비, 쿠팡 수수료, 부가세, 선정산 패널티를 한 번에 계산합니다.</p>
+        </div>
+
+        <div class="two-column">
+          <section class="card input-card">
+            <div class="card-title-row">
+              <div>
+                <h2>입력</h2>
+                <p>기본값은 바로 수정할 수 있습니다.</p>
+              </div>
+              <button id="resetMarginDefaults" class="ghost-btn" type="button">기본값</button>
+            </div>
+
+            <label class="field full fancy-select-field">
+              <span>상품 선택</span>
+              <select id="productSelect"></select>
+            </label>
+
+            <div class="form-grid">
+              <label class="field">
+                <span>판매가 / 총 결제금액</span>
+                <input id="salePrice" type="number" inputmode="numeric" min="0" placeholder="예: 12900" />
+              </label>
+              <label class="field">
+                <span>판매 수량</span>
+                <input id="saleQty" type="number" inputmode="numeric" min="1" value="1" />
+              </label>
+              <label class="field">
+                <span>낱개당 매입가</span>
+                <input id="unitCost" type="number" inputmode="decimal" min="0" step="0.1" />
+              </label>
+              <label class="field">
+                <span>택배비</span>
+                <input id="shippingFee" type="number" inputmode="numeric" min="0" value="2400" />
+              </label>
+              <label class="field">
+                <span>박스비</span>
+                <input id="boxFee" type="number" inputmode="numeric" min="0" value="0" />
+              </label>
+              <label class="field">
+                <span>쿠팡 수수료율 %</span>
+                <input id="commissionRate" type="number" inputmode="decimal" min="0" step="0.1" value="12" />
+              </label>
+              <label class="field">
+                <span>부가세율 %</span>
+                <input id="vatRate" type="number" inputmode="decimal" min="0" step="0.1" value="10" />
+              </label>
+              <label class="field">
+                <span>선정산 패널티율 %</span>
+                <input id="earlyRate" type="number" inputmode="decimal" min="0" step="0.1" value="1.2" />
+              </label>
+            </div>
+
+            <div class="quick-boxes" aria-label="박스비 빠른 입력">
+              <button type="button" data-box-cost="480">대 박스 480원</button>
+              <button type="button" data-box-cost="380">중 박스 380원</button>
+              <button type="button" data-box-cost="250">소 박스 250원</button>
+              <button type="button" data-box-cost="0">박스 없음</button>
+            </div>
+          </section>
+
+          <section class="card result-card">
+            <div class="card-title-row">
+              <div>
+                <h2>결과</h2>
+                <p>입력 즉시 자동 계산됩니다.</p>
+              </div>
+              <span id="marginBadge" class="status-badge">대기</span>
+            </div>
+
+            <div class="result-highlight">
+              <span>최종 순이익</span>
+              <strong id="netProfit">0원</strong>
+              <em id="marginRateText">마진율 0.00%</em>
+            </div>
+
+            <div class="metric-grid">
+              <div><span>판매가</span><strong id="grossSales">0원</strong></div>
+              <div><span>상품 원가</span><strong id="productCost">0원</strong></div>
+              <div><span>박스비</span><strong id="boxFeeResult">0원</strong></div>
+              <div><span>택배비</span><strong id="shippingFeeResult">0원</strong></div>
+              <div><span>쿠팡 수수료</span><strong id="commissionCost">0원</strong></div>
+              <div><span>부가세</span><strong id="vatCost">0원</strong></div>
+              <div><span>선정산</span><strong id="earlyCost">0원</strong></div>
+              <div><span>총 비용</span><strong id="totalCost">0원</strong></div>
+              <div><span>손익분기 판매가</span><strong id="breakEvenPrice">0원</strong></div>
+              <div><span>마진 10% 권장가</span><strong id="targetSalePrice">0원</strong></div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="page-wms" class="page" aria-label="WMS재고">
+        <div class="page-head wms-head">
+          <p class="eyebrow">WAREHOUSE MANAGEMENT</p>
+          <h1>WMS재고</h1>
+          <p class="lead">입고 적용과 주문 차감 결과가 바로 반영되는 실시간 재고 기준으로 관리합니다.</p>
+        </div>
+
+        <section class="summary-grid" aria-label="WMS 요약">
+          <article class="summary-card"><span>총 재고자산</span><strong id="assetValue">0원</strong><small id="unknownCostInfo">원가 미입력 0개</small></article>
+          <article class="summary-card"><span>오늘 주문건수</span><strong id="ordersToday">0건</strong><small>엑셀 처리 기준</small></article>
+          <article class="summary-card"><span>최근 7일 주문건수</span><strong id="ordersWeek">0건</strong><small>누적 처리 기준</small></article>
+          <article class="summary-card"><span>최근 30일 주문건수</span><strong id="ordersMonth">0건</strong><small>누적 처리 기준</small></article>
+          <article id="cumulativeSalesCard" class="summary-card clickable cumulative" role="button" tabindex="0"><span>누적 판매량</span><strong id="cumulativeOrderTotal">0건</strong><small>클릭해서 연도별 보기</small></article>
+          <article class="summary-card low-stock-summary"><span>안전재고 부족</span><strong id="lowStockCount">0개</strong><small id="lowStockInfo">모든 품목 안전권</small></article>
+          <article class="summary-card water"><span>증류수 보충</span><strong id="waterReminder">매월 1일</strong><small>2026년 5월 1일부터</small></article>
+        </section>
+
+        <section class="card order-chart-card" id="orderChartCard" aria-label="주문건수 그래프" data-collapsible data-collapse-key="order-chart" data-collapse-default="closed">
+          <div class="card-title-row chart-title-row">
+            <div>
+              <h2>주문건수 그래프</h2>
+              <p>엑셀 분석 결과를 실제 차감 적용했을 때 기록된 주문건수 기준입니다.</p>
+            </div>
+            <div class="chart-switch" role="tablist" aria-label="그래프 선택">
+              <button type="button" class="chart-tab active" data-chart-mode="daily">1. 일간</button>
+              <button type="button" class="chart-tab" data-chart-mode="weekly">2. 주간</button>
+              <button type="button" class="chart-tab" data-chart-mode="monthly">3. 월간</button>
+            </div>
+          </div>
+          <div class="chart-stage">
+            <canvas id="orderChart" width="1200" height="360"></canvas>
+            <div id="orderChartEmpty" class="chart-empty" hidden>아직 그래프로 표시할 주문 처리 기록이 없습니다.</div>
+          </div>
+          <div class="chart-footer">
+            <span id="orderChartSubtitle">최근 7일 일별 주문건수</span>
+            <strong id="orderChartTotal">합계 0건</strong>
+          </div>
+        </section>
+
+        <section class="card pallet-card" id="palletCard" data-collapsible data-collapse-key="pallet-stock" data-collapse-default="closed">
+          <div class="card-title-row">
+            <div>
+              <h2>파렛 보유 현황</h2>
+              <p>현재 사용 중인 파렛을 포함한 전체 보유 수량입니다.</p>
+            </div>
+            <button id="savePallets" type="button" class="primary-btn small">저장</button>
+          </div>
+          <div class="pallet-grid" id="palletGrid"></div>
+        </section>
+
+        <section class="card box-stock-card" id="boxStockCard" data-collapsible data-collapse-key="box-stock" data-collapse-default="closed">
+          <div class="card-title-row">
+            <div>
+              <h2>박스 재고 직접 수정</h2>
+              <p>박스 대/중/소를 파렛·묶음·장 기준으로 바로 수정합니다.</p>
+            </div>
+            <button id="saveBoxStock" type="button" class="primary-btn small">저장</button>
+          </div>
+          <div class="box-stock-grid" id="boxStockGrid"></div>
+        </section>
+
+        <section class="card inventory-card">
+          <div class="card-title-row">
+            <div>
+              <h2>재고 현황</h2>
+              <p>입고 적용과 주문 차감 후 현재 남아있는 재고만 표시합니다.</p>
+            </div>
+            <input id="inventorySearch" class="search-input" type="search" placeholder="품목 검색" />
+          </div>
+          <div class="table-wrap tall">
+            <table>
+              <thead>
+                <tr>
+                  <th>품목</th>
+                  <th>구조</th>
+                  <th>현재 재고</th>
+                  <th>총 낱개</th>
+                  <th>재고자산</th>
+                  <th>상태</th>
+                </tr>
+              </thead>
+              <tbody id="inventoryTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <div class="two-column wms-columns">
+          <section class="card stock-move-card">
+            <div class="card-title-row">
+              <div>
+                <h2>입고 직접 입력</h2>
+                <p>여러 품목을 한 번에 추가한 뒤 재고현황에 일괄 반영합니다. 예: 에낙 치킨 3파렛, 브이콘 50g 6파렛, 명가 참깨 2파렛, 라멘뽀식이 3파렛.</p>
+              </div>
+            </div>
+
+            <div class="move-control-panel inbound-only">
+              <div class="inbound-badge">입고 전용</div>
+              <label class="field move-memo-field">
+                <span>메모</span>
+                <input id="moveMemo" type="text" placeholder="예: 4/28 14파렛 입고" />
+              </label>
+            </div>
+
+            <div class="move-header">
+              <strong>입력 품목</strong>
+              <div class="move-actions">
+                <button id="quickInboundExample" type="button" class="ghost-btn small-btn">14파렛 예시</button>
+                <button id="addStockMoveRow" type="button" class="ghost-btn small-btn">+ 품목 추가</button>
+                <button id="clearStockMoveRows" type="button" class="ghost-btn small-btn">초기화</button>
+              </div>
+            </div>
+
+            <div id="stockMoveRows" class="move-list" aria-label="입고 여러 품목 입력"></div>
+            <div id="moveBatchSummary" class="move-summary">입력 예정 0개 품목</div>
+
+            <button id="applyStockMove" type="button" class="primary-btn full-btn">입력 적용</button>
+          </section>
+
+          <section class="card">
+            <div class="card-title-row">
+              <div>
+                <h2>엑셀 주문 처리</h2>
+                <p>.xlsx/.xls 파일을 넣으면 상품 매칭, 차감 수량, 박스 사용량, 확인 필요 목록을 계산합니다.</p>
+              </div>
+            </div>
+            <div class="file-box excel-file-box">
+              <label class="file-trigger excel-file-trigger" for="orderFile">
+                <span class="excel-icon" aria-hidden="true">▦</span>
+                <span class="excel-file-copy">
+                  <strong id="orderFileName">엑셀 파일 선택</strong>
+                  <small>.xlsx / .xls / .csv 지원</small>
+                </span>
+              </label>
+              <input id="orderFile" class="visually-hidden-file" type="file" accept=".xlsx,.xls,.csv" />
+              <button id="parseOrderFile" type="button" class="primary-btn">엑셀 분석</button>
+              <button id="applyOrderDeductions" type="button" class="ghost-btn" disabled>분석 결과 차감 적용</button>
+            </div>
+            <div class="notice" id="excelNotice">A열 주소 / B열 상품명 / C열 판매금액 / D열 추가배송비 기준으로 분석합니다. 분석 후 버튼을 눌러 재고현황에서 실제 차감합니다.</div>
+            <div class="mini-summary" id="excelSummary"></div>
+          </section>
+        </div>
+
+        <section class="card" id="orderResultCard" hidden>
+          <div class="card-title-row">
+            <div>
+              <h2>주문 분석 결과</h2>
+              <p>확인 필요가 있는 주문은 자동 차감하지 않도록 분리합니다.</p>
+            </div>
+          </div>
+          <div class="result-tabs">
+            <button class="subtab active" data-result-tab="deduct">차감 품목</button>
+            <button class="subtab" data-result-tab="boxes">박스 사용</button>
+            <button class="subtab" data-result-tab="needs">확인 필요</button>
+          </div>
+          <div class="result-pane active" id="pane-deduct">
+            <div class="table-wrap"><table><thead><tr><th>품목</th><th>차감 낱개</th><th>환산</th></tr></thead><tbody id="deductTable"></tbody></table></div>
+          </div>
+          <div class="result-pane" id="pane-boxes">
+            <div class="table-wrap"><table><thead><tr><th>박스</th><th>사용 장수</th><th>환산</th></tr></thead><tbody id="boxUseTable"></tbody></table></div>
+          </div>
+          <div class="result-pane" id="pane-needs">
+            <div class="table-wrap"><table><thead><tr><th>행</th><th>상품명</th><th>수량</th><th>사유</th></tr></thead><tbody id="needsTable"></tbody></table></div>
+          </div>
+        </section>
+
+        <div class="two-column wms-columns">
+          <section class="card">
+            <div class="card-title-row">
+              <div>
+                <h2>저장/백업/복구</h2>
+                <p>저장은 브라우저에 보존됩니다. 잘못 적용했을 때는 이전값 복구로 직전 저장 상태를 되돌릴 수 있습니다.</p>
+              </div>
+            </div>
+            <div class="backup-actions">
+              <button id="exportBackup" type="button" class="primary-btn">백업 파일 받기</button>
+              <label class="import-label">백업 불러오기<input id="importBackup" type="file" accept=".json" /></label>
+              <button id="resetWms" type="button" class="danger-btn">초기값 복구</button>
+              <button id="restorePreviousWms" type="button" class="ghost-btn">이전값 복구</button>
+            </div>
+            <ul id="backupList" class="backup-list"></ul>
+          </section>
+
+          <section class="card">
+            <div class="card-title-row">
+              <div>
+                <h2>입출고 흐름</h2>
+                <p>내용을 클릭하면 품목별 상세 내역을 확인할 수 있습니다.</p>
+              </div>
+            </div>
+            <div class="table-wrap history">
+              <table>
+                <thead><tr><th>시간</th><th>구분</th><th>내용</th><th>수량</th></tr></thead>
+                <tbody id="historyTable"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
   </div>
 
-  <header>
-    <div class="nav">
-      <div class="brand">
-        <div class="logo" aria-label="RE:BORN 로고">
-          <span class="ribbon-icon"></span>
-        </div>
-        <div>
-          <h1>RE:BORN</h1>
-        </div>
-      </div>
-      <nav class="mini-nav" aria-label="계산기 주요 기능">
-        <a href="#inputs">입력</a>
-        <a href="#results">결과</a>
-        <a href="#checks">체크</a>
-      </nav>
-
-
-      <div class="badge">실시간 자동 계산</div>
-    </div>
-  </header>
-
-  <main>
-    <section class="intro hero-watchlike">
-      <div>
-        <div class="eyebrow"><span></span> RE:BORN Margin Studio</div>
-        <h2>판매 전, 마진의 흐름을 한눈에.</h2>
-        <p>
-          원가·판매가·배송비·수수료·부가세·선정산 패널티를 한 화면에서 정리해
-          실제 순이익과 마진율을 빠르게 확인하는 내부 업무용 계산 도구입니다.
-        </p>
-
-        <div class="hero-actions" aria-label="빠른 안내">
-          <a href="#inputs" class="hero-link primary">바로 계산하기</a>
-          <a href="#results" class="hero-link">결과 보기</a>
-        </div>
-
-        <div class="intro-pills">
-          <span>Live Calculation</span>
-          <span>Saved Inputs</span>
-          <span>Mobile Ready</span>
-        </div>
-      </div>
-
-      <div class="hero-device" aria-hidden="true">
-        <div class="device-card main-metric">
-          <span>순이익</span>
-          <strong id="heroProfitMirror">자동 계산</strong>
-        </div>
-        <div class="device-orbit orbit-one"></div>
-        <div class="device-orbit orbit-two"></div>
-        <div class="device-screen">
-          <div class="screen-topline"></div>
-          <div class="screen-ring"><span></span></div>
-          <div class="screen-copy">Margin<br />Control</div>
-          <div class="screen-bars"><i></i><i></i><i></i></div>
-        </div>
-        <div class="device-card sub-metric">
-          <span>마진율</span>
-          <strong id="heroMarginMirror">0.00%</strong>
-        </div>
-      </div>
+  <div id="historyDetailOverlay" class="detail-overlay" hidden>
+    <section class="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="historyDetailTitle">
+      <button id="closeHistoryDetail" class="detail-close" type="button" aria-label="상세 닫기">×</button>
+      <p class="eyebrow">FLOW DETAIL</p>
+      <h2 id="historyDetailTitle">상세내용</h2>
+      <p id="historyDetailMeta" class="detail-meta"></p>
+      <div id="historyDetailBody" class="detail-body"></div>
     </section>
+  </div>
 
-    <section class="content">
-      <div class="panel input-panel" id="inputs">
-        <div class="business-mode-tabs" id="businessModeTabs">
-          <button type="button" class="business-mode-btn active" data-mode="본점">본점</button>
-          <button type="button" class="business-mode-btn" data-mode="대리점">대리점</button>
-          <button type="button" class="business-mode-btn" data-mode="대리점 공급가">대리점 공급가</button>
-        </div>
 
-        <div class="panel-top">
-          <h3>입력값</h3>
-        </div>
-
-        <p class="panel-desc">상품을 선택하거나 값을 입력하면 자동 계산됩니다. 저장 버튼을 누르면 다음 실행 시 유지됩니다.</p>
-
-        <div class="input-helper-bar" aria-label="빠른 작업">
-          <button type="button" id="restoreDefaultsBtn" class="helper-action-btn">기본값 복원</button>
-          <button type="button" id="clearInputsBtn" class="helper-action-btn">입력 초기화</button>
-          <button type="button" id="jumpResultsBtn" class="helper-action-btn dark">결과 보기</button>
-        </div>
-
-        <div class="product-tools" aria-label="상품 선택 영역">
-          <div class="section-label product-label"><span>상품 선택</span><small>검색 · 품목 · 즐겨찾기</small></div>
-          <div class="product-search-box">
-            <span class="search-icon">🔍</span>
-            <input id="productSearch" class="product-search" type="text" placeholder="상품명을 입력해 검색하세요" autocomplete="off" aria-label="상품명 검색" />
-          </div>
-
-          <div class="product-select-row">
-            <div class="product-picker-wrap">
-              <select id="productSelect" class="product-picker" aria-label="품목 선택">
-                <option value="">품목 선택</option>
-              </select>
-            </div>
-            <button type="button" id="addFavoriteBtn" class="favorite-add-btn" aria-label="즐겨찾기 추가" title="선택한 상품 즐겨찾기 추가">☆</button>
-          </div>
-
-          <div class="product-action-row">
-            <button type="button" id="clearProductSearchBtn" class="small-action-btn secondary">검색 초기화</button>
-          </div>
-
-          <div id="favoriteList" class="quick-list favorite-area"></div>
-          <div id="recentList" class="quick-list recent-area"></div>
-        </div>
-
-        <div class="section-label input-label"><span>계산 입력</span><small>원가 · 수량 · 비용</small></div>
-
-        <label class="field">
-          <div class="field-title">원가(낱개)</div>
-          <div class="field-row">
-            <input id="unitCost" type="number" inputmode="decimal" value="0" />
-            <span class="suffix">원</span>
-            <button type="button" class="field-save-btn" data-save="unitCost">저장</button>
-          </div>
-          <div class="hint">상품 1개당 매입 원가입니다.</div>
-        </label>
-
-        <label class="field">
-          <div class="field-title">판매수량</div>
-          <div class="field-row">
-            <input id="quantity" type="number" inputmode="decimal" value="0" />
-            <span class="suffix">개</span>
-            <button type="button" class="field-save-btn" data-save="quantity">저장</button>
-          </div>
-          <div class="hint">한 주문에 판매하는 총 수량입니다.</div>
-        </label>
-
-        <label class="field">
-          <div class="field-title">판매가</div>
-          <div class="field-row">
-            <input id="salePrice" type="number" inputmode="decimal" value="0" />
-            <span class="suffix">원</span>
-            <button type="button" class="field-save-btn" data-save="salePrice">저장</button>
-          </div>
-          <div class="hint">쿠팡에 등록된 최종 판매가입니다.</div>
-        </label>
-
-        <div class="field box-field" role="group" aria-label="박스비">
-          <div class="field-title">박스비</div>
-          <div id="boxSizeOptions" class="box-size-row">
-            <button type="button" class="box-size-btn" data-size="대">대</button>
-            <button type="button" class="box-size-btn" data-size="중">중</button>
-            <button type="button" class="box-size-btn" data-size="소">소</button>
-          </div>
-          <div class="field-row">
-            <input id="boxFee" type="number" inputmode="decimal" value="0" readonly />
-            <input id="boxSize" type="hidden" value="" />
-            <span class="suffix">원</span>
-            <button type="button" id="changeBoxBtn" class="box-change-btn">변경</button>
-            <button type="button" class="field-save-btn" data-save="boxSize">저장</button>
-          </div>
-          <div class="hint">대 480원 · 중 380원 · 소 250원 / 변경 버튼을 누르면 다시 선택할 수 있습니다.</div>
-        </div>
-
-        <label class="field">
-          <div class="field-title">택배비</div>
-          <div class="field-row">
-            <input id="shippingFee" type="number" inputmode="decimal" value="2400" />
-            <span class="suffix">원</span>
-            <button type="button" class="field-save-btn" data-save="shippingFee">저장</button>
-          </div>
-          <div class="hint">주문 1건에 들어가는 총 배송비입니다.</div>
-        </label>
-
-        <label class="field">
-          <div class="field-title">쿠팡 수수료율</div>
-          <div class="field-row">
-            <input id="coupangFeeRate" type="number" inputmode="decimal" value="12" />
-            <span class="suffix">%</span>
-            <button type="button" class="field-save-btn" data-save="coupangFeeRate">저장</button>
-          </div>
-          <div class="hint">판매가 기준으로 차감되는 수수료율입니다.</div>
-        </label>
-
-        <label class="field">
-          <div class="field-title">부가세율</div>
-          <div class="field-row">
-            <input id="vatRate" type="number" inputmode="decimal" value="10" />
-            <span class="suffix">%</span>
-            <button type="button" class="field-save-btn" data-save="vatRate">저장</button>
-          </div>
-          <div class="hint">부가세를 제외하고 싶으면 0을 입력하세요.</div>
-        </label>
-
-        <label class="field">
-          <div class="field-title">선정산 패널티율</div>
-          <div class="field-row">
-            <input id="earlySettlementRate" type="number" inputmode="decimal" value="1.2" />
-            <span class="suffix">%</span>
-            <button type="button" class="field-save-btn" data-save="earlySettlementRate">저장</button>
-          </div>
-          <div class="hint">선정산 이용 시 적용되는 차감률입니다.</div>
-        </label>
-      </div>
-
-      <div class="panel result-panel" id="results">
-        <div class="panel-kicker result-kicker">Summary</div>
-        <h3>자동 계산 결과</h3>
-        <p class="panel-desc">비용 항목별로 나누어 마진 구조를 확인할 수 있습니다.</p>
-        <div class="result-status-line" aria-live="polite">
-          <span id="profitStatusLabel" class="idle">대기</span>
-          <strong id="quickDecision" class="idle">원가·수량·판매가 입력 후 자동 판단됩니다.</strong>
-        </div>
-        <div class="results">
-          <div class="result-card"><span>총원가</span><strong id="totalProductCost">0원</strong><p>낱개 원가 × 판매수량</p></div>
-          <div class="result-card"><span>박스비</span><strong id="boxFeeResult">0원</strong><p>선택한 박스 크기 기준</p></div>
-          <div class="result-card"><span>쿠팡수수료</span><strong id="coupangFee">0원</strong><p>판매가 × 쿠팡 수수료율</p></div>
-          <div class="result-card"><span>선정산 패널티</span><strong id="earlySettlementFee">0원</strong><p>판매가 × 선정산 패널티율</p></div>
-          <div class="result-card"><span>부가세</span><strong id="vat">0원</strong><p>판매가 × 부가세율</p></div>
-          <div class="result-card"><span>총 비용</span><strong id="totalCost">0원</strong><p>원가 + 박스비 + 배송비 + 수수료 + 세금</p></div>
-          <div class="result-card highlight" id="profitCard"><span>순이익</span><strong id="profit">0원</strong><p>판매가 - 총 비용</p></div>
-          <div class="result-card highlight" id="marginCard"><span>마진율</span><strong id="marginRate">0.00%</strong><p>순이익 ÷ 판매가</p></div>
-          <div class="result-card"><span>손익분기 판매가</span><strong id="breakEvenPrice">0원</strong><p>이 가격보다 낮으면 손실 가능성</p></div>
-          <div class="result-card"><span>마진 10% 권장가</span><strong id="targetSalePrice">0원</strong><p>안전 마진을 보고 정하는 기준</p></div>
-        </div>
-
-        <div class="tips" id="checks">
-          <div class="tips-head">
-            <strong>실무 체크 포인트</strong>
-            <span>Decision guide</span>
-          </div>
-          <ul class="check-list">
-            <li>순이익이 0원 이하이면 손익분기 판매가와 권장가를 먼저 확인하십시오.</li>
-            <li>자주 쓰는 상품은 즐겨찾기와 최근 사용 목록으로 빠르게 다시 불러올 수 있습니다.</li>
-            <li>박스비는 변경 버튼을 눌렀을 때만 대/중/소가 다시 나타납니다.</li>
-          </ul>
-        </div>
-
-        <div class="insight-grid" aria-label="운영 판단 보조 카드">
-          <div class="insight-card primary">
-            <span>판단 기준</span>
-            <strong>자동 판단 표시</strong>
-            <p>손실·주의·양호 상태를 결과 상단에서 바로 확인할 수 있습니다.</p>
-          </div>
-          <div class="insight-card">
-            <span>운영 기준</span>
-            <strong>반복 상품은 최근 사용</strong>
-            <p>상품을 선택하면 최근 사용 목록에 남아 다음 계산 때 빠르게 불러올 수 있습니다.</p>
-          </div>
-          <div class="insight-card">
-            <span>비용 체크</span>
-            <strong>손익분기 확인</strong>
-            <p>판매가를 정할 때 손익분기 판매가를 먼저 보면 가격 실수를 줄일 수 있습니다.</p>
-          </div>
-        </div>
-      </div>
+  <div id="cumulativeOverlay" class="detail-overlay" hidden>
+    <section class="detail-drawer cumulative-drawer" role="dialog" aria-modal="true" aria-labelledby="cumulativeTitle">
+      <button id="closeCumulative" class="detail-close" type="button" aria-label="누적 판매량 닫기">×</button>
+      <p class="eyebrow">CUMULATIVE SALES</p>
+      <h2 id="cumulativeTitle">누적 판매량</h2>
+      <p id="cumulativeMeta" class="detail-meta">1년이 지난 기록은 연도별 합계로 확인합니다.</p>
+      <div id="cumulativeBody" class="detail-body"></div>
     </section>
+  </div>
 
-    <div class="footer-note">REBORN Margin Calculator · 내부 업무용 계산 도구</div>
-  </main>
 
-  <script src="./script.js?v=reborn-mobile-dark-final-01"></script>
+
+  <div id="inventoryItemOverlay" class="detail-overlay item-detail-overlay" hidden>
+    <section class="detail-drawer item-detail-drawer" role="dialog" aria-modal="true" aria-labelledby="inventoryItemTitle">
+      <button id="closeInventoryItem" class="detail-close" type="button" aria-label="품목 상세 닫기">×</button>
+      <p class="eyebrow">INVENTORY DETAIL</p>
+      <h2 id="inventoryItemTitle">품목 상세</h2>
+      <p id="inventoryItemMeta" class="detail-meta"></p>
+      <div id="inventoryItemBody" class="detail-body inventory-detail-body"></div>
+    </section>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="./script.js?v=reborn-wms-v14-fold-polish-20260429-01"></script>
 </body>
 </html>
