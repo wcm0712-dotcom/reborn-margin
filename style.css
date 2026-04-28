@@ -3054,3 +3054,964 @@ body.view-only-mode button:disabled, body.view-only-mode input:disabled, body.vi
     grid-template-columns: 1fr;
   }
 }
+
+
+/* =========================================================
+   v21 Mobile WebView overlap fix
+   목적: 모바일 앱(WebView)에서 요소가 겹치거나 우측으로 삐져나오는 문제 방지
+   - PC UI/재고 계산 로직 영향 없음
+   - 모바일 WMS는 조회 중심으로 간소화
+   ========================================================= */
+
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body * {
+  min-width: 0;
+}
+
+img,
+svg,
+canvas,
+video {
+  max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.page,
+.card,
+.panel,
+.table-wrap,
+.wms-dashboard-layout,
+.wms-main-column,
+.wms-side-column,
+.summary-card,
+.result-card,
+.input-card,
+.file-box,
+.backup-actions,
+.move-list,
+.move-row {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.visually-hidden-file,
+input[type="file"].visually-hidden-file,
+.backup-import-input {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  min-width: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    width: 100%;
+    max-width: 100%;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .topbar {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .brand {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .brand div {
+    min-width: 0;
+  }
+
+  .brand strong,
+  .brand small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .category-nav {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .category-tab {
+    width: 100%;
+    justify-content: center;
+    white-space: nowrap;
+  }
+
+  .page-head {
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .page-head h1 {
+    font-size: clamp(24px, 7vw, 36px);
+    line-height: 1.05;
+  }
+
+  .page-head .lead {
+    max-width: 100%;
+  }
+
+  .card-title-row,
+  .sync-title-row,
+  .chart-title-row,
+  .move-header {
+    align-items: flex-start;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .card-title-row > *,
+  .sync-title-row > *,
+  .chart-title-row > *,
+  .move-header > * {
+    min-width: 0;
+  }
+
+  .backup-actions,
+  .file-box,
+  .excel-file-box {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .backup-actions > *,
+  .file-box > *,
+  .excel-file-box > * {
+    width: 100%;
+  }
+}
+
+@media (max-width: 720px) {
+  body {
+    font-size: 13px;
+  }
+
+  .app-shell {
+    padding: 10px;
+  }
+
+  .page {
+    padding-top: 8px;
+  }
+
+  .page-head {
+    margin-bottom: 10px;
+  }
+
+  .page-head .eyebrow,
+  .page-head .lead {
+    display: none;
+  }
+
+  .card {
+    border-radius: 18px;
+    padding: 14px;
+  }
+
+  .card-title-row h2 {
+    font-size: 15px;
+  }
+
+  .card-title-row p {
+    font-size: 11px;
+    line-height: 1.45;
+  }
+
+  /* 모바일 마진 계산기는 보조 사용 기준으로 더 작고 단순하게 */
+  #page-margin .margin-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    max-width: 520px;
+    margin: 0 auto;
+  }
+
+  #page-margin .input-card,
+  #page-margin .result-card {
+    padding: 14px;
+  }
+
+  #page-margin .section-title h2 {
+    font-size: 16px;
+  }
+
+  #page-margin .section-title p,
+  #page-margin .subtle-copy {
+    display: none;
+  }
+
+  #page-margin .form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  #page-margin .field {
+    gap: 5px;
+  }
+
+  #page-margin .field span {
+    font-size: 11px;
+  }
+
+  #page-margin input,
+  #page-margin select,
+  #page-margin button {
+    min-height: 40px;
+    font-size: 13px;
+  }
+
+  #page-margin .quick-boxes {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  #page-margin .quick-box {
+    min-height: 34px;
+    padding: 7px 6px;
+    font-size: 12px;
+  }
+
+  #page-margin .result-highlight {
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  #page-margin .result-highlight strong {
+    font-size: 26px;
+    line-height: 1.05;
+    overflow-wrap: anywhere;
+  }
+
+  #page-margin .metric-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  #page-margin .metric-grid > div {
+    padding: 10px;
+    border-radius: 14px;
+    overflow: hidden;
+  }
+
+  #page-margin .metric-grid span,
+  #page-margin .metric-grid strong {
+    overflow-wrap: anywhere;
+  }
+
+  /* 모바일 WMS는 확인용: 재고 현황 중심으로 간소화 */
+  #page-wms .wms-dashboard-layout {
+    display: block;
+  }
+
+  #page-wms .wms-main-column,
+  #page-wms .wms-side-column {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  #page-wms .wms-summary-block {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  #page-wms .summary-card {
+    min-height: auto;
+    padding: 11px;
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  #page-wms .summary-card span,
+  #page-wms .summary-card small {
+    font-size: 10.5px;
+    line-height: 1.3;
+  }
+
+  #page-wms .summary-card strong {
+    font-size: 16px;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+  }
+
+  #page-wms .stock-move-card,
+  #page-wms .wms-columns,
+  #page-wms .bottom-wms-columns,
+  #page-wms #orderResultCard,
+  #page-wms .order-chart-card,
+  #page-wms .pallet-card,
+  #page-wms .box-stock-card {
+    display: none !important;
+  }
+
+  #page-wms .inventory-card {
+    padding: 12px;
+  }
+
+  #page-wms .inventory-card .card-title-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 9px;
+  }
+
+  #page-wms .inventory-card .card-title-row p {
+    display: none;
+  }
+
+  #page-wms .search-input,
+  #inventorySearch {
+    width: 100%;
+    min-height: 40px;
+    font-size: 13px;
+  }
+
+  #page-wms .table-wrap.tall {
+    max-height: none;
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  #page-wms .inventory-card table,
+  #page-wms .inventory-card thead,
+  #page-wms .inventory-card tbody,
+  #page-wms .inventory-card tr,
+  #page-wms .inventory-card td {
+    display: block;
+    width: 100%;
+  }
+
+  #page-wms .inventory-card thead {
+    display: none !important;
+  }
+
+  #page-wms .inventory-card tbody {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  #page-wms .inventory-card tbody tr {
+    padding: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 17px;
+    background: rgba(255, 255, 255, 0.035);
+    overflow: hidden;
+  }
+
+  #page-wms .inventory-card tbody tr:hover {
+    transform: none;
+  }
+
+  #page-wms .inventory-card td {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+    padding: 6px 0;
+    border: 0;
+    text-align: right;
+    white-space: normal;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+
+  #page-wms .inventory-card td::before {
+    content: attr(data-label);
+    text-align: left;
+    color: var(--muted);
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+
+  #page-wms .inventory-card td:first-child {
+    padding-top: 0;
+  }
+
+  #page-wms .inventory-card td:last-child {
+    padding-bottom: 0;
+  }
+
+  #page-wms .inventory-card td strong,
+  #page-wms .inventory-card td span,
+  #page-wms .inventory-card td small,
+  #page-wms .inventory-card td button {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  #page-wms .stock-now-cell {
+    align-items: start;
+  }
+
+  #page-wms .stock-display {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    justify-content: flex-end;
+  }
+
+  #page-wms .safety-cell {
+    text-align: right;
+  }
+
+  #page-wms .wms-side-column {
+    margin-top: 10px;
+  }
+
+  #page-wms .wms-side-column > *:not(.sync-card) {
+    display: none !important;
+  }
+
+  #page-wms .sync-card {
+    padding: 11px 12px;
+    border-radius: 17px;
+  }
+
+  #page-wms .sync-card .card-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+
+  #page-wms .sync-card h2 {
+    font-size: 13px;
+    line-height: 1.2;
+  }
+
+  #page-wms .sync-card p,
+  #page-wms .sync-card .admin-auth-panel,
+  #page-wms .sync-card .sync-grid {
+    display: none !important;
+  }
+
+  #page-wms .sync-state-pill {
+    flex: 0 1 auto;
+    max-width: 58%;
+    min-height: 30px;
+    padding: 6px 8px;
+    gap: 5px;
+    font-size: 11px;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  #page-wms .sync-state-pill strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .detail-drawer {
+    width: calc(100vw - 20px);
+    max-width: calc(100vw - 20px);
+    max-height: calc(100dvh - 20px);
+    padding: 18px;
+    border-radius: 20px;
+  }
+}
+
+@media (max-width: 430px) {
+  .app-shell {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .topbar {
+    gap: 8px;
+  }
+
+  .category-nav {
+    gap: 6px;
+  }
+
+  .category-tab {
+    min-height: 38px;
+    padding: 8px 6px;
+    font-size: 12px;
+  }
+
+  .brand {
+    gap: 8px;
+  }
+
+  .brand-mark {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+  }
+
+  .brand strong {
+    font-size: 14px;
+  }
+
+  .brand small {
+    font-size: 10px;
+  }
+
+  #page-margin .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #page-margin .metric-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #page-margin .quick-boxes {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  #page-wms .wms-summary-block {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #page-wms .summary-card {
+    padding: 9px;
+  }
+
+  #page-wms .summary-card strong {
+    font-size: 14px;
+  }
+
+  #page-wms .inventory-card td {
+    grid-template-columns: 68px minmax(0, 1fr);
+    gap: 6px;
+    font-size: 12px;
+  }
+
+  #page-wms .inventory-card td::before {
+    font-size: 10px;
+  }
+
+  #page-wms .sync-state-pill {
+    max-width: 54%;
+  }
+}
+
+@media (max-width: 360px) {
+  #page-wms .wms-summary-block {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #page-wms .sync-card .card-title-row {
+    flex-wrap: wrap;
+  }
+
+  #page-wms .sync-state-pill {
+    max-width: 100%;
+  }
+}
+
+
+
+/* =========================================================
+   Mobile WMS Simple View
+   - 모바일 WMS는 확인 전용: 총 재고자산 / 오늘 주문건수 / 현재 재고만 표시
+   - PC 화면과 재고 계산 로직은 변경하지 않음
+   ========================================================= */
+@media (max-width: 760px) {
+  body:has(#page-wms.active) {
+    overflow-x: hidden;
+  }
+
+  /* WMS 상단 설명은 모바일에서 과감히 축소 */
+  #page-wms .page-head {
+    margin-bottom: 8px;
+  }
+
+  #page-wms .page-head h1 {
+    font-size: 20px;
+    line-height: 1.15;
+  }
+
+  /* 모바일 WMS 요약은 총 재고자산 + 오늘 주문건수 2개만 */
+  #page-wms .wms-summary-block {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+    margin-bottom: 8px !important;
+  }
+
+  #page-wms .wms-summary-block > .summary-card:not(:nth-child(1)):not(:nth-child(2)) {
+    display: none !important;
+  }
+
+  #page-wms .wms-summary-block > .summary-card:nth-child(1),
+  #page-wms .wms-summary-block > .summary-card:nth-child(2) {
+    display: flex !important;
+    min-width: 0;
+    min-height: 74px;
+    padding: 10px 11px !important;
+    border-radius: 16px !important;
+  }
+
+  #page-wms .wms-summary-block > .summary-card span {
+    font-size: 10.5px !important;
+    line-height: 1.2;
+  }
+
+  #page-wms .wms-summary-block > .summary-card strong {
+    font-size: clamp(15px, 4vw, 18px) !important;
+    line-height: 1.15;
+    white-space: normal;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+
+  #page-wms .wms-summary-block > .summary-card small {
+    font-size: 10px !important;
+    line-height: 1.2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  /* 모바일에서는 수정/동기화/그래프/입고/엑셀/백업/파렛/박스 영역을 전부 숨김 */
+  #page-wms .stock-move-card,
+  #page-wms .order-card,
+  #page-wms #orderResultCard,
+  #page-wms .wms-columns,
+  #page-wms .bottom-wms-columns,
+  #page-wms .wms-side-column,
+  #page-wms .sync-card,
+  #page-wms .order-chart-card,
+  #page-wms .pallet-card,
+  #page-wms .box-stock-card {
+    display: none !important;
+  }
+
+  /* 현재 재고 카드만 남기고 간격 최소화 */
+  #page-wms .inventory-card {
+    display: block !important;
+    padding: 11px !important;
+    border-radius: 18px !important;
+    margin-top: 0 !important;
+  }
+
+  #page-wms .inventory-card .card-title-row {
+    display: block !important;
+    margin-bottom: 8px !important;
+  }
+
+  #page-wms .inventory-card .card-title-row h2 {
+    font-size: 15px !important;
+    line-height: 1.2;
+  }
+
+  #page-wms .inventory-card .card-title-row p,
+  #page-wms #inventorySearch {
+    display: none !important;
+  }
+
+  /* 모바일 재고 카드는 품목 / 현재 재고 / 총 낱개 / 재고자산만 표시 */
+  #page-wms .inventory-card td[data-label="구조"],
+  #page-wms .inventory-card td[data-label="상태"] {
+    display: none !important;
+  }
+
+  #page-wms .inventory-card tbody {
+    gap: 8px !important;
+  }
+
+  #page-wms .inventory-card tbody tr {
+    padding: 10px 11px !important;
+    border-radius: 16px !important;
+  }
+
+  #page-wms .inventory-card td {
+    grid-template-columns: 70px minmax(0, 1fr) !important;
+    gap: 7px !important;
+    padding: 5px 0 !important;
+    font-size: 12px !important;
+    line-height: 1.35;
+  }
+
+  #page-wms .inventory-card td::before {
+    font-size: 10px !important;
+    line-height: 1.35;
+  }
+
+  #page-wms .inventory-card td[data-label="품목"] strong {
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  #page-wms .inventory-card td[data-label="품목"] .muted {
+    display: none !important;
+  }
+
+  #page-wms .stock-status {
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  #page-wms .stock-status-top {
+    display: block !important;
+  }
+
+  #page-wms .stock-status-top strong {
+    display: block;
+    font-size: 13px !important;
+    line-height: 1.35;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+
+  #page-wms .stock-status-top span,
+  #page-wms .stock-meter {
+    display: none !important;
+  }
+
+  #page-wms .stock-now-cell {
+    align-items: start !important;
+  }
+}
+
+@media (max-width: 380px) {
+  #page-wms .wms-summary-block {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  #page-wms .wms-summary-block > .summary-card:nth-child(1),
+  #page-wms .wms-summary-block > .summary-card:nth-child(2) {
+    padding: 9px !important;
+    min-height: 70px;
+  }
+
+  #page-wms .wms-summary-block > .summary-card strong {
+    font-size: 14px !important;
+  }
+
+  #page-wms .inventory-card td {
+    grid-template-columns: 62px minmax(0, 1fr) !important;
+    gap: 6px !important;
+  }
+}
+/* 2026-04-29 v21: Mobile WMS Ultra Compact
+   - 모바일 WMS 재고현황은 품목명 + 현재 재고만 표시
+   - 총 낱개/개별 재고자산/구조/상태는 모바일에서 숨김
+   - PC 화면, 재고 계산, Supabase 저장/권한 로직 변경 없음
+*/
+@media (max-width: 760px) {
+  #page-wms .page-head {
+    margin-bottom: 6px !important;
+  }
+
+  #page-wms .page-head h1 {
+    font-size: 18px !important;
+  }
+
+  #page-wms .wms-summary-block {
+    gap: 6px !important;
+    margin-bottom: 6px !important;
+  }
+
+  #page-wms .wms-summary-block > .summary-card:nth-child(1),
+  #page-wms .wms-summary-block > .summary-card:nth-child(2) {
+    min-height: 58px !important;
+    padding: 8px 9px !important;
+    border-radius: 14px !important;
+  }
+
+  #page-wms .wms-summary-block > .summary-card span {
+    font-size: 9.5px !important;
+  }
+
+  #page-wms .wms-summary-block > .summary-card strong {
+    font-size: clamp(14px, 3.75vw, 16px) !important;
+    line-height: 1.08 !important;
+    letter-spacing: -0.04em;
+  }
+
+  #page-wms .wms-summary-block > .summary-card small,
+  #page-wms #unknownCostInfo {
+    display: none !important;
+  }
+
+  #page-wms .inventory-card {
+    padding: 8px !important;
+    border-radius: 16px !important;
+  }
+
+  #page-wms .inventory-card .card-title-row {
+    margin-bottom: 6px !important;
+  }
+
+  #page-wms .inventory-card .card-title-row h2 {
+    font-size: 14px !important;
+    letter-spacing: -0.02em;
+  }
+
+  #page-wms .inventory-card .card-title-row h2::after {
+    content: " · 수량 확인";
+    color: var(--muted);
+    font-weight: 500;
+    font-size: 11px;
+  }
+
+  #page-wms .inventory-card table,
+  #page-wms .inventory-card tbody {
+    display: block !important;
+    width: 100% !important;
+  }
+
+  #page-wms .inventory-card tbody {
+    display: grid !important;
+    gap: 5px !important;
+  }
+
+  #page-wms .inventory-card tbody tr {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    gap: 8px !important;
+    min-height: 42px !important;
+    padding: 7px 8px !important;
+    border-radius: 13px !important;
+    background: rgba(255, 255, 255, 0.035) !important;
+    border: 1px solid rgba(255, 255, 255, 0.075) !important;
+  }
+
+  #page-wms .inventory-card td {
+    display: block !important;
+    width: auto !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    text-align: left !important;
+    font-size: 12px !important;
+    line-height: 1.25 !important;
+  }
+
+  #page-wms .inventory-card td::before {
+    display: none !important;
+  }
+
+  #page-wms .inventory-card td[data-label="구조"],
+  #page-wms .inventory-card td[data-label="총 낱개"],
+  #page-wms .inventory-card td[data-label="재고자산"],
+  #page-wms .inventory-card td[data-label="상태"] {
+    display: none !important;
+  }
+
+  #page-wms .inventory-card td[data-label="품목"] {
+    overflow: hidden !important;
+  }
+
+  #page-wms .inventory-card td[data-label="품목"] strong {
+    display: block !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    font-size: 12.5px !important;
+    font-weight: 650 !important;
+    letter-spacing: -0.035em;
+  }
+
+  #page-wms .inventory-card td[data-label="현재 재고"] {
+    text-align: right !important;
+    justify-self: end !important;
+    max-width: 46vw !important;
+  }
+
+  #page-wms .stock-status {
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  #page-wms .stock-status-top {
+    display: block !important;
+  }
+
+  #page-wms .stock-status-top strong {
+    display: block !important;
+    font-size: 12.5px !important;
+    line-height: 1.22 !important;
+    font-weight: 750 !important;
+    letter-spacing: -0.035em;
+    text-align: right !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+  }
+
+  #page-wms .stock-status-top span,
+  #page-wms .stock-meter {
+    display: none !important;
+  }
+}
+
+@media (max-width: 380px) {
+  #page-wms .wms-summary-block > .summary-card:nth-child(1),
+  #page-wms .wms-summary-block > .summary-card:nth-child(2) {
+    min-height: 54px !important;
+    padding: 7px 8px !important;
+  }
+
+  #page-wms .wms-summary-block > .summary-card strong {
+    font-size: 13.5px !important;
+  }
+
+  #page-wms .inventory-card tbody tr {
+    grid-template-columns: minmax(0, 1fr) minmax(96px, auto) !important;
+    gap: 6px !important;
+    padding: 7px !important;
+  }
+
+  #page-wms .inventory-card td[data-label="현재 재고"] {
+    max-width: 44vw !important;
+  }
+
+  #page-wms .inventory-card td[data-label="품목"] strong,
+  #page-wms .stock-status-top strong {
+    font-size: 12px !important;
+  }
+}
