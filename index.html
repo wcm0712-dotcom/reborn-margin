@@ -4,17 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="RE:BORN 전용 쿠팡 판매 마진 계산기. 원가, 판매가, 배송비, 박스비, 쿠팡 수수료, 부가세, 선정산 패널티를 반영해 순이익과 마진율을 계산합니다." />
-  <title>RE:BORN Margin Calculator · Theme Final</title>
+  <title>RE:BORN Margin Calculator · Mobile Dark Final</title>
   <script>
     (function () {
-      var saved = localStorage.getItem("reborn_theme_mode") || "dark";
-      var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-      var resolved = saved === "auto" ? (prefersDark ? "dark" : "light") : saved;
-      document.documentElement.dataset.theme = resolved;
-      document.documentElement.dataset.themeMode = saved;
+      document.documentElement.dataset.theme = "dark";
+      document.documentElement.dataset.themeMode = "dark";
     })();
   </script>
-  <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="./style.css?v=reborn-mobile-dark-final-01" />
 </head>
 <body class="premium-app reborn-polished">
   <div id="rebornSplash">
@@ -41,11 +38,6 @@
         <a href="#checks">체크</a>
       </nav>
 
-      <div class="theme-switcher" aria-label="화면 모드 선택">
-        <button type="button" class="theme-btn active" data-theme-choice="dark" aria-pressed="true">다크</button>
-        <button type="button" class="theme-btn" data-theme-choice="light" aria-pressed="false">라이트</button>
-        <button type="button" class="theme-btn" data-theme-choice="auto" aria-pressed="false">자동</button>
-      </div>
 
       <div class="badge">실시간 자동 계산</div>
     </div>
@@ -283,6 +275,6 @@
     <div class="footer-note">REBORN Margin Calculator · 내부 업무용 계산 도구</div>
   </main>
 
-  <script src="./script.js"></script>
+  <script src="./script.js?v=reborn-mobile-dark-final-01"></script>
 </body>
 </html>
