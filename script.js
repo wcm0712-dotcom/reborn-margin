@@ -138,6 +138,22 @@
 
   const $ = (id) => document.getElementById(id);
   const money = (value) => `${Math.round(Number(value) || 0).toLocaleString("ko-KR")}원`;
+  const isMobileWmsCompactView = () => typeof window !== "undefined"
+    && typeof window.matchMedia === "function"
+    && window.matchMedia("(max-width: 760px)").matches;
+  const compactKoreanWon = (value) => {
+    const raw = Math.round(Number(value) || 0);
+    const sign = raw < 0 ? "-" : "";
+    const amount = Math.abs(raw);
+    const eok = Math.floor(amount / 100000000);
+    const man = Math.floor((amount % 100000000) / 10000);
+    const rest = amount % 10000;
+    let text = "";
+    if (eok) text += `${eok}억`;
+    if (man) text += `${man}만`;
+    if (rest || !text) text += `${rest}`;
+    return `${sign}${text}원`;
+  };
   const number = (value) => Number(value || 0).toLocaleString("ko-KR");
   const cleanNumber = (value) => {
     if (value === null || value === undefined) return 0;
@@ -1018,7 +1034,16 @@
     initCollapsibleSections();
   }
 
-  function renderAll() {
+  
+  let mobileCompactSummaryResizeTimer = null;
+  window.addEventListener("resize", () => {
+    window.clearTimeout(mobileCompactSummaryResizeTimer);
+    mobileCompactSummaryResizeTimer = window.setTimeout(() => {
+      renderSummary();
+    }, 120);
+  });
+
+function renderAll() {
     renderInventory();
     renderPalletInputs(false);
     renderBoxStockInputs(false);
@@ -1271,7 +1296,7 @@
 
   function renderSummary() {
     const { asset, unknown } = computeInventoryAssetValue();
-    setText("assetValue", money(asset));
+    setText("assetValue", isMobileWmsCompactView() ? compactKoreanWon(asset) : money(asset));
     setText("unknownCostInfo", `원가 미입력 ${unknown}개 품목 제외`);
     const lowItems = lowSafetyItems();
     setText("lowStockCount", `${number(lowItems.length)}개`);
