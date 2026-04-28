@@ -1,6 +1,6 @@
 /* =========================
    RE:BORN Margin Calculator
-   FULL SAFE FINAL
+   MOBILE DARK FINAL
 ========================= */
 
 const productCategories = [
@@ -79,7 +79,7 @@ let selectedProduct = null;
 let openedCategory = "";
 let pickerOpen = false;
 let businessMode = localStorage.getItem(STORAGE.businessMode) || "본점";
-let themeMode = localStorage.getItem(STORAGE.themeMode) || "dark";
+let themeMode = "dark";
 
 const $ = (id) => document.getElementById(id);
 
@@ -159,58 +159,21 @@ function setObj(key, value) {
 }
 
 
-function resolveThemeMode(mode) {
-  if (mode === "auto") {
-    const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-    return prefersDark ? "dark" : "light";
+function applyDarkThemeOnly() {
+  themeMode = "dark";
+
+  try {
+    localStorage.removeItem(STORAGE.themeMode);
+  } catch {
+    // localStorage 접근이 막힌 환경에서도 계산기는 그대로 동작합니다.
   }
 
-  return mode === "light" ? "light" : "dark";
-}
-
-function applyThemeMode(mode) {
-  const selectedMode = mode || "dark";
-  const resolvedTheme = resolveThemeMode(selectedMode);
-
-  themeMode = selectedMode;
-  localStorage.setItem(STORAGE.themeMode, selectedMode);
-
-  document.documentElement.dataset.theme = resolvedTheme;
-  document.documentElement.dataset.themeMode = selectedMode;
-
-  document.querySelectorAll(".theme-btn").forEach((btn) => {
-    const isActive = btn.dataset.themeChoice === selectedMode;
-    btn.classList.toggle("active", isActive);
-    btn.setAttribute("aria-pressed", isActive ? "true" : "false");
-  });
+  document.documentElement.dataset.theme = "dark";
+  document.documentElement.dataset.themeMode = "dark";
 }
 
 function setupThemeControls() {
-  const buttons = document.querySelectorAll(".theme-btn");
-  if (!buttons.length) return;
-
-  buttons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      applyThemeMode(btn.dataset.themeChoice || "dark");
-    });
-  });
-
-  applyThemeMode(themeMode);
-
-  if (window.matchMedia) {
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const syncAutoTheme = () => {
-      if (themeMode === "auto") {
-        applyThemeMode("auto");
-      }
-    };
-
-    if (typeof media.addEventListener === "function") {
-      media.addEventListener("change", syncAutoTheme);
-    } else if (typeof media.addListener === "function") {
-      media.addListener(syncAutoTheme);
-    }
-  }
+  applyDarkThemeOnly();
 }
 
 function hideSplash() {
