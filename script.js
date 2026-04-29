@@ -243,6 +243,7 @@
       stock,
       pallets: { ...INITIAL_PALLETS },
       history: [],
+      orderStatus: [],
       orderStats: [],
       orderYearArchives: {},
       updatedAt: new Date().toISOString()
@@ -281,6 +282,7 @@
       stock: normalizedStock,
       pallets: normalizedPallets,
       history: Array.isArray(parsed.history) ? parsed.history : [],
+      orderStatus: Array.isArray(parsed.orderStatus) ? parsed.orderStatus.map(normalizePurchaseItem).filter(Boolean) : [],
       orderStats: Array.isArray(parsed.orderStats) ? parsed.orderStats : [],
       orderYearArchives: parsed.orderYearArchives && typeof parsed.orderYearArchives === "object" ? parsed.orderYearArchives : {}
     };
@@ -541,7 +543,9 @@
       "#orderFile", "#parseOrderFile", "#applyOrderDeductions",
       "#moveMemo", "#quickInboundExample", "#addStockMoveRow", "#clearStockMoveRows", "#applyStockMove",
       "#palletGrid input", "#boxStockGrid input",
-      "#stockMoveRows input", "#stockMoveRows select", "#stockMoveRows button"
+      "#stockMoveRows input", "#stockMoveRows select", "#stockMoveRows button",
+      "#purchaseAdminPanel input", "#purchaseAdminPanel select", "#purchaseAdminPanel button",
+      "#purchaseList [data-purchase-action]"
     ];
 
     document.querySelectorAll(lockSelectors.join(",")).forEach((node) => {
@@ -1227,6 +1231,7 @@
     renderPalletInputs();
     renderBoxStockInputs();
     renderStockMoveRows();
+    renderPurchaseProductOptions();
     bindWmsEvents();
     renderAll();
     enhanceNativeSelects($("page-wms") || document);
@@ -1264,6 +1269,297 @@ function refreshActiveOrderAnalysisSummary() {
       `;
   }
 
+
+  function getDefByKey(key) {
+    return INVENTORY_DEFS[key] || null;
+  }
+
+  function generatePurchaseId() {
+    return `po_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  }
+
+  function normalizePurchaseItem(item) {
+    if (!item || typeof item !== "object") return null;
+    const productKey = typeof item.productKey === "string" ? item.productKey : "";
+    const def = productKey ? getDefByKey(productKey) : null;
+    const name = String(item.name || productKey || "").trim();
+    if (!name) return null;
+    return {
+      id: String(item.id || generatePurchaseId()),
+      productKey,
+      name,
+      qty: cleanNumber(item.qty),
+      unit: String(item.unit || "unit"),
+      unitPrice: cleanNumber(item.unitPrice || def?.cost || 0),
+      status: String(item.status || "발주중"),
+      memo: String(item.memo || ""),
+      createdAt: String(item.createdAt || new Date().toISOString()),
+    };
+  }
+
+  function purchaseUnitsPerSelectedUnit(item) {
+    const def = item.productKey ? getDefByKey(item.productKey) : null;
+    if (!def) return 1;
+    if (item.unit === "pallet") return cleanNumber(def.boxesPerPallet) * cleanNumber(def.unitsPerBox) || 1;
+    if (item.unit === "box") return cleanNumber(def.unitsPerBox) || 1;
+    return 1;
+  }
+
+  function purchaseUnitLabel(item) {
+    const def = item.productKey ? getDefByKey(item.productKey) : null;
+    if (item.unit === "pallet") return "파렛";
+    if (item.unit === "box") return def?.isBox ? "묶음" : "완박스";
+    return def?.isBox ? "장" : "낱개";
+  }
+
+  function calculatePurchaseItemAmount(item) {
+    return Math.round(cleanNumber(item.qty) * purchaseUnitsPerSelectedUnit(item) * cleanNumber(item.unitPrice));
+  }
+
+  function purchaseQtyLabel(item) {
+    const qty = cleanNumber(item.qty);
+    const formattedQty = Number.isInteger(qty) ? String(qty) : qty.toLocaleString("ko-KR", { maximumFractionDigits: 2 });
+    const unitCount = purchaseUnitsPerSelectedUnit(item);
+    if (unitCount > 1) return `${formattedQty}${purchaseUnitLabel(item)} · ${number(Math.round(qty * unitCount))}${item.productKey && getDefByKey(item.productKey)?.isBox ? "장" : "개"} 기준`;
+    return `${formattedQty}${purchaseUnitLabel(item)}`;
+  }
+
+  function renderPurchaseProductOptions() {
+    const select = $("purchaseProductSelect");
+    if (!select) return;
+    const current = select.value;
+    select.innerHTML = `<option value="">직접 입력</option>` + Object.entries(INVENTORY_DEFS).map(([sku, def]) => `
+      <option value="${escapeHtml(sku)}">${escapeHtml(sku)} · ${escapeHtml(def.group || "기타")}</option>
+    `).join("");
+    select.value = INVENTORY_DEFS[current] ? current : "";
+  }
+
+  function syncPurchaseFormFromProduct() {
+    const productSelect = $("purchaseProductSelect");
+    const nameInput = $("purchaseNameInput");
+    const unitPriceInput = $("purchaseUnitPriceInput");
+    const def = productSelect?.value ? getDefByKey(productSelect.value) : null;
+    if (def) {
+      if (nameInput) nameInput.value = productSelect.value;
+      if (unitPriceInput) unitPriceInput.value = def.cost ? String(def.cost) : "";
+    }
+  }
+
+  function resetPurchaseForm() {
+    const productSelect = $("purchaseProductSelect");
+    if (productSelect) productSelect.value = "";
+    ["purchaseNameInput", "purchaseQtyInput", "purchaseUnitPriceInput", "purchaseStatusInput", "purchaseMemoInput"].forEach((id) => {
+      const el = $(id);
+      if (el) el.value = "";
+    });
+    const unitSelect = $("purchaseUnitSelect");
+    if (unitSelect) unitSelect.value = "pallet";
+  }
+
+  function addPurchaseItemFromForm() {
+    if (!requireEditor("발주 현황 추가")) return;
+    const productKey = $("purchaseProductSelect")?.value || "";
+    const def = productKey ? getDefByKey(productKey) : null;
+    const name = ($("purchaseNameInput")?.value || productKey || "").trim();
+    const qty = cleanNumber($("purchaseQtyInput")?.value || 0);
+    const unit = $("purchaseUnitSelect")?.value || "unit";
+    const unitPrice = cleanNumber($("purchaseUnitPriceInput")?.value || def?.cost || 0);
+    const status = ($("purchaseStatusInput")?.value || "발주중").trim();
+    const memo = ($("purchaseMemoInput")?.value || "").trim();
+    if (!name || qty <= 0) {
+      showWmsStatus("발주 품목명과 수량을 확인해 주세요.", false);
+      return;
+    }
+    if (unitPrice < 0) {
+      showWmsStatus("발주 단가를 확인해 주세요.", false);
+      return;
+    }
+    state.orderStatus.unshift(normalizePurchaseItem({ id: generatePurchaseId(), productKey, name, qty, unit, unitPrice, status, memo, createdAt: new Date().toISOString() }));
+    resetPurchaseForm();
+    renderAll();
+    saveState("발주 현황이 추가되었습니다.");
+  }
+
+  function removePurchaseItem(id) {
+    if (!requireEditor("발주 현황 삭제")) return;
+    state.orderStatus = state.orderStatus.filter((item) => item.id !== id);
+    renderAll();
+    saveState("발주 현황에서 삭제되었습니다.");
+  }
+
+  function updatePurchaseItemField(id, field, value) {
+    if (!requireEditor("발주 현황 수정")) return;
+    const item = state.orderStatus.find((entry) => entry.id === id);
+    if (!item) return;
+    item[field] = field === "qty" || field === "unitPrice" ? cleanNumber(value) : String(value || "");
+    renderPurchaseStatus();
+    saveState("발주 현황이 수정되었습니다.", { silent: true });
+  }
+
+  function formatPurchaseQtyValue(qty) {
+    const value = cleanNumber(qty);
+    if (Number.isInteger(value)) return number(value);
+    return value.toLocaleString("ko-KR", { maximumFractionDigits: 2 });
+  }
+
+  function purchaseBaseUnitLabel(item) {
+    return item.productKey && getDefByKey(item.productKey)?.isBox ? "장" : "개";
+  }
+
+  function getPurchaseGroupKey(item) {
+    return item.productKey || item.name.trim();
+  }
+
+  function buildPurchaseGroups(items) {
+    const groups = new Map();
+    items.forEach((item) => {
+      const key = getPurchaseGroupKey(item);
+      const amount = calculatePurchaseItemAmount(item);
+      const unitLabel = purchaseUnitLabel(item);
+      const baseUnits = cleanNumber(item.qty) * purchaseUnitsPerSelectedUnit(item);
+      const baseUnitLabel = purchaseBaseUnitLabel(item);
+      const created = item.createdAt ? new Date(item.createdAt) : null;
+      const createdTime = created && !Number.isNaN(created.getTime()) ? created.getTime() : 0;
+
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          name: item.productKey || item.name,
+          productKey: item.productKey,
+          items: [],
+          amount: 0,
+          count: 0,
+          baseUnits: 0,
+          baseUnitLabel,
+          unitTotals: new Map(),
+          statusCounts: new Map(),
+          latestCreatedTime: 0,
+        });
+      }
+
+      const group = groups.get(key);
+      group.items.push(item);
+      group.amount += amount;
+      group.count += 1;
+      group.baseUnits += baseUnits;
+      group.latestCreatedTime = Math.max(group.latestCreatedTime, createdTime);
+      group.statusCounts.set(item.status || "발주중", (group.statusCounts.get(item.status || "발주중") || 0) + 1);
+
+      const unitKey = `${item.unit || "unit"}__${unitLabel}`;
+      const prev = group.unitTotals.get(unitKey) || { label: unitLabel, qty: 0 };
+      prev.qty += cleanNumber(item.qty);
+      group.unitTotals.set(unitKey, prev);
+    });
+
+    return Array.from(groups.values()).sort((a, b) => {
+      if (b.amount !== a.amount) return b.amount - a.amount;
+      return String(a.name).localeCompare(String(b.name), "ko-KR");
+    });
+  }
+
+  function purchaseGroupQtyLabel(group) {
+    const unitParts = Array.from(group.unitTotals.values()).map((unit) => `${formatPurchaseQtyValue(unit.qty)}${unit.label}`);
+    const unitSummary = unitParts.join(" + ");
+    const baseUnits = Math.round(cleanNumber(group.baseUnits));
+    const baseLabel = `${number(baseUnits)}${group.baseUnitLabel} 기준`;
+    return unitSummary ? `${unitSummary} · ${baseLabel}` : baseLabel;
+  }
+
+  function purchaseGroupStatusLabel(group) {
+    const parts = Array.from(group.statusCounts.entries()).map(([status, count]) => {
+      return count > 1 ? `${status} ${number(count)}건` : status;
+    });
+    return parts.join(" · ") || "발주중";
+  }
+
+  function renderPurchaseSummary(items) {
+    const summary = $("purchaseSummaryList");
+    const grandTotal = $("purchaseGrandTotal");
+    if (!summary) return;
+    const groups = buildPurchaseGroups(items);
+    const total = groups.reduce((sum, group) => sum + group.amount, 0);
+    if (grandTotal) grandTotal.textContent = money(total);
+    if (!items.length) {
+      summary.innerHTML = "";
+      return;
+    }
+    summary.innerHTML = `
+      <div class="purchase-summary-compact">
+        <span>품목 ${number(groups.length)}개</span>
+        <span>발주 ${number(items.length)}건</span>
+        <strong>${money(total)}</strong>
+      </div>`;
+  }
+
+  function renderPurchaseStatus() {
+    const list = $("purchaseList");
+    const empty = $("purchaseEmptyState");
+    if (!list) return;
+    const items = Array.isArray(state.orderStatus) ? state.orderStatus.map(normalizePurchaseItem).filter(Boolean) : [];
+    state.orderStatus = items;
+    renderPurchaseSummary(items);
+    if (!items.length) {
+      list.innerHTML = "";
+      if (empty) empty.hidden = false;
+      return;
+    }
+    if (empty) empty.hidden = true;
+
+    const groups = buildPurchaseGroups(items);
+    list.innerHTML = groups.map((group) => {
+      const latest = group.latestCreatedTime ? new Date(group.latestCreatedTime) : null;
+      const latestLabel = latest && !Number.isNaN(latest.getTime()) ? latest.toLocaleDateString("ko-KR") : "-";
+      const statusLabel = purchaseGroupStatusLabel(group);
+      const adminDetails = isEditorSession() ? `
+        <details class="purchase-card-details" data-admin-only="true">
+          <summary>관리자 상세 · 개별 ${number(group.count)}건 수정/삭제</summary>
+          <div class="purchase-detail-list">
+            ${group.items.map((item) => {
+              const amount = calculatePurchaseItemAmount(item);
+              const created = item.createdAt ? new Date(item.createdAt) : null;
+              const createdLabel = created && !Number.isNaN(created.getTime()) ? created.toLocaleDateString("ko-KR") : "-";
+              return `
+                <article class="purchase-detail-row">
+                  <div class="purchase-detail-head">
+                    <strong>${escapeHtml(item.name)}</strong>
+                    <span>${escapeHtml(purchaseQtyLabel(item))}</span>
+                    <span>${money(amount)}</span>
+                    <span>${escapeHtml(createdLabel)}</span>
+                  </div>
+                  <div class="purchase-row-admin" data-admin-only="true">
+                    <label><span>수량</span><input type="number" min="0" step="0.01" value="${escapeHtml(String(item.qty))}" data-purchase-action="qty" data-purchase-id="${escapeHtml(item.id)}" aria-label="발주 수량 수정" /></label>
+                    <label><span>낱개 단가</span><input type="number" min="0" step="0.01" value="${escapeHtml(String(item.unitPrice))}" data-purchase-action="unitPrice" data-purchase-id="${escapeHtml(item.id)}" aria-label="발주 단가 수정" /></label>
+                    <label><span>상태</span><input type="text" value="${escapeHtml(item.status)}" data-purchase-action="status" data-purchase-id="${escapeHtml(item.id)}" aria-label="발주 상태 수정" /></label>
+                    <label><span>메모</span><input type="text" value="${escapeHtml(item.memo)}" data-purchase-action="memo" data-purchase-id="${escapeHtml(item.id)}" aria-label="발주 메모 수정" /></label>
+                    <button type="button" class="btn ghost danger-lite" data-purchase-action="remove" data-purchase-id="${escapeHtml(item.id)}">삭제</button>
+                  </div>
+                </article>`;
+            }).join("")}
+          </div>
+        </details>` : "";
+
+      return `
+        <article class="purchase-card">
+          <div class="purchase-card-main">
+            <div class="purchase-card-name">
+              <strong>${escapeHtml(group.name)}</strong>
+              <span>${escapeHtml(purchaseGroupQtyLabel(group))}</span>
+            </div>
+            <div class="purchase-card-amount">
+              <strong>${money(group.amount)}</strong>
+              <span>${number(group.count)}건</span>
+            </div>
+          </div>
+          <div class="purchase-card-meta">
+            <span>${escapeHtml(statusLabel)}</span>
+            <span>최근 ${escapeHtml(latestLabel)}</span>
+          </div>
+          ${adminDetails}
+        </article>`;
+    }).join("");
+    updateEditorLock();
+  }
+
   function renderAll() {
     renderInventory();
     renderPalletInputs(false);
@@ -1272,6 +1568,7 @@ function refreshActiveOrderAnalysisSummary() {
     renderOrderChart();
     renderHistory();
     renderBackups();
+    renderPurchaseStatus();
     refreshActiveOrderAnalysisSummary();
     updateEditorLock();
   }
@@ -1825,6 +2122,20 @@ function refreshActiveOrderAnalysisSummary() {
   }
 
   function bindWmsEvents() {
+
+    $("purchaseProductSelect")?.addEventListener("change", syncPurchaseFormFromProduct);
+    $("purchaseAddBtn")?.addEventListener("click", addPurchaseItemFromForm);
+    $("purchaseList")?.addEventListener("click", (event) => {
+      const target = event.target.closest("[data-purchase-action]");
+      if (!target) return;
+      if (target.dataset.purchaseAction === "remove") removePurchaseItem(target.dataset.purchaseId);
+    });
+    $("purchaseList")?.addEventListener("change", (event) => {
+      const target = event.target.closest("[data-purchase-action]");
+      if (!target) return;
+      const action = target.dataset.purchaseAction;
+      if (["qty", "unitPrice", "status", "memo"].includes(action)) updatePurchaseItemField(target.dataset.purchaseId, action, target.value);
+    });
     $("inventorySearch")?.addEventListener("input", renderInventory);
     $("orderFile")?.addEventListener("change", (event) => {
       const fileName = event.target.files?.[0]?.name || "엑셀 파일 선택";
