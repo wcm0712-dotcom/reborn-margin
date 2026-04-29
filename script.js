@@ -1002,15 +1002,64 @@
   }
 
   function initMarginClearOnFocus() {
+    const marginPage = $("page-margin") || document;
+    let lastPointerTarget = null;
+    let lastPointerTime = 0;
+    let suppressFocusUntil = 0;
+
+    const markWindowReturn = () => {
+      suppressFocusUntil = Date.now() + 900;
+    };
+
+    window.addEventListener("blur", markWindowReturn);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) markWindowReturn();
+    });
+
+    marginPage.addEventListener("pointerdown", (event) => {
+      lastPointerTarget = event.target.closest("#page-margin input[type='number']");
+      lastPointerTime = Date.now();
+    }, true);
+
     document.querySelectorAll("#page-margin input[type='number']").forEach((input) => {
       if (input.dataset.clearReady) return;
       input.dataset.clearReady = "1";
+
+      input.addEventListener("input", () => {
+        input.dataset.marginEdited = "1";
+      });
+
       input.addEventListener("focus", () => {
         if (input.readOnly || input.disabled) return;
+
         input.dataset.previousValue = input.value;
-        input.value = "";
         input.classList.add("editing-now");
+
+        const now = Date.now();
+        const focusedByPointer = lastPointerTarget === input && now - lastPointerTime < 500;
+        const returningFromOtherWindow = now < suppressFocusUntil;
+        const rawValue = String(input.value || "").trim();
+
+        // 0 기본값은 마우스/터치로 직접 누른 경우에만 비웁니다.
+        // Tab 이동이나 브라우저 창 복귀로 다시 focus될 때는 값을 건드리지 않습니다.
+        if (focusedByPointer && !returningFromOtherWindow && !input.dataset.marginEdited && rawValue === "0") {
+          input.value = "";
+          return;
+        }
+
+        if (!returningFromOtherWindow && rawValue !== "") {
+          requestAnimationFrame(() => {
+            if (document.activeElement === input) {
+              try {
+                input.select();
+              } catch (error) {
+                // 일부 모바일 브라우저에서 select()가 막혀도 계산기는 정상 작동해야 합니다.
+              }
+            }
+          });
+        }
       });
+
       input.addEventListener("blur", () => {
         if (input.value.trim() === "" && input.dataset.previousValue !== undefined) {
           input.value = input.dataset.previousValue;
@@ -1020,6 +1069,7 @@
       });
     });
   }
+
 
   function initCollapsibleSections() {
     document.querySelectorAll("[data-collapsible]").forEach((card) => {
@@ -1068,75 +1118,186 @@
   function buildMarginProductPicker(select) {
     if (!select || select.dataset.customPickerReady) return;
     select.dataset.customPickerReady = "1";
+
     const shell = select.closest(".select-shell") || select;
     shell.classList.add("is-hidden-select");
 
     const picker = document.createElement("div");
-    picker.className = "product-picker";
+    picker.className = "product-picker product-search-picker";
     picker.innerHTML = `
-      <button type="button" class="product-picker-trigger" aria-expanded="false">
-        <span class="picker-label">상품을 선택하세요</span>
-        <small>원가 자동 입력</small>
-      </button>
+      <div class="product-picker-input-wrap">
+        <input type="search" class="product-picker-input" placeholder="상품명 직접 입력 또는 검색" autocomplete="off" aria-expanded="false" aria-autocomplete="list" />
+        <small class="product-picker-cost-hint">상품명을 입력하거나 추천상품을 선택하세요</small>
+      </div>
       <div class="product-picker-menu" hidden>
-        <input type="search" class="product-picker-search" placeholder="상품명 검색" autocomplete="off" />
         <div class="product-picker-list" role="listbox"></div>
       </div>
     `;
     shell.after(picker);
 
-    const trigger = picker.querySelector(".product-picker-trigger");
+    const input = picker.querySelector(".product-picker-input");
+    const hint = picker.querySelector(".product-picker-cost-hint");
     const menu = picker.querySelector(".product-picker-menu");
-    const search = picker.querySelector(".product-picker-search");
     const list = picker.querySelector(".product-picker-list");
-    const label = picker.querySelector(".picker-label");
+    const directProduct = MARGIN_PRODUCTS.find((item) => item.name === "직접 입력") || MARGIN_PRODUCTS[0];
+    let currentItems = [];
+    let activeIndex = -1;
 
-    const syncLabel = () => {
-      const selected = MARGIN_PRODUCTS.find((item) => item.name === select.value) || MARGIN_PRODUCTS[0];
-      label.textContent = selected?.name || "상품을 선택하세요";
-      trigger.querySelector("small").textContent = selected?.cost ? `${money(selected.cost)} 자동 입력` : "원가 직접 입력";
+    const normalizeKeyword = (value) => String(value || "")
+      .toLowerCase()
+      .replace(/\s+/g, "")
+      .trim();
+
+    const getSearchItems = (keyword = "") => {
+      const raw = String(keyword || "").trim();
+      const compact = normalizeKeyword(raw);
+      const words = raw.toLowerCase().split(/\s+/).filter(Boolean);
+      const candidates = MARGIN_PRODUCTS.filter((item) => item.name !== "직접 입력");
+      if (!compact) return candidates;
+      return candidates
+        .map((item) => {
+          const name = item.name.toLowerCase();
+          const compactName = normalizeKeyword(item.name);
+          let score = 0;
+          if (name === raw.toLowerCase()) score += 100;
+          if (compactName === compact) score += 90;
+          if (name.startsWith(raw.toLowerCase())) score += 45;
+          if (compactName.startsWith(compact)) score += 40;
+          if (name.includes(raw.toLowerCase())) score += 25;
+          if (compactName.includes(compact)) score += 20;
+          if (words.length && words.every((word) => name.includes(word))) score += 15;
+          return { item, score };
+        })
+        .filter((entry) => entry.score > 0)
+        .sort((a, b) => b.score - a.score || a.item.name.localeCompare(b.item.name, "ko"))
+        .map((entry) => entry.item);
+    };
+
+    const exactMatch = (keyword = "") => {
+      const compact = normalizeKeyword(keyword);
+      if (!compact) return null;
+      return MARGIN_PRODUCTS.find((item) => item.name !== "직접 입력" && normalizeKeyword(item.name) === compact) || null;
+    };
+
+    const setHint = (item = null) => {
+      if (item?.cost) {
+        hint.textContent = `${money(item.cost)} 자동 입력`;
+        picker.classList.add("has-selected-product");
+        return;
+      }
+      hint.textContent = "등록되지 않은 상품은 원가를 직접 입력하세요";
+      picker.classList.remove("has-selected-product");
     };
 
     const close = () => {
       menu.hidden = true;
-      trigger.setAttribute("aria-expanded", "false");
+      input.setAttribute("aria-expanded", "false");
       picker.classList.remove("open");
+      activeIndex = -1;
     };
 
     const open = () => {
       menu.hidden = false;
-      trigger.setAttribute("aria-expanded", "true");
+      input.setAttribute("aria-expanded", "true");
       picker.classList.add("open");
-      renderList(search.value);
-      requestAnimationFrame(() => search.focus());
+      renderList(input.value);
     };
 
-    const renderList = (keyword = "") => {
-      const q = keyword.trim().toLowerCase();
-      const items = MARGIN_PRODUCTS.filter((item) => !q || item.name.toLowerCase().includes(q));
-      list.innerHTML = items.map((item) => `
-        <button type="button" class="product-picker-option ${item.name === select.value ? "active" : ""}" data-name="${escapeHtml(item.name)}">
+    const setDirectMode = () => {
+      if (directProduct && select.value !== directProduct.name) {
+        select.value = directProduct.name;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      setHint(null);
+      calculateMargin();
+    };
+
+    const applyProduct = (item, shouldClose = true) => {
+      if (!item) return;
+      input.value = item.name;
+      select.value = item.name;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+      setHint(item);
+      renderList(input.value);
+      if (shouldClose) close();
+    };
+
+    function renderList(keyword = "") {
+      currentItems = getSearchItems(keyword);
+      if (activeIndex >= currentItems.length) activeIndex = currentItems.length - 1;
+      if (!currentItems.length) {
+        list.innerHTML = `<p class="picker-empty">추천 상품이 없습니다. 상품명은 그대로 입력하고 원가는 직접 입력하세요.</p>`;
+        return;
+      }
+      list.innerHTML = currentItems.map((item, index) => `
+        <button type="button" class="product-picker-option ${item.name === select.value ? "active" : ""} ${index === activeIndex ? "is-focused" : ""}" data-index="${index}" data-name="${escapeHtml(item.name)}">
           <strong>${escapeHtml(item.name)}</strong>
           <span>${item.cost ? money(item.cost) : "원가 직접 입력"}</span>
         </button>
-      `).join("") || `<p class="picker-empty">검색 결과가 없습니다.</p>`;
-    };
+      `).join("");
+    }
 
-    trigger.addEventListener("click", () => menu.hidden ? open() : close());
-    search.addEventListener("input", () => renderList(search.value));
+    input.addEventListener("focus", () => open());
+    input.addEventListener("click", () => open());
+    input.addEventListener("input", () => {
+      const matched = exactMatch(input.value);
+      if (matched) {
+        select.value = matched.name;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        setHint(matched);
+      } else {
+        setDirectMode();
+      }
+      activeIndex = currentItems.length ? 0 : -1;
+      open();
+    });
+
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        close();
+        input.blur();
+        return;
+      }
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        if (menu.hidden) open();
+        activeIndex = currentItems.length ? Math.min(activeIndex + 1, currentItems.length - 1) : -1;
+        renderList(input.value);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        activeIndex = currentItems.length ? Math.max(activeIndex - 1, 0) : -1;
+        renderList(input.value);
+        return;
+      }
+      if (event.key === "Enter" && !menu.hidden && activeIndex >= 0 && currentItems[activeIndex]) {
+        event.preventDefault();
+        applyProduct(currentItems[activeIndex]);
+      }
+    });
+
+    list.addEventListener("mousedown", (event) => event.preventDefault());
     list.addEventListener("click", (event) => {
       const option = event.target.closest(".product-picker-option");
       if (!option) return;
-      select.value = option.dataset.name;
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-      syncLabel();
-      close();
+      const item = currentItems[Number(option.dataset.index)] || MARGIN_PRODUCTS.find((entry) => entry.name === option.dataset.name);
+      applyProduct(item);
     });
+
     document.addEventListener("click", (event) => {
       if (!picker.contains(event.target)) close();
     });
-    select.addEventListener("change", syncLabel);
-    syncLabel();
+
+    const initial = MARGIN_PRODUCTS.find((item) => item.name === select.value);
+    if (initial && initial.name !== "직접 입력") {
+      input.value = initial.name;
+      setHint(initial);
+    } else {
+      input.value = "";
+      setHint(null);
+    }
+    renderList("");
   }
 
   function initMarginCalculator() {
@@ -1151,6 +1312,7 @@
       if (cost > 0) $("unitCost").value = cost;
       calculateMargin();
     });
+    buildMarginProductPicker(select);
     document.querySelectorAll("#page-margin input, #page-margin select").forEach((el) => el.addEventListener("input", calculateMargin));
     document.querySelectorAll("[data-box-cost]").forEach((button) => button.addEventListener("click", () => {
       $("boxFee").value = button.dataset.boxCost;
@@ -1566,6 +1728,7 @@ function refreshActiveOrderAnalysisSummary() {
     renderPalletInputs(false);
     renderBoxStockInputs(false);
     renderSummary();
+    renderSkuOrderRankSummary();
     renderOrderChart();
     renderHistory();
     renderBackups();
@@ -1836,6 +1999,86 @@ function refreshActiveOrderAnalysisSummary() {
     setText("ordersMonth", `${countSince(30).toLocaleString("ko-KR")}건`);
     setText("cumulativeOrderTotal", `${number(getCumulativeOrderTotal())}건`);
     setText("waterReminder", waterReminderText());
+  }
+
+  function buildSkuOrderRankSummary() {
+    const todayStart = startOfDay(new Date());
+    const tomorrowStart = addDays(todayStart, 1);
+    const weekStart = addDays(todayStart, -6);
+    const monthStart = addDays(todayStart, -29);
+    const itemsBySku = new Map(
+      Object.keys(INVENTORY_DEFS)
+        .filter((sku) => !INVENTORY_DEFS[sku]?.isBox)
+        .map((sku) => [sku, { sku, today: 0, week: 0, month: 0 }])
+    );
+
+    (state.history || []).forEach((record) => {
+      const at = new Date(record.at);
+      if (Number.isNaN(at.getTime()) || at < monthStart || at >= tomorrowStart) return;
+      const details = Array.isArray(record.details) ? record.details : [];
+      details.forEach((detail) => {
+        const sku = detail?.sku;
+        const def = INVENTORY_DEFS[sku];
+        if (!sku || !def || def.isBox) return;
+        if (detail.direction && detail.direction !== "out") return;
+        const rawCount = cleanNumber(detail.orderCount ?? detail.orders ?? detail.orderRows ?? 0);
+        const orderCount = rawCount > 0 ? rawCount : 1;
+        const item = itemsBySku.get(sku) || { sku, today: 0, week: 0, month: 0 };
+        item.month += orderCount;
+        if (at >= weekStart) item.week += orderCount;
+        if (at >= todayStart) item.today += orderCount;
+        itemsBySku.set(sku, item);
+      });
+    });
+
+    const activeItems = [...itemsBySku.values()].filter((item) => item.month > 0);
+    const byHigh = [...activeItems].sort((a, b) =>
+      b.month - a.month || b.week - a.week || b.today - a.today || a.sku.localeCompare(b.sku, "ko-KR")
+    );
+    const byLow = [...activeItems].sort((a, b) =>
+      a.month - b.month || a.week - b.week || a.today - b.today || a.sku.localeCompare(b.sku, "ko-KR")
+    );
+
+    return {
+      top: byHigh.slice(0, 3),
+      low: byLow.slice(0, 3),
+      totalActive: activeItems.length,
+      startLabel: dateKey(monthStart),
+      endLabel: dateKey(todayStart)
+    };
+  }
+
+  function renderSkuOrderRankSummary() {
+    const topList = $("skuOrderTopList");
+    const lowList = $("skuOrderLowList");
+    if (!topList || !lowList) return;
+
+    const summary = buildSkuOrderRankSummary();
+    setText("skuOrderRankBasis", summary.totalActive
+      ? `${summary.startLabel} ~ ${summary.endLabel} 주문처리 기록 기준 · 오늘/7일/30일 주문건수 표시`
+      : "아직 품목별 주문처리 기록이 없습니다. 엑셀 주문 차감 적용 후 자동 집계됩니다."
+    );
+
+    const renderRows = (items, type) => {
+      if (!items.length) {
+        return `<div class="sku-rank-empty">표시할 주문 기록이 없습니다.</div>`;
+      }
+      return items.map((item, index) => `
+        <div class="sku-rank-row ${type}">
+          <span class="sku-rank-no">${index + 1}</span>
+          <div class="sku-rank-main">
+            <strong>${escapeHtml(item.sku)}</strong>
+            <div class="sku-rank-counts" aria-label="${escapeHtml(item.sku)} 주문건수">
+              <span><b>${number(item.today)}건</b><small>하루</small></span>
+              <span><b>${number(item.week)}건</b><small>7일</small></span>
+              <span><b>${number(item.month)}건</b><small>30일</small></span>
+            </div>
+          </div>
+        </div>`).join("");
+    };
+
+    topList.innerHTML = renderRows(summary.top, "top");
+    lowList.innerHTML = renderRows(summary.low, "low");
   }
 
   function addDays(date, days) {
@@ -2574,6 +2817,7 @@ function refreshActiveOrderAnalysisSummary() {
 
   function analyzeOrderRows(rows) {
     const deductions = new Map();
+    const deductionOrderCounts = new Map();
     const boxUsages = new Map();
     const needs = [];
     const excluded = [];
@@ -2635,6 +2879,7 @@ function refreshActiveOrderAnalysisSummary() {
       }
       match.items.forEach(({ sku, units }) => {
         deductions.set(sku, (deductions.get(sku) || 0) + units);
+        deductionOrderCounts.set(sku, (deductionOrderCounts.get(sku) || 0) + 1);
         const boxResult = getBoxUsage(sku, units);
         if (boxResult.needCheck) {
           needs.push({ row: index + 1, productName, qty: units, reason: boxResult.needCheck });
@@ -2649,7 +2894,11 @@ function refreshActiveOrderAnalysisSummary() {
     const paymentRecords = [...paymentGroups.values()];
     const paymentUniqueSum = paymentRecords.reduce((sum, item) => sum + item.amount, 0);
     const extraShippingSum = paymentRecords.reduce((sum, item) => sum + item.extraShipping, 0);
-    const deductionList = [...deductions.entries()].map(([sku, units]) => ({ sku, units }));
+    const deductionList = [...deductions.entries()].map(([sku, units]) => ({
+      sku,
+      units,
+      orderCount: deductionOrderCounts.get(sku) || 0
+    }));
     const boxUsageList = [...boxUsages.entries()].map(([sku, units]) => ({ sku, units }));
     const assetDeductionValue = calcMovementAssetValue(deductionList);
     const boxAssetDeductionValue = calcMovementAssetValue(boxUsageList, { includeBoxes: true });
@@ -2898,9 +3147,10 @@ function refreshActiveOrderAnalysisSummary() {
     state.orderStats.unshift(orderStatRecord);
     queueSupabaseOrderStatSave(orderStatRecord);
     state.orderStats = state.orderStats.slice(0, 2000);
-    const detailItems = analysis.deductions.map(({ sku, units }) => ({
+    const detailItems = analysis.deductions.map(({ sku, units, orderCount }) => ({
       sku,
       units,
+      orderCount: Math.max(1, cleanNumber(orderCount)),
       direction: "out",
       text: formatMovementDetail(sku, units, "out")
     }));
