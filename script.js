@@ -415,9 +415,8 @@
       document.querySelector(".stock-move-card"),
       findCardByTitle("엑셀 주문 처리"),
       document.getElementById("orderResultCard"),
-      document.getElementById("backupCard"),
-      document.getElementById("palletCard"),
-      document.getElementById("boxStockCard")
+      // 파렛/박스 현황은 일반 이용자도 조회 가능해야 하므로 숨기지 않습니다.
+      document.getElementById("backupCard")
     ].filter(Boolean);
 
     adminOnlyNodes.forEach((node) => {
@@ -509,6 +508,16 @@
     document.querySelectorAll("[data-admin-only='true']").forEach((node) => {
       node.hidden = !editable;
       node.setAttribute("aria-hidden", String(!editable));
+    });
+
+    // 조회용 카드: 일반 이용자는 볼 수만 있고, 입력/저장 기능은 아래에서 잠급니다.
+    ["palletCard", "boxStockCard"].forEach((id) => {
+      const node = $(id);
+      if (!node) return;
+      node.hidden = false;
+      node.removeAttribute("aria-hidden");
+      node.classList.remove("admin-only-section");
+      delete node.dataset.adminOnly;
     });
 
     const syncCard = $("syncCard");
