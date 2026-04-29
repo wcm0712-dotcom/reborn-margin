@@ -2094,10 +2094,16 @@ function renderAll() {
     const boxUsages = new Map();
     const needs = [];
     const excluded = [];
+
+    // 결제/주문금액 집계 기준:
+    // 주소 + 판매금액이 완전히 같은 행은 같은 주문 결제금액으로 보고 1번만 더한다.
+    // 주소가 같아도 판매금액이 다르면 서로 다른 주문으로 유지한다.
+    // 재고 차감과 박스 차감은 기존처럼 모든 상품 행을 그대로 처리한다.
     const paymentGroups = new Map();
+
     let orderRows = 0;
     let amountRawSum = 0;
-    let extraShippingSum = 0;
+    let duplicatePaymentRowCount = 0;
 
     rows.forEach((row, index) => {
       const cols = detectColumns(row);
@@ -2108,14 +2114,28 @@ function renderAll() {
       const orderedQty = Math.max(1, cleanNumber(cols.qty) || 1);
       const unitsInName = extractUnitsFromName(productName);
       const lineUnits = Math.max(1, unitsInName || 1) * orderedQty;
-      const amount = cleanNumber(cols.amount);
-      const extraShipping = cleanNumber(cols.extraShipping);
-      amountRawSum += amount;
-      extraShippingSum += extraShipping;
 
-      const address = String(cols.address || "").trim();
-      const groupKey = address && amount ? `${address}|${amount}` : `row-${index}`;
-      if (!paymentGroups.has(groupKey)) paymentGroups.set(groupKey, amount);
+      const rawAddress = String(cols.address || "").trim();
+      const rawAmount = String(cols.amount ?? "").trim();
+      const amount = cleanNumber(rawAmount);
+      const extraShipping = cleanNumber(cols.extraShipping);
+
+      amountRawSum += amount;
+
+      const hasPaymentKey = rawAddress !== "" && rawAmount !== "";
+      const paymentKey = hasPaymentKey ? `${rawAddress}||${amount}` : `row-${index}`;
+
+      if (!paymentGroups.has(paymentKey)) {
+        paymentGroups.set(paymentKey, {
+          address: rawAddress,
+          amount,
+          extraShipping,
+          rows: [index + 1]
+        });
+      } else {
+        paymentGroups.get(paymentKey).rows.push(index + 1);
+        duplicatePaymentRowCount += 1;
+      }
 
       const match = matchOrderLine(productName, lineUnits);
       if (match.excluded) {
@@ -2143,15 +2163,19 @@ function renderAll() {
       });
     });
 
-    const paymentUniqueSum = [...paymentGroups.values()].reduce((sum, amount) => sum + amount, 0);
+    const paymentRecords = [...paymentGroups.values()];
+    const paymentUniqueSum = paymentRecords.reduce((sum, item) => sum + item.amount, 0);
+    const extraShippingSum = paymentRecords.reduce((sum, item) => sum + item.extraShipping, 0);
     const deductionList = [...deductions.entries()].map(([sku, units]) => ({ sku, units }));
     const boxUsageList = [...boxUsages.entries()].map(([sku, units]) => ({ sku, units }));
     const assetDeductionValue = calcMovementAssetValue(deductionList);
     const boxAssetDeductionValue = calcMovementAssetValue(boxUsageList, { includeBoxes: true });
+
     return {
       at: new Date().toISOString(),
       orderRows,
       paymentGroupCount: paymentGroups.size,
+      duplicatePaymentRowCount,
       amountRawSum,
       extraShippingSum,
       paymentUniqueSum,
@@ -2331,7 +2355,8 @@ function renderAll() {
 
   function renderOrderAnalysis(analysis) {
     $("orderResultCard").hidden = false;
-    setText("excelNotice", `분석 완료: ${analysis.orderRows.toLocaleString("ko-KR")}행 처리, 확인 필요 ${analysis.needs.length.toLocaleString("ko-KR")}건, 제외 ${analysis.excluded.length.toLocaleString("ko-KR")}건 · 문제 없으면 "분석 결과 차감 적용"을 눌러 재고에서 뺄 수 있습니다.`);
+    const duplicatePaymentText = analysis.duplicatePaymentRowCount ? `, 주문금액 중복 ${analysis.duplicatePaymentRowCount.toLocaleString("ko-KR")}행 제외` : "";
+    setText("excelNotice", `분석 완료: ${analysis.orderRows.toLocaleString("ko-KR")}행 처리, 주소+판매금액 기준 ${analysis.paymentGroupCount.toLocaleString("ko-KR")}건${duplicatePaymentText}, 확인 필요 ${analysis.needs.length.toLocaleString("ko-KR")}건, 제외 ${analysis.excluded.length.toLocaleString("ko-KR")}건 · 문제 없으면 "분석 결과 차감 적용"을 눌러 재고에서 뺄 수 있습니다.`);
     const summary = $("excelSummary");
     if (summary) {
       const currentAsset = computeInventoryAssetValue().asset;
@@ -2339,10 +2364,10 @@ function renderAll() {
       const boxAssetDeductionValue = analysis.boxAssetDeductionValue ?? calcMovementAssetValue(analysis.boxUsages || [], { includeBoxes: true });
       summary.innerHTML = `
         <div>주문 행 기준: <strong>${number(analysis.orderRows)}건</strong></div>
-        <div>주소+금액 결제 그룹: <strong>${number(analysis.paymentGroupCount)}건</strong></div>
-        <div>중복 제거 결제금액: <strong>${money(analysis.paymentUniqueSum)}</strong></div>
-        <div>추가 배송비 합계: <strong>${money(analysis.extraShippingSum || 0)}</strong></div>
-        <div>중복 제거 결제금액+추가배송비: <strong>${money(analysis.paymentUniqueWithExtraShipping || analysis.paymentUniqueSum)}</strong></div>
+        <div>주소+판매금액 기준 주문: <strong>${number(analysis.paymentGroupCount)}건</strong></div>
+        <div>중복 제외 주문금액: <strong>${money(analysis.paymentUniqueSum)}</strong></div>
+        <div>중복 제외 추가배송비: <strong>${money(analysis.extraShippingSum || 0)}</strong></div>
+        <div>중복 제외 주문금액+추가배송비: <strong>${money(analysis.paymentUniqueWithExtraShipping || analysis.paymentUniqueSum)}</strong></div>
         <div class="asset-loss">재고자산 차감 예정: <strong>${money(assetDeductionValue)}</strong></div>
         <div class="asset-loss muted-small">차감 후 예상 재고자산: <strong>${money(currentAsset - assetDeductionValue)}</strong></div>
         <div class="asset-loss muted-small">박스 재고 차감액: <strong>${money(boxAssetDeductionValue)}</strong></div>
