@@ -258,11 +258,28 @@
   function normalizeState(parsed) {
     const fresh = createInitialState();
     if (!parsed || typeof parsed !== "object") return fresh;
+
+    const normalizedStock = { ...fresh.stock };
+    Object.keys(INVENTORY_DEFS).forEach((sku) => {
+      const incoming = parsed.stock?.[sku];
+      if (!incoming || typeof incoming !== "object") return;
+      normalizedStock[sku] = {
+        ...normalizedStock[sku],
+        ...incoming,
+        units: Number(incoming.units) || 0
+      };
+    });
+
+    const normalizedPallets = { ...fresh.pallets };
+    Object.keys({ ...fresh.pallets, ...(parsed.pallets || {}) }).forEach((key) => {
+      normalizedPallets[key] = Number(parsed.pallets?.[key] ?? fresh.pallets[key] ?? 0) || 0;
+    });
+
     return {
       ...fresh,
       ...parsed,
-      stock: { ...fresh.stock, ...(parsed.stock || {}) },
-      pallets: { ...fresh.pallets, ...(parsed.pallets || {}) },
+      stock: normalizedStock,
+      pallets: normalizedPallets,
       history: Array.isArray(parsed.history) ? parsed.history : [],
       orderStats: Array.isArray(parsed.orderStats) ? parsed.orderStats : [],
       orderYearArchives: parsed.orderYearArchives && typeof parsed.orderYearArchives === "object" ? parsed.orderYearArchives : {}
@@ -1216,7 +1233,29 @@
     }, 120);
   });
 
-function renderAll() {
+function refreshActiveOrderAnalysisSummary() {
+    if (!lastOrderAnalysis) return;
+    const summary = $("excelSummary");
+    if (!summary) return;
+
+    const currentAsset = computeInventoryAssetValue({ includeBoxes: true }).asset;
+    const assetDeductionValue = lastOrderAnalysis.assetDeductionValue ?? calcMovementAssetValue(lastOrderAnalysis.deductions || []);
+    const boxAssetDeductionValue = lastOrderAnalysis.boxAssetDeductionValue ?? calcMovementAssetValue(lastOrderAnalysis.boxUsages || [], { includeBoxes: true });
+    const afterAsset = currentAsset - assetDeductionValue - boxAssetDeductionValue;
+
+    summary.innerHTML = `
+        <div>주문 행 기준: <strong>${number(lastOrderAnalysis.orderRows)}건</strong></div>
+        <div>주소+판매금액 기준 주문: <strong>${number(lastOrderAnalysis.paymentGroupCount)}건</strong></div>
+        <div>중복 제외 주문금액: <strong>${money(lastOrderAnalysis.paymentUniqueSum)}</strong></div>
+        <div>중복 제외 추가배송비: <strong>${money(lastOrderAnalysis.extraShippingSum || 0)}</strong></div>
+        <div>중복 제외 주문금액+추가배송비: <strong>${money(lastOrderAnalysis.paymentUniqueWithExtraShipping || lastOrderAnalysis.paymentUniqueSum)}</strong></div>
+        <div class="asset-loss">상품 재고자산 차감 예정: <strong>${money(assetDeductionValue)}</strong></div>
+        <div class="asset-loss muted-small">박스 재고 차감액: <strong>${money(boxAssetDeductionValue)}</strong></div>
+        <div class="asset-loss muted-small">차감 후 예상 재고자산: <strong>${money(afterAsset)}</strong></div>
+      `;
+  }
+
+  function renderAll() {
     renderInventory();
     renderPalletInputs(false);
     renderBoxStockInputs(false);
@@ -1224,6 +1263,7 @@ function renderAll() {
     renderOrderChart();
     renderHistory();
     renderBackups();
+    refreshActiveOrderAnalysisSummary();
     updateEditorLock();
   }
 
@@ -1445,12 +1485,13 @@ function renderAll() {
       .filter((item) => item.status?.isLow);
   }
 
-  function computeInventoryAssetValue() {
+  function computeInventoryAssetValue(options = {}) {
+    const { includeBoxes = true } = options;
     let asset = 0;
     let unknown = 0;
     Object.entries(INVENTORY_DEFS).forEach(([sku, def]) => {
-      if (def.isBox) return;
-      const units = state.stock[sku]?.units || 0;
+      if (def.isBox && !includeBoxes) return;
+      const units = Number(state.stock[sku]?.units) || 0;
       if (def.cost) asset += units * def.cost;
       else unknown += 1;
     });
@@ -1470,7 +1511,7 @@ function renderAll() {
   function renderSummary() {
     const { asset, unknown } = computeInventoryAssetValue();
     setText("assetValue", isMobileWmsCompactView() ? compactKoreanWon(asset) : money(asset));
-    setText("unknownCostInfo", `원가 미입력 ${unknown}개 품목 제외`);
+    setText("unknownCostInfo", `상품/박스 원가 미입력 ${unknown}개 품목 제외`);
     const lowItems = lowSafetyItems();
     setText("lowStockCount", `${number(lowItems.length)}개`);
     setText("lowStockInfo", lowItems.length ? `${lowItems.slice(0, 2).map((item) => item.sku).join(", ")}${lowItems.length > 2 ? " 외" : ""}` : "모든 품목 안전권");
@@ -1925,7 +1966,7 @@ function renderAll() {
 
     [...bySku.entries()].forEach(([sku, units]) => {
       if (!state.stock[sku]) state.stock[sku] = { units: 0 };
-      state.stock[sku].units += units;
+      state.stock[sku].units = (Number(state.stock[sku].units) || 0) + units;
     });
 
     const detailItems = [...bySku.entries()].map(([sku, units]) => ({
@@ -2359,18 +2400,19 @@ function renderAll() {
     setText("excelNotice", `분석 완료: ${analysis.orderRows.toLocaleString("ko-KR")}행 처리, 주소+판매금액 기준 ${analysis.paymentGroupCount.toLocaleString("ko-KR")}건${duplicatePaymentText}, 확인 필요 ${analysis.needs.length.toLocaleString("ko-KR")}건, 제외 ${analysis.excluded.length.toLocaleString("ko-KR")}건 · 문제 없으면 "분석 결과 차감 적용"을 눌러 재고에서 뺄 수 있습니다.`);
     const summary = $("excelSummary");
     if (summary) {
-      const currentAsset = computeInventoryAssetValue().asset;
+      const currentAsset = computeInventoryAssetValue({ includeBoxes: true }).asset;
       const assetDeductionValue = analysis.assetDeductionValue ?? calcMovementAssetValue(analysis.deductions || []);
       const boxAssetDeductionValue = analysis.boxAssetDeductionValue ?? calcMovementAssetValue(analysis.boxUsages || [], { includeBoxes: true });
+      const afterAsset = currentAsset - assetDeductionValue - boxAssetDeductionValue;
       summary.innerHTML = `
         <div>주문 행 기준: <strong>${number(analysis.orderRows)}건</strong></div>
         <div>주소+판매금액 기준 주문: <strong>${number(analysis.paymentGroupCount)}건</strong></div>
         <div>중복 제외 주문금액: <strong>${money(analysis.paymentUniqueSum)}</strong></div>
         <div>중복 제외 추가배송비: <strong>${money(analysis.extraShippingSum || 0)}</strong></div>
         <div>중복 제외 주문금액+추가배송비: <strong>${money(analysis.paymentUniqueWithExtraShipping || analysis.paymentUniqueSum)}</strong></div>
-        <div class="asset-loss">재고자산 차감 예정: <strong>${money(assetDeductionValue)}</strong></div>
-        <div class="asset-loss muted-small">차감 후 예상 재고자산: <strong>${money(currentAsset - assetDeductionValue)}</strong></div>
+        <div class="asset-loss">상품 재고자산 차감 예정: <strong>${money(assetDeductionValue)}</strong></div>
         <div class="asset-loss muted-small">박스 재고 차감액: <strong>${money(boxAssetDeductionValue)}</strong></div>
+        <div class="asset-loss muted-small">차감 후 예상 재고자산: <strong>${money(afterAsset)}</strong></div>
       `;
     }
     $("deductTable").innerHTML = analysis.deductions.map(({ sku, units }) => `
