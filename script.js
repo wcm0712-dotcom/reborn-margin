@@ -19,9 +19,12 @@
   };
   const ADMIN_AUTH_CONFIG = {
     enabled: true,
-    lockWmsEditingUntilLogin: true
+    lockWmsEditingUntilLogin: true,
+    allowedUserIds: ["779ce4cf-e50c-4907-ab9c-11c95c288d50"],
+    revealClicks: 5
   };
   let adminSession = null;
+  let adminLoginPanelOpen = false;
 
   const SYNC_INTERVAL_KEY = "reborn.wms.sync.interval.v1";
 
@@ -368,8 +371,103 @@
   let supabaseBusy = false;
   let lastSupabaseSavePromise = Promise.resolve();
 
+
+  function getAdminUser() {
+    return adminSession?.user || null;
+  }
+
+  function isAllowedAdminUser(user = getAdminUser()) {
+    if (!user?.id) return false;
+    const allowedUserIds = ADMIN_AUTH_CONFIG.allowedUserIds || [];
+    if (!allowedUserIds.length) return true;
+    return allowedUserIds.includes(user.id);
+  }
+
   function isEditorSession() {
-    return !ADMIN_AUTH_CONFIG.enabled || !ADMIN_AUTH_CONFIG.lockWmsEditingUntilLogin || Boolean(adminSession?.user);
+    return !ADMIN_AUTH_CONFIG.enabled || !ADMIN_AUTH_CONFIG.lockWmsEditingUntilLogin || isAllowedAdminUser();
+  }
+
+  function findCardByTitle(titleText) {
+    const headings = Array.from(document.querySelectorAll(".card h2"));
+    const heading = headings.find((item) => item.textContent.trim() === titleText);
+    return heading?.closest(".card") || null;
+  }
+
+  function markAdminOnlySections() {
+    const adminOnlyNodes = [
+      document.querySelector(".stock-move-card"),
+      findCardByTitle("엑셀 주문 처리"),
+      document.getElementById("orderResultCard"),
+      document.getElementById("backupCard"),
+      document.getElementById("palletCard"),
+      document.getElementById("boxStockCard")
+    ].filter(Boolean);
+
+    adminOnlyNodes.forEach((node) => {
+      node.dataset.adminOnly = "true";
+      node.classList.add("admin-only-section");
+    });
+  }
+
+  function setAdminLoginPanelOpen(open) {
+    adminLoginPanelOpen = Boolean(open);
+    document.body.classList.toggle("admin-login-open", adminLoginPanelOpen || isEditorSession());
+    updateEditorLock();
+  }
+
+  function revealAdminLogin() {
+    setAdminLoginPanelOpen(true);
+    setAdminAuthStatus("관리자 로그인창을 열었습니다. 등록된 관리자 계정으로 로그인하세요.", "muted");
+    setTimeout(() => $("adminEmail")?.focus(), 80);
+  }
+
+  function hideAdminLogin() {
+    if (isEditorSession()) return;
+    setAdminLoginPanelOpen(false);
+  }
+
+  function initAdminLoginReveal() {
+    let tapCount = 0;
+    let tapTimer = null;
+
+    const resetTapCount = () => {
+      tapCount = 0;
+      if (tapTimer) {
+        clearTimeout(tapTimer);
+        tapTimer = null;
+      }
+    };
+
+    const handleHiddenTrigger = () => {
+      tapCount += 1;
+      if (tapTimer) clearTimeout(tapTimer);
+      tapTimer = setTimeout(resetTapCount, 3500);
+      if (tapCount >= ADMIN_AUTH_CONFIG.revealClicks) {
+        resetTapCount();
+        revealAdminLogin();
+      }
+    };
+
+    const hiddenTriggers = [
+      document.querySelector("#page-wms .wms-head h1"),
+      document.querySelector(".brand-mark"),
+      document.querySelector(".brand-title")
+    ].filter(Boolean);
+
+    hiddenTriggers.forEach((trigger) => {
+      trigger.addEventListener("click", handleHiddenTrigger);
+    });
+
+    document.addEventListener("keydown", (event) => {
+      const key = event.key?.toLowerCase();
+      if (event.ctrlKey && event.altKey && key === "a") {
+        event.preventDefault();
+        revealAdminLogin();
+      }
+      if (event.key === "Escape" && adminLoginPanelOpen && !isEditorSession()) {
+        hideAdminLogin();
+      }
+    });
   }
 
   function setAdminAuthStatus(text, tone = "muted") {
@@ -380,21 +478,55 @@
   }
 
   function updateEditorLock() {
+    markAdminOnlySections();
+
     const editable = isEditorSession();
+    const loggedIn = Boolean(getAdminUser());
+    const authorized = isAllowedAdminUser();
+    const showLoginPanel = editable || adminLoginPanelOpen || loggedIn;
+
+    document.body.classList.toggle("admin-active", editable);
+    document.body.classList.toggle("admin-login-open", showLoginPanel);
     document.body.classList.toggle("view-only-mode", !editable);
 
+    document.querySelectorAll("[data-admin-only='true']").forEach((node) => {
+      node.hidden = !editable;
+      node.setAttribute("aria-hidden", String(!editable));
+    });
+
+    const syncCard = $("syncCard");
+    if (syncCard) {
+      const showSyncCard = editable || showLoginPanel;
+      syncCard.hidden = !showSyncCard;
+      syncCard.setAttribute("aria-hidden", String(!showSyncCard));
+      syncCard.classList.toggle("sync-login-only", showLoginPanel && !editable);
+    }
+
+    const panel = $("adminAuthPanel");
+    if (panel) {
+      panel.hidden = !showLoginPanel;
+      panel.setAttribute("aria-hidden", String(!showLoginPanel));
+    }
+
     const lockSelectors = [
-      "#savePallets", "#saveBoxStock", "#quickInboundExample",
-      "#addStockMoveRow", "#clearStockMoveRows", "#applyStockMove",
+      "#syncNow", "#syncIntervalSelect",
+      "#savePallets", "#saveBoxStock",
+      "#exportBackup", "#restorePreviousWms", "#resetWms",
       "#orderFile", "#parseOrderFile", "#applyOrderDeductions",
-      "#importBackup", "#resetWms", "#restorePreviousWms", "#moveMemo",
+      "#moveMemo", "#quickInboundExample", "#addStockMoveRow", "#clearStockMoveRows", "#applyStockMove",
       "#palletGrid input", "#boxStockGrid input",
       "#stockMoveRows input", "#stockMoveRows select", "#stockMoveRows button"
     ];
 
-    document.querySelectorAll(lockSelectors.join(",")).forEach((el) => {
-      el.disabled = !editable;
-      el.setAttribute("aria-disabled", String(!editable));
+    document.querySelectorAll(lockSelectors.join(",")).forEach((node) => {
+      node.disabled = !editable;
+      node.setAttribute("aria-disabled", String(!editable));
+    });
+
+    document.querySelectorAll(".file-trigger, .import-label").forEach((label) => {
+      label.classList.toggle("is-disabled", !editable);
+      label.setAttribute("aria-disabled", String(!editable));
+      label.tabIndex = editable ? 0 : -1;
     });
 
     const loginButton = $("adminLogin");
@@ -402,21 +534,22 @@
     const emailInput = $("adminEmail");
     const passwordInput = $("adminPassword");
 
-    if (loginButton) loginButton.hidden = editable;
-    if (logoutButton) logoutButton.hidden = !editable;
-    if (emailInput) emailInput.hidden = editable;
-    if (passwordInput) {
-      passwordInput.hidden = editable;
-      if (editable) passwordInput.value = "";
-    }
+    if (loginButton) loginButton.hidden = loggedIn;
+    if (logoutButton) logoutButton.hidden = !loggedIn;
+    if (emailInput) emailInput.hidden = loggedIn;
+    if (passwordInput) passwordInput.hidden = loggedIn;
 
     if (editable) {
-      const email = adminSession?.user?.email || "관리자";
-      setAdminAuthStatus(`${email} 계정으로 로그인되어 재고 수정이 가능합니다.`, "ok");
+      setAdminAuthStatus("관리자 수정 모드입니다. 입고, 주문 차감, 박스/파렛 수정, 백업/복구를 사용할 수 있습니다.", "success");
+    } else if (loggedIn && !authorized) {
+      setAdminAuthStatus("로그인된 계정이 등록된 관리자 UID가 아닙니다. 이 계정은 수정할 수 없습니다.", "danger");
+    } else if (showLoginPanel) {
+      setAdminAuthStatus("관리자 로그인 전에는 수정 기능이 숨겨집니다.", "muted");
     } else {
-      setAdminAuthStatus("관리자 로그인 전에는 입고, 주문 차감, 박스/파렛 수정, 복구/초기화가 잠깁니다.", "warn");
+      setAdminAuthStatus("보기 전용 모드입니다.", "muted");
     }
   }
+
 
   function requireEditor(action = "수정") {
     if (isEditorSession()) return true;
@@ -427,52 +560,92 @@
   }
 
   async function initAdminAuth() {
-    if (!ADMIN_AUTH_CONFIG.enabled) {
+    const client = getSupabaseClient();
+    const panel = $("adminAuthPanel");
+
+    if (!ADMIN_AUTH_CONFIG.enabled || !panel) {
+      adminSession = null;
       updateEditorLock();
       return;
     }
 
-    updateEditorLock();
-    const client = getSupabaseClient();
     if (!client?.auth) {
-      setAdminAuthStatus("Supabase 연결 전이라 수정 권한 확인을 할 수 없습니다.", "warn");
+      adminSession = null;
+      setAdminAuthStatus("Supabase 연결 전이라 관리자 로그인을 사용할 수 없습니다.", "muted");
+      updateEditorLock();
       return;
     }
 
     $("adminLogin")?.addEventListener("click", async () => {
-      const email = ($("adminEmail")?.value || "").trim();
+      const email = $("adminEmail")?.value.trim();
       const password = $("adminPassword")?.value || "";
+
       if (!email || !password) {
-        setAdminAuthStatus("관리자 이메일과 비밀번호를 입력하세요.", "warn");
+        setAdminAuthStatus("관리자 이메일과 비밀번호를 입력하세요.", "danger");
         return;
       }
 
-      setAdminAuthStatus("로그인 확인 중입니다.", "muted");
+      setAdminAuthStatus("로그인 확인 중입니다...", "muted");
+
       const { data, error } = await client.auth.signInWithPassword({ email, password });
+
       if (error) {
         adminSession = null;
+        setAdminAuthStatus(`로그인 실패: ${error.message}`, "danger");
         updateEditorLock();
-        setAdminAuthStatus("로그인 실패: 이메일/비밀번호 또는 Supabase Auth 설정을 확인하세요.", "bad");
         return;
       }
+
       adminSession = data?.session || null;
+
+      if (!isAllowedAdminUser(adminSession?.user)) {
+        await client.auth.signOut();
+        adminSession = null;
+        adminLoginPanelOpen = false;
+        setAdminAuthStatus("로그인된 계정이 등록된 관리자 UID가 아닙니다. 수정 권한이 없습니다.", "danger");
+        updateEditorLock();
+        return;
+      }
+
+      adminLoginPanelOpen = true;
+      setAdminAuthStatus("관리자 수정 권한이 확인되었습니다.", "success");
       updateEditorLock();
-      syncFromSupabase({ forcePull: true, silent: false });
+      syncFromSupabase({ forcePull: true, silent: true });
     });
 
     $("adminLogout")?.addEventListener("click", async () => {
       await client.auth.signOut();
       adminSession = null;
+      adminLoginPanelOpen = false;
+      setAdminAuthStatus("로그아웃되었습니다. 수정 기능은 숨겨집니다.", "muted");
       updateEditorLock();
       syncFromSupabase({ forcePull: true, silent: true });
     });
 
     const { data } = await client.auth.getSession();
     adminSession = data?.session || null;
+
+    if (adminSession && !isAllowedAdminUser(adminSession.user)) {
+      await client.auth.signOut();
+      adminSession = null;
+      adminLoginPanelOpen = false;
+    } else {
+      adminLoginPanelOpen = isAllowedAdminUser(adminSession?.user);
+    }
+
     updateEditorLock();
 
-    client.auth.onAuthStateChange((_event, session) => {
+    client.auth.onAuthStateChange(async (_event, session) => {
+      if (session && !isAllowedAdminUser(session.user)) {
+        adminSession = null;
+        adminLoginPanelOpen = false;
+        await client.auth.signOut();
+        updateEditorLock();
+        return;
+      }
+
       adminSession = session || null;
+      adminLoginPanelOpen = isAllowedAdminUser(adminSession?.user);
       updateEditorLock();
     });
   }
@@ -1690,7 +1863,10 @@ function renderAll() {
         closeInventoryItemDetail();
       }
     });
-    $("exportBackup")?.addEventListener("click", exportBackup);
+    $("exportBackup")?.addEventListener("click", () => {
+      if (!requireEditor("백업 파일 받기")) return;
+      exportBackup();
+    });
     $("importBackup")?.addEventListener("change", (event) => {
       if (!requireEditor("백업 파일 불러오기")) {
         event.target.value = "";
@@ -1703,6 +1879,7 @@ function renderAll() {
       restorePreviousState();
     });
     $("resetWms")?.addEventListener("click", () => {
+      if (!requireEditor("초기값 복구")) return;
       if (!confirm("WMS 재고를 초기값으로 복구할까요? 현재 브라우저 저장값은 백업 후 초기화됩니다.")) return;
       addBackup("초기화 전 백업");
       state = createInitialState();
@@ -2224,6 +2401,7 @@ function renderAll() {
   }
 
   function exportBackup() {
+    if (!requireEditor("백업 파일 받기")) return;
     const payload = { exportedAt: new Date().toISOString(), state };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -2237,6 +2415,10 @@ function renderAll() {
   }
 
   async function importBackup(event) {
+    if (!requireEditor("백업 파일 불러오기")) {
+      if (event?.target) event.target.value = "";
+      return;
+    }
     const file = event.target.files?.[0];
     if (!file) return;
     try {
@@ -2278,6 +2460,7 @@ function renderAll() {
     initMarginCalculator();
     initWms();
     initSupabaseSync();
+    initAdminLoginReveal();
     initAdminAuth();
   });
 })();
