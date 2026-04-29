@@ -255,6 +255,7 @@
   let stockMoveRowSeq = 0;
   let orderChartMode = "daily";
   let chartResizeTimer = null;
+  let activeInventoryDetailSku = null;
 
   function normalizeState(parsed) {
     const fresh = createInitialState();
@@ -1569,6 +1570,7 @@ function refreshActiveOrderAnalysisSummary() {
     renderHistory();
     renderBackups();
     renderPurchaseStatus();
+    renderInventoryItemOrderTrend();
     refreshActiveOrderAnalysisSummary();
     updateEditorLock();
   }
@@ -2016,7 +2018,7 @@ function refreshActiveOrderAnalysisSummary() {
     ctx.textAlign = "center";
     ctx.fillStyle = "rgba(232,238,255,0.62)";
     ctx.font = "700 12px Pretendard, system-ui, sans-serif";
-    const labelStep = isNarrowChart && points.length > 7 ? 2 : 1;
+    const labelStep = points.length > 14 ? Math.ceil(points.length / (isNarrowChart ? 6 : 10)) : (isNarrowChart && points.length > 7 ? 2 : 1);
     coords.forEach((point, index) => {
       if (labelStep > 1 && index % labelStep !== 0 && index !== coords.length - 1) return;
       ctx.fillText(point.label, point.x, cssHeight - 24);
@@ -2267,7 +2269,10 @@ function refreshActiveOrderAnalysisSummary() {
     });
     window.addEventListener("resize", () => {
       clearTimeout(chartResizeTimer);
-      chartResizeTimer = setTimeout(renderOrderChart, 140);
+      chartResizeTimer = setTimeout(() => {
+        renderOrderChart();
+        renderInventoryItemOrderTrend();
+      }, 140);
     });
     document.querySelectorAll(".subtab").forEach((tab) => tab.addEventListener("click", () => switchResultTab(tab.dataset.resultTab)));
   }
@@ -2354,6 +2359,99 @@ function refreshActiveOrderAnalysisSummary() {
     return `${percent}% · 기준 ${safety.thresholdText}`;
   }
 
+
+  function buildSkuOutboundTrend(sku) {
+    const today = startOfDay(new Date());
+    const start = addDays(today, -29);
+    const endExclusive = addDays(today, 1);
+    const dailyTotals = new Map();
+    let storedTotal = 0;
+    let latestDate = null;
+
+    (state.history || []).forEach((record) => {
+      const at = new Date(record.at);
+      if (Number.isNaN(at.getTime())) return;
+      const details = Array.isArray(record.details) ? record.details : [];
+      details.forEach((detail) => {
+        if (detail?.sku !== sku) return;
+        if (detail.direction && detail.direction !== "out") return;
+        const units = Math.max(0, cleanNumber(detail.units));
+        if (!units) return;
+        storedTotal += units;
+        if (!latestDate || at > latestDate) latestDate = at;
+        if (at >= start && at < endExclusive) {
+          const key = dateKey(at);
+          dailyTotals.set(key, (dailyTotals.get(key) || 0) + units);
+        }
+      });
+    });
+
+    const points = [];
+    for (let offset = 29; offset >= 0; offset -= 1) {
+      const date = addDays(today, -offset);
+      const key = dateKey(date);
+      points.push({ key, label: formatMonthDay(date), value: dailyTotals.get(key) || 0 });
+    }
+
+    const recentTotal = points.reduce((sum, point) => sum + point.value, 0);
+    const activeDays = points.filter((point) => point.value > 0);
+    const maxDay = activeDays.reduce((best, point) => (!best || point.value > best.value ? point : best), null);
+
+    return {
+      points,
+      recentTotal,
+      storedTotal,
+      activeDays,
+      maxDay,
+      latestDate
+    };
+  }
+
+  function renderInventoryItemOrderTrend() {
+    if (!activeInventoryDetailSku) return;
+    const overlay = $("inventoryItemOverlay");
+    if (!overlay || overlay.hidden) return;
+    const canvas = $("inventoryItemOrderChart");
+    const empty = $("inventoryItemOrderChartEmpty");
+    const meta = $("inventoryItemOrderTrendMeta");
+    const summary = $("inventoryItemOrderTrendSummary");
+    const list = $("inventoryItemOrderTrendList");
+    if (!canvas || !empty || !meta || !summary || !list) return;
+
+    const sku = activeInventoryDetailSku;
+    const data = buildSkuOutboundTrend(sku);
+    const hasData = data.storedTotal > 0;
+    const hasRecentData = data.recentTotal > 0;
+    const recentAverage = data.activeDays.length ? Math.round(data.recentTotal / data.activeDays.length) : 0;
+
+    meta.textContent = hasData
+      ? `최근 30일 ${formatStock(sku, data.recentTotal)} 출고 · 저장 기록 전체 ${formatStock(sku, data.storedTotal)}`
+      : "엑셀 주문 차감 적용 이후 저장된 품목별 출고 기록이 아직 없습니다.";
+    empty.textContent = hasData
+      ? "저장된 출고 기록은 있지만, 최근 30일 안에 이 품목의 출고 기록은 없습니다."
+      : "엑셀 주문 차감 적용 이후 저장된 품목별 출고 기록이 아직 없습니다.";
+
+    summary.innerHTML = `
+      <div><span>최근 30일 합계</span><strong>${escapeHtml(formatStock(sku, data.recentTotal))}</strong></div>
+      <div><span>출고 발생일</span><strong>${number(data.activeDays.length)}일</strong></div>
+      <div><span>발생일 평균</span><strong>${escapeHtml(formatStock(sku, recentAverage))}</strong></div>
+      <div><span>최대 출고일</span><strong>${data.maxDay ? `${escapeHtml(data.maxDay.label)} · ${escapeHtml(formatStock(sku, data.maxDay.value))}` : "-"}</strong></div>
+    `;
+
+    const recentLines = data.activeDays.slice(-8).reverse();
+    list.innerHTML = recentLines.length
+      ? recentLines.map((point) => `
+        <div class="sku-order-day-line">
+          <span>${escapeHtml(point.key)}</span>
+          <strong>${escapeHtml(formatStock(sku, point.value))}</strong>
+        </div>`).join("")
+      : `<div class="detail-empty">최근 30일 안에 이 품목으로 저장된 주문 출고 기록이 없습니다.</div>`;
+
+    empty.hidden = hasRecentData;
+    canvas.hidden = !hasRecentData;
+    if (hasRecentData) drawLineChart(canvas, data.points);
+  }
+
   function openInventoryItemDetail(sku) {
     const def = INVENTORY_DEFS[sku];
     const item = state.stock[sku];
@@ -2362,6 +2460,7 @@ function refreshActiveOrderAnalysisSummary() {
     const body = $("inventoryItemBody");
     if (!overlay || !body) return;
 
+    activeInventoryDetailSku = sku;
     const units = item.units || 0;
     const safety = safetyStatus(sku, state.stock[sku]?.units || 0);
     setText("inventoryItemTitle", sku);
@@ -2381,9 +2480,31 @@ function refreshActiveOrderAnalysisSummary() {
         ${rows.map(([label, value]) => `<div class="inventory-detail-line"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}
       </div>
       ${def.isBox ? `<p class="detail-note">박스 재고는 파렛/묶음/장 기준으로 직접 수정할 수 있습니다.</p>` : `<p class="detail-note">이 품목의 입고는 입고 직접 입력에서 여러 줄로 한 번에 적용할 수 있습니다.</p>`}
+      <section class="sku-order-trend-card" id="inventoryItemOrderTrend">
+        <div class="sku-order-trend-head">
+          <div>
+            <p class="eyebrow">ORDER OUT TREND</p>
+            <strong>날짜별 주문 출고 추적</strong>
+          </div>
+          <span>최근 30일</span>
+        </div>
+        <p id="inventoryItemOrderTrendMeta" class="sku-order-trend-meta">출고 기록을 불러오는 중입니다.</p>
+        <div class="sku-order-chart-stage">
+          <canvas id="inventoryItemOrderChart" height="260" aria-label="날짜별 주문 출고 그래프"></canvas>
+          <div id="inventoryItemOrderChartEmpty" class="detail-empty" hidden>엑셀 주문 차감 적용 이후 저장된 품목별 출고 기록이 아직 없습니다.</div>
+        </div>
+        <div id="inventoryItemOrderTrendSummary" class="sku-order-trend-summary"></div>
+        <div class="sku-order-trend-recent">
+          <span>최근 출고일</span>
+          <div id="inventoryItemOrderTrendList" class="sku-order-trend-list"></div>
+        </div>
+      </section>
     `;
     overlay.hidden = false;
-    requestAnimationFrame(() => overlay.classList.add("open"));
+    requestAnimationFrame(() => {
+      overlay.classList.add("open");
+      renderInventoryItemOrderTrend();
+    });
   }
 
   function closeInventoryItemDetail() {
@@ -2391,6 +2512,7 @@ function refreshActiveOrderAnalysisSummary() {
     if (!overlay || overlay.hidden) return;
     overlay.classList.remove("open");
     overlay.hidden = true;
+    activeInventoryDetailSku = null;
   }
 
   function openHistoryDetail(key) {
