@@ -128,6 +128,63 @@
           <p class="lead">입고 적용과 주문 차감 결과가 바로 반영되는 실시간 재고 기준으로 관리합니다.</p>
         </div>
 
+
+        <section class="card purchase-status-card" id="purchaseStatusCard">
+          <div class="card-title-row purchase-title-row">
+            <div>
+              <h2>발주 현황</h2>
+              <p>일반 이용자는 조회만 가능하고, 관리자 로그인 시에만 추가·수정·삭제할 수 있습니다.</p>
+            </div>
+            <div class="purchase-total-box">
+              <span>발주 총액</span>
+              <strong id="purchaseGrandTotal">0원</strong>
+            </div>
+          </div>
+
+          <div class="purchase-admin-panel" id="purchaseAdminPanel" data-admin-only="true" hidden>
+            <div class="purchase-input-grid">
+              <label>
+                <span>등록 품목</span>
+                <select id="purchaseProductSelect"><option value="">직접 입력</option></select>
+              </label>
+              <label>
+                <span>품목명</span>
+                <input id="purchaseNameInput" type="text" placeholder="예: 브이콘 50g / 박스 대 / SAMPLE-A" />
+              </label>
+              <label>
+                <span>수량</span>
+                <input id="purchaseQtyInput" type="number" min="0" step="0.01" placeholder="예: 3" />
+              </label>
+              <label>
+                <span>단위</span>
+                <select id="purchaseUnitSelect">
+                  <option value="pallet">파렛</option>
+                  <option value="box">완박스/묶음</option>
+                  <option value="unit">낱개/장</option>
+                </select>
+              </label>
+              <label>
+                <span>낱개 단가</span>
+                <input id="purchaseUnitPriceInput" type="number" min="0" step="0.01" placeholder="자동 또는 직접 입력" />
+              </label>
+              <label>
+                <span>상태</span>
+                <input id="purchaseStatusInput" type="text" placeholder="예: 발주완료 / 입고예정" />
+              </label>
+              <label class="purchase-wide-input">
+                <span>메모</span>
+                <input id="purchaseMemoInput" type="text" placeholder="한글, 영어, 특수문자 모두 입력 가능" />
+              </label>
+              <button type="button" class="btn primary" id="purchaseAddBtn">발주 항목 추가</button>
+            </div>
+            <p class="form-help">등록 품목을 선택하면 낱개 단가가 자동 입력되고, 파렛/완박스/묶음 수량은 낱개 기준으로 환산해 금액을 계산합니다.</p>
+          </div>
+
+          <div class="purchase-summary-list" id="purchaseSummaryList"></div>
+          <div class="purchase-list" id="purchaseList"></div>
+          <p class="empty-state" id="purchaseEmptyState">등록된 발주 항목이 없습니다.</p>
+        </section>
+
         <div class="wms-dashboard-layout">
           <div class="wms-main-column">
             <section class="summary-grid wms-summary-block" aria-label="WMS 요약">
