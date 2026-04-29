@@ -4175,3 +4175,95 @@ body.view-only-mode #boxStockCard input:disabled {
   border-color: rgba(255, 255, 255, 0.09);
 }
 
+
+
+/* 2026-04-29: WMS 발주 현황 */
+.purchase-status-card { margin-bottom: 18px; overflow: hidden; }
+.purchase-title-row { align-items: stretch; gap: 14px; }
+.purchase-total-box { min-width: 168px; display: grid; align-content: center; justify-items: end; gap: 3px; padding: 10px 12px; border-radius: 16px; border: 1px solid rgba(255,255,255,.09); background: rgba(15,23,42,.58); }
+.purchase-total-box span { color: var(--muted); font-size: 11px; font-weight: 700; }
+.purchase-total-box strong { font-size: 18px; letter-spacing: -.035em; }
+.purchase-admin-panel { margin-top: 14px; padding: 12px; border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: rgba(15,23,42,.42); }
+.purchase-input-grid { display: grid; grid-template-columns: minmax(160px,1.2fr) minmax(160px,1.2fr) minmax(90px,.55fr) minmax(110px,.75fr) minmax(120px,.8fr) minmax(130px,.9fr); gap: 10px; align-items: end; }
+.purchase-input-grid label { min-width: 0; }
+.purchase-input-grid .purchase-wide-input { grid-column: span 2; }
+.purchase-input-grid button { min-height: 42px; white-space: nowrap; }
+
+.purchase-summary-list { margin-top: 12px; }
+.purchase-summary-compact { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 7px; padding: 7px 9px; border-radius: 999px; border: 1px solid rgba(255,255,255,.08); background: rgba(255,255,255,.035); color: var(--muted); font-size: 12px; font-weight: 750; }
+.purchase-summary-compact strong { color: var(--accent-2); font-weight: 900; }
+
+.purchase-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px; margin-top: 12px; }
+.purchase-card { min-width: 0; padding: 12px; border-radius: 18px; border: 1px solid rgba(255,255,255,.08); background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.025)); box-shadow: inset 0 1px 0 rgba(255,255,255,.035); }
+.purchase-card-main { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 12px; align-items: start; }
+.purchase-card-name, .purchase-card-amount { display: grid; gap: 4px; min-width: 0; }
+.purchase-card-name strong { font-size: 15px; letter-spacing: -.025em; overflow-wrap: anywhere; }
+.purchase-card-name span, .purchase-card-amount span, .purchase-card-meta span, .purchase-detail-head span { color: var(--muted); font-size: 12px; line-height: 1.35; }
+.purchase-card-amount { justify-items: end; text-align: right; }
+.purchase-card-amount strong { color: var(--accent-2); font-size: 17px; letter-spacing: -.03em; white-space: nowrap; }
+.purchase-card-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.purchase-card-meta span { max-width: 100%; padding: 5px 8px; border-radius: 999px; background: rgba(15,23,42,.62); border: 1px solid rgba(255,255,255,.07); overflow-wrap: anywhere; }
+
+.purchase-card-details { margin-top: 10px; border-radius: 14px; border: 1px solid rgba(255,255,255,.07); background: rgba(15,23,42,.38); overflow: hidden; }
+.purchase-card-details summary { cursor: pointer; list-style: none; padding: 9px 10px; color: var(--text); font-size: 12px; font-weight: 850; user-select: none; }
+.purchase-card-details summary::-webkit-details-marker { display: none; }
+.purchase-card-details summary::after { content: "펼치기"; float: right; color: var(--muted); font-size: 11px; font-weight: 800; }
+.purchase-card-details[open] summary::after { content: "접기"; }
+.purchase-detail-list { display: grid; gap: 8px; padding: 0 10px 10px; }
+.purchase-detail-row { padding: 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,.07); background: rgba(255,255,255,.035); }
+.purchase-detail-head { display: grid; grid-template-columns: minmax(0,1fr) auto auto auto; gap: 8px; align-items: center; margin-bottom: 8px; }
+.purchase-detail-head strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.purchase-detail-head span:nth-child(3) { color: var(--accent-2); font-weight: 850; }
+
+.purchase-row-admin { display: grid; grid-template-columns: 80px 100px minmax(120px,.75fr) minmax(160px,1fr) auto; gap: 8px; align-items: end; }
+.purchase-row-admin label { display: grid; gap: 4px; min-width: 0; }
+.purchase-row-admin label span { color: var(--muted); font-size: 10px; font-weight: 800; }
+.purchase-row-admin input { width: 100%; min-width: 0; min-height: 36px; font-size: 12px; }
+.purchase-row-admin .btn { min-height: 36px; align-self: end; }
+.danger-lite { color: #fecaca; border-color: rgba(248,113,113,.24); background: rgba(127,29,29,.22); }
+
+body.view-only-mode #purchaseAdminPanel,
+body.view-only-mode .purchase-card-details,
+body.view-only-mode .purchase-row-admin { display: none !important; }
+
+@media (max-width: 1180px) {
+  .purchase-input-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .purchase-input-grid .purchase-wide-input { grid-column: span 2; }
+  .purchase-list { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .purchase-row-admin { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .purchase-row-admin .btn { grid-column: 1 / -1; }
+}
+
+@media (max-width: 760px) {
+  #page-wms .purchase-status-card { display: block !important; padding: 9px !important; border-radius: 16px !important; margin-bottom: 7px !important; }
+  #page-wms .purchase-title-row { display: grid !important; grid-template-columns: minmax(0,1fr) auto; gap: 8px !important; margin-bottom: 0 !important; }
+  #page-wms .purchase-title-row h2 { font-size: 14px !important; line-height: 1.18; }
+  #page-wms .purchase-title-row p,
+  #page-wms .purchase-admin-panel,
+  #page-wms .purchase-card-details { display: none !important; }
+  #page-wms .purchase-total-box { min-width: 104px; padding: 7px 8px; border-radius: 12px; }
+  #page-wms .purchase-total-box span { font-size: 9px; }
+  #page-wms .purchase-total-box strong { font-size: 12.5px; letter-spacing: -.04em; }
+  #page-wms .purchase-summary-list { margin-top: 7px; }
+  #page-wms .purchase-summary-compact { width: 100%; justify-content: space-between; gap: 5px; padding: 6px 7px; border-radius: 11px; font-size: 10.5px; }
+  #page-wms .purchase-list { grid-template-columns: minmax(0,1fr); gap: 5px; margin-top: 7px; }
+  #page-wms .purchase-card { padding: 7px 8px; border-radius: 13px; }
+  #page-wms .purchase-card-main { grid-template-columns: minmax(0,1fr) auto; gap: 7px; }
+  #page-wms .purchase-card-name strong { display: block; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #page-wms .purchase-card-name span { font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #page-wms .purchase-card-amount strong { font-size: 12px; }
+  #page-wms .purchase-card-amount span { font-size: 10px; }
+  #page-wms .purchase-card-meta { display: none !important; }
+  #page-wms #purchaseEmptyState { margin-top: 7px; font-size: 11px; }
+}
+
+@media (max-width: 520px) {
+  .purchase-input-grid,
+  .purchase-card-main,
+  .purchase-row-admin,
+  .purchase-detail-head { grid-template-columns: minmax(0,1fr); }
+  .purchase-input-grid .purchase-wide-input { grid-column: auto; }
+  .purchase-title-row { display: grid; }
+  .purchase-total-box { justify-items: start; min-width: 0; }
+  .purchase-card-amount { justify-items: start; text-align: left; }
+}
