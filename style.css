@@ -4015,3 +4015,143 @@ input[type="file"].visually-hidden-file,
     font-size: 12px !important;
   }
 }
+
+
+/* 관리자 권한: 저장/백업/복구 잠금 */
+body.view-only-mode #backupCard {
+  position: relative;
+}
+
+body.view-only-mode #backupCard::after {
+  content: "관리자 로그인 후 저장/백업/복구 사용 가능";
+  position: absolute;
+  inset: 10px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed rgba(245, 158, 11, 0.34);
+  border-radius: 18px;
+  background: rgba(11, 15, 27, 0.72);
+  color: #fde68a;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  pointer-events: none;
+  backdrop-filter: blur(1px);
+}
+
+body.view-only-mode #backupCard .backup-actions,
+body.view-only-mode #backupCard .backup-list {
+  filter: saturate(0.7);
+}
+
+body.view-only-mode .backup-import-label.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  pointer-events: none;
+  transform: none;
+}
+
+body.view-only-mode .backup-import-label.is-disabled:hover {
+  border-color: rgba(255, 255, 255, 0.09);
+  background: rgba(15, 23, 42, 0.72);
+}
+
+/* Admin-only visibility refinement */
+.admin-only-section[hidden],
+[data-admin-only="true"][hidden] {
+  display: none !important;
+}
+
+body.view-only-mode [data-admin-only="true"] {
+  display: none !important;
+}
+
+#adminAuthPanel[hidden] {
+  display: none !important;
+}
+
+body:not(.admin-login-open):not(.admin-active) #adminAuthPanel {
+  display: none !important;
+}
+
+body.admin-login-open #adminAuthPanel,
+body.admin-active #adminAuthPanel {
+  display: grid !important;
+  animation: adminPanelSoftIn 160ms ease-out;
+}
+
+@keyframes adminPanelSoftIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.view-only-mode .file-trigger,
+.view-only-mode .import-label {
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.admin-auth-panel {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.58);
+  border-radius: 18px;
+  padding: 12px;
+}
+
+.admin-auth-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.admin-auth-form input {
+  min-width: 0;
+  flex: 1 1 150px;
+}
+
+.admin-auth-form button {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 820px) {
+  body.admin-login-open #adminAuthPanel,
+  body.admin-active #adminAuthPanel {
+    display: block !important;
+  }
+
+  .admin-auth-form {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .admin-auth-form input,
+  .admin-auth-form button {
+    width: 100%;
+  }
+}
+
+/* Sync card follows the same admin-only visibility rule */
+#syncCard[hidden] {
+  display: none !important;
+}
+
+#syncCard.sync-login-only .sync-title-row,
+#syncCard.sync-login-only .sync-actions {
+  display: none !important;
+}
+
+#syncCard.sync-login-only {
+  padding: 12px;
+}
+
+body.view-only-mode:not(.admin-login-open) #syncCard {
+  display: none !important;
+}
+
