@@ -4155,3 +4155,23 @@ body.view-only-mode:not(.admin-login-open) #syncCard {
   display: none !important;
 }
 
+/* Staff view: pallet/box inventory cards remain visible, while editing controls stay admin-only */
+body.view-only-mode #palletCard,
+body.view-only-mode #boxStockCard {
+  display: block;
+}
+
+body.view-only-mode #palletCard [data-admin-only="true"],
+body.view-only-mode #boxStockCard [data-admin-only="true"] {
+  display: none !important;
+}
+
+body.view-only-mode #palletCard input:disabled,
+body.view-only-mode #boxStockCard input:disabled {
+  opacity: 0.72;
+  color: var(--text);
+  -webkit-text-fill-color: var(--text);
+  background: rgba(15, 23, 42, 0.62);
+  border-color: rgba(255, 255, 255, 0.09);
+}
+
