@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0f1220" />
   <title>리본컴퍼니 관리 시스템</title>
-  <link rel="stylesheet" href="./style.css?v=reborn-stockout-forecast-20260430-01" />
+  <link rel="stylesheet" href="./style.css?v=reborn-return-adjust-auth-fix-20260430-01" />
 </head>
 <body>
   <div class="app-shell">
@@ -175,6 +175,47 @@
           <div class="purchase-summary-list" id="purchaseSummaryList"></div>
           <div class="purchase-list" id="purchaseList"></div>
           <p class="empty-state" id="purchaseEmptyState">등록된 발주 항목이 없습니다.</p>
+        </section>
+
+        <section class="card return-adjust-card" id="returnAdjustmentCard" data-admin-only="true" hidden>
+          <div class="card-title-row return-adjust-title-row">
+            <div>
+              <h2>취소/반품 처리</h2>
+              <p>관리자만 입력·처리할 수 있습니다. 일반 이용자 화면에는 취소/반품 정보가 표시되지 않습니다.</p>
+            </div>
+            <span class="sync-badge" id="returnAdjustmentSummary">처리 기록 없음</span>
+          </div>
+
+          <div class="return-adjust-form" id="returnAdjustmentAdminPanel" data-admin-only="true" hidden>
+            <label>
+              <span>처리 유형</span>
+              <select id="returnAdjustmentType"></select>
+            </label>
+            <label>
+              <span>품목</span>
+              <select id="returnAdjustmentSku"></select>
+            </label>
+            <label>
+              <span>수량</span>
+              <input id="returnAdjustmentQty" type="number" min="0" step="1" placeholder="예: 12" />
+            </label>
+            <label>
+              <span>단위</span>
+              <select id="returnAdjustmentUnit"></select>
+            </label>
+            <label>
+              <span>처리 날짜</span>
+              <input id="returnAdjustmentDate" type="date" />
+            </label>
+            <label class="return-adjust-memo-field">
+              <span>메모</span>
+              <input id="returnAdjustmentMemo" type="text" placeholder="예: 쿠팡 주문취소 / 검수 대기 / 오차감 복구 사유" />
+            </label>
+            <button type="button" class="btn primary" id="returnAdjustmentProcessBtn">처리 적용</button>
+            <p class="return-adjust-message" id="returnAdjustmentMessage" hidden></p>
+          </div>
+
+          <div class="return-adjust-list" id="returnAdjustmentList"></div>
         </section>
 
         <div class="wms-dashboard-layout">
@@ -509,6 +550,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./script.js?v=reborn-stockout-forecast-20260430-01"></script>
+  <script src="./script.js?v=reborn-return-adjust-auth-fix-20260430-01"></script>
 </body>
 </html>
