@@ -31,6 +31,13 @@
   const BOX_PRICES = { large: 480, medium: 380, small: 250 };
   const BOX_SKU_BY_SIZE = { large: "박스 대", medium: "박스 중", small: "박스 소" };
   const BOX_LABEL = { large: "대 박스", medium: "중 박스", small: "소 박스", none: "박스 없음" };
+  const RETURN_ADJUSTMENT_TYPES = {
+    postShipCancel: { label: "출고 후 주문취소", restores: true },
+    saleableReturn: { label: "판매 가능 반품", restores: true },
+    defectiveReturn: { label: "불량 반품", restores: false },
+    inspectionPendingReturn: { label: "검수 대기 반품", restores: false },
+    overDeductRestore: { label: "오차감 복구", restores: true }
+  };
 
   const MARGIN_PRODUCTS = [
     { name: "직접 입력", cost: 0 },
@@ -277,6 +284,7 @@
       pallets: { ...INITIAL_PALLETS },
       history: [],
       orderStatus: [],
+      returnAdjustments: [],
       orderStats: [],
       orderYearArchives: {},
       updatedAt: new Date().toISOString()
@@ -318,6 +326,7 @@
       pallets: normalizedPallets,
       history: Array.isArray(parsed.history) ? parsed.history : [],
       orderStatus: Array.isArray(parsed.orderStatus) ? parsed.orderStatus.map(normalizePurchaseItem).filter(Boolean) : [],
+      returnAdjustments: Array.isArray(parsed.returnAdjustments) ? parsed.returnAdjustments.map(normalizeReturnAdjustment).filter(Boolean) : [],
       orderStats: Array.isArray(parsed.orderStats) ? parsed.orderStats : [],
       orderYearArchives: parsed.orderYearArchives && typeof parsed.orderYearArchives === "object" ? parsed.orderYearArchives : {}
     };
@@ -530,6 +539,12 @@
     status.dataset.tone = tone;
   }
 
+  function showWmsStatus(message, ok = true) {
+    if (message) setAdminAuthStatus(message, ok ? "ok" : "warn");
+    if (ok) console.info(message);
+    else console.warn(message);
+  }
+
   function updateEditorLock() {
     markAdminOnlySections();
 
@@ -580,6 +595,7 @@
       "#palletGrid input", "#boxStockGrid input",
       "#stockMoveRows input", "#stockMoveRows select", "#stockMoveRows button",
       "#purchaseAdminPanel input", "#purchaseAdminPanel select", "#purchaseAdminPanel button",
+      "#returnAdjustmentAdminPanel input", "#returnAdjustmentAdminPanel select", "#returnAdjustmentAdminPanel button",
       "#productCostEditorCard input", "#productCostEditorCard button",
       "#purchaseList [data-purchase-action]"
     ];
@@ -625,6 +641,11 @@
     return false;
   }
 
+  function refreshUiAfterAdminAuthChange() {
+    renderAll();
+    updateEditorLock();
+  }
+
   async function initAdminAuth() {
     const client = getSupabaseClient();
     const panel = $("adminAuthPanel");
@@ -658,7 +679,7 @@
       if (error) {
         adminSession = null;
         setAdminAuthStatus(`로그인 실패: ${error.message}`, "danger");
-        updateEditorLock();
+        refreshUiAfterAdminAuthChange();
         return;
       }
 
@@ -669,13 +690,13 @@
         adminSession = null;
         adminLoginPanelOpen = false;
         setAdminAuthStatus("로그인된 계정이 등록된 관리자 UID가 아닙니다. 수정 권한이 없습니다.", "danger");
-        updateEditorLock();
+        refreshUiAfterAdminAuthChange();
         return;
       }
 
       adminLoginPanelOpen = true;
       setAdminAuthStatus("관리자 수정 권한이 확인되었습니다.", "success");
-      updateEditorLock();
+      refreshUiAfterAdminAuthChange();
       syncFromSupabase({ forcePull: true, silent: true });
     });
 
@@ -684,7 +705,7 @@
       adminSession = null;
       adminLoginPanelOpen = false;
       setAdminAuthStatus("로그아웃되었습니다. 수정 기능은 숨겨집니다.", "muted");
-      updateEditorLock();
+      refreshUiAfterAdminAuthChange();
       syncFromSupabase({ forcePull: true, silent: true });
     });
 
@@ -699,20 +720,20 @@
       adminLoginPanelOpen = isAllowedAdminUser(adminSession?.user);
     }
 
-    updateEditorLock();
+    refreshUiAfterAdminAuthChange();
 
     client.auth.onAuthStateChange(async (_event, session) => {
       if (session && !isAllowedAdminUser(session.user)) {
         adminSession = null;
         adminLoginPanelOpen = false;
         await client.auth.signOut();
-        updateEditorLock();
+        refreshUiAfterAdminAuthChange();
         return;
       }
 
       adminSession = session || null;
       adminLoginPanelOpen = isAllowedAdminUser(adminSession?.user);
-      updateEditorLock();
+      refreshUiAfterAdminAuthChange();
     });
   }
 
@@ -1442,6 +1463,7 @@
     renderBoxStockInputs();
     renderStockMoveRows();
     renderPurchaseProductOptions();
+    setReturnAdjustmentDefaults();
     ensurePurchaseDateInputDefault();
     bindWmsEvents();
     renderAll();
@@ -1530,6 +1552,29 @@ function refreshActiveOrderAnalysisSummary() {
       memo: String(item.memo || ""),
       orderDate,
       createdAt,
+    };
+  }
+
+  function normalizeReturnAdjustment(item) {
+    if (!item || typeof item !== "object") return null;
+    const sku = String(item.sku || "").trim();
+    if (!INVENTORY_DEFS[sku]) return null;
+    const typeKey = RETURN_ADJUSTMENT_TYPES[item.type] ? item.type : "postShipCancel";
+    const date = String(item.date || todayKey()).slice(0, 10);
+    const qty = cleanNumber(item.qty);
+    const unit = ["unit", "box", "pallet"].includes(String(item.unit)) ? String(item.unit) : "unit";
+    const units = Math.max(0, Math.round(cleanNumber(item.units)));
+    return {
+      id: String(item.id || createHistoryId()),
+      type: typeKey,
+      sku,
+      qty,
+      unit,
+      units,
+      date,
+      memo: String(item.memo || ""),
+      restores: Boolean(item.restores ?? RETURN_ADJUSTMENT_TYPES[typeKey]?.restores),
+      createdAt: String(item.createdAt || new Date().toISOString())
     };
   }
 
@@ -2029,6 +2074,193 @@ function refreshActiveOrderAnalysisSummary() {
   }
 
 
+  function returnAdjustmentTypeOptionsHtml(selected = "postShipCancel") {
+    return Object.entries(RETURN_ADJUSTMENT_TYPES).map(([key, info]) => `
+      <option value="${escapeHtml(key)}" ${key === selected ? "selected" : ""}>${escapeHtml(info.label)}${info.restores ? " · 재고 복구" : " · 기록만"}</option>
+    `).join("");
+  }
+
+  function returnAdjustmentSkuOptionsHtml(selected = "") {
+    return `<option value="">품목 선택</option>` + Object.entries(INVENTORY_DEFS).map(([sku, def]) => `
+      <option value="${escapeHtml(sku)}" ${sku === selected ? "selected" : ""}>${escapeHtml(sku)} · ${escapeHtml(def.group || "기타")}</option>
+    `).join("");
+  }
+
+  function returnAdjustmentUnitOptionsHtml(sku, selected = "unit") {
+    const def = sku ? getDefByKey(sku) : null;
+    const boxLabel = def?.isBox ? "묶음" : "완박스";
+    const unitLabel = def?.isBox ? "장" : sku === "코디 3겹" ? "개" : "낱개";
+    return `
+      <option value="unit" ${selected === "unit" ? "selected" : ""}>${unitLabel}</option>
+      <option value="box" ${selected === "box" ? "selected" : ""}>${boxLabel}</option>
+      <option value="pallet" ${selected === "pallet" ? "selected" : ""}>파렛</option>
+    `;
+  }
+
+  function returnAdjustmentUnitsPerSelectedUnit(sku, unit) {
+    const def = getDefByKey(sku);
+    if (!def) return 1;
+    if (unit === "pallet") return cleanNumber(def.boxesPerPallet) * cleanNumber(def.unitsPerBox) || 1;
+    if (unit === "box") return cleanNumber(def.unitsPerBox) || 1;
+    return 1;
+  }
+
+  function returnAdjustmentUnitLabel(sku, unit) {
+    const def = getDefByKey(sku);
+    if (unit === "pallet") return "파렛";
+    if (unit === "box") return def?.isBox ? "묶음" : "완박스";
+    return def?.isBox ? "장" : sku === "코디 3겹" ? "개" : "낱개";
+  }
+
+  function formatReturnAdjustmentInputQty(record) {
+    const qty = cleanNumber(record.qty);
+    const qtyText = Number.isInteger(qty) ? number(qty) : qty.toLocaleString("ko-KR", { maximumFractionDigits: 2 });
+    const unitLabel = returnAdjustmentUnitLabel(record.sku, record.unit);
+    return `${qtyText}${unitLabel} · ${formatStock(record.sku, record.units)} 환산`;
+  }
+
+  function setReturnAdjustmentDefaults() {
+    const type = $("returnAdjustmentType");
+    const sku = $("returnAdjustmentSku");
+    const unit = $("returnAdjustmentUnit");
+    const date = $("returnAdjustmentDate");
+    if (type && !type.children.length) type.innerHTML = returnAdjustmentTypeOptionsHtml();
+    if (sku && !sku.children.length) sku.innerHTML = returnAdjustmentSkuOptionsHtml();
+    if (unit && !unit.children.length) unit.innerHTML = returnAdjustmentUnitOptionsHtml(sku?.value || "", unit.value || "unit");
+    if (date && !date.value) date.value = todayKey();
+  }
+
+  function refreshReturnAdjustmentUnitOptions() {
+    const sku = $("returnAdjustmentSku")?.value || "";
+    const unit = $("returnAdjustmentUnit");
+    if (!unit) return;
+    const current = unit.value || "unit";
+    unit.innerHTML = returnAdjustmentUnitOptionsHtml(sku, current);
+  }
+
+  function showReturnAdjustmentMessage(message, ok = true) {
+    const target = $("returnAdjustmentMessage");
+    if (target) {
+      target.hidden = false;
+      target.textContent = message;
+      target.className = `return-adjust-message ${ok ? "success" : "danger"}`;
+    }
+    showWmsStatus(message, ok);
+  }
+
+  function handleReturnAdjustmentProcessClick(event) {
+    if (event) event.preventDefault();
+    try {
+      addReturnAdjustmentFromForm();
+    } catch (error) {
+      console.error("return adjustment process failed", error);
+      showReturnAdjustmentMessage("취소/반품 처리 중 오류가 발생했습니다. 콘솔 오류를 확인해 주세요.", false);
+    }
+  }
+
+  function addReturnAdjustmentFromForm() {
+    if (!requireEditor("취소/반품 처리")) {
+      showReturnAdjustmentMessage("취소/반품 처리는 관리자 로그인 후 가능합니다.", false);
+      return;
+    }
+    const typeKey = $("returnAdjustmentType")?.value || "postShipCancel";
+    const info = RETURN_ADJUSTMENT_TYPES[typeKey] || RETURN_ADJUSTMENT_TYPES.postShipCancel;
+    const sku = ($("returnAdjustmentSku")?.value || "").trim();
+    const qty = cleanNumber($("returnAdjustmentQty")?.value);
+    const unit = $("returnAdjustmentUnit")?.value || "unit";
+    const date = ($("returnAdjustmentDate")?.value || todayKey()).slice(0, 10);
+    const memo = ($("returnAdjustmentMemo")?.value || "").trim();
+
+    if (!INVENTORY_DEFS[sku]) {
+      showReturnAdjustmentMessage("처리할 품목을 선택해 주세요.", false);
+      return;
+    }
+    if (qty <= 0) {
+      showReturnAdjustmentMessage("수량을 1 이상 입력해 주세요.", false);
+      return;
+    }
+
+    addBackup("취소/반품 처리 전 자동 백업");
+    const units = Math.round(qty * returnAdjustmentUnitsPerSelectedUnit(sku, unit));
+    const record = {
+      id: createHistoryId(),
+      type: typeKey,
+      sku,
+      qty,
+      unit,
+      units,
+      date,
+      memo,
+      restores: Boolean(info.restores),
+      createdAt: new Date().toISOString()
+    };
+
+    state.returnAdjustments = Array.isArray(state.returnAdjustments) ? state.returnAdjustments : [];
+    state.returnAdjustments.unshift(record);
+    state.returnAdjustments = state.returnAdjustments.slice(0, 1000);
+
+    const typeLabel = info.label;
+    const at = new Date(`${date}T12:00:00`).toISOString();
+    state.stock[sku] = state.stock[sku] || { units: 0 };
+    if (info.restores) {
+      state.stock[sku].units = cleanNumber(state.stock[sku].units) + units;
+      pushHistory("취소/반품", `${typeLabel} · ${sku}${memo ? ` · ${memo}` : ""}`, `재고 복구 ${formatStock(sku, units)}`, [{
+        sku,
+        units,
+        direction: "in",
+        source: "returnAdjustment",
+        adjustmentType: typeKey,
+        affectsNetOutbound: true,
+        text: `${sku} ${formatStock(sku, units)} 복구`
+      }], { at });
+    } else {
+      pushHistory("취소/반품", `${typeLabel} · ${sku}${memo ? ` · ${memo}` : ""}`, `재고 미복구 ${formatStock(sku, units)}`, [], { at });
+    }
+
+    saveState("취소/반품 처리가 적용되었습니다.");
+    const qtyInput = $("returnAdjustmentQty");
+    const memoInput = $("returnAdjustmentMemo");
+    if (qtyInput) qtyInput.value = "";
+    if (memoInput) memoInput.value = "";
+    showReturnAdjustmentMessage("취소/반품 처리가 적용되었습니다.", true);
+  }
+
+  function renderReturnAdjustmentPanel() {
+    setReturnAdjustmentDefaults();
+    const summary = $("returnAdjustmentSummary");
+    const list = $("returnAdjustmentList");
+    if (!list) return;
+    const records = Array.isArray(state.returnAdjustments) ? state.returnAdjustments.map(normalizeReturnAdjustment).filter(Boolean) : [];
+    state.returnAdjustments = records;
+
+    if (!isEditorSession()) {
+      if (summary) summary.textContent = "관리자 전용";
+      list.innerHTML = "";
+      return;
+    }
+
+    const restoreCount = records.filter((record) => record.restores).length;
+    if (summary) summary.textContent = records.length ? `총 ${number(records.length)}건 · 재고 복구 ${number(restoreCount)}건` : "처리 기록 없음";
+
+    list.innerHTML = records.length ? records.slice(0, 40).map((record) => {
+      const info = RETURN_ADJUSTMENT_TYPES[record.type] || RETURN_ADJUSTMENT_TYPES.postShipCancel;
+      const tone = record.restores ? "restore" : "hold";
+      return `
+        <article class="return-adjust-record ${tone}">
+          <div class="return-adjust-record-main">
+            <strong>${escapeHtml(record.sku)}</strong>
+            <span>${escapeHtml(info.label)} · ${escapeHtml(record.date || "-")}</span>
+          </div>
+          <div class="return-adjust-record-qty">
+            <b>${escapeHtml(formatStock(record.sku, record.units))}</b>
+            <small>${escapeHtml(formatReturnAdjustmentInputQty(record))}</small>
+          </div>
+          <span class="return-adjust-badge ${tone}">${record.restores ? "재고 복구" : "재고 미복구"}</span>
+          ${record.memo ? `<p>${escapeHtml(record.memo)}</p>` : ""}
+        </article>`;
+    }).join("") : `<div class="detail-empty">아직 취소/반품 처리 기록이 없습니다.</div>`;
+  }
+
   function renderProductCostEditor() {
     const list = $("productCostEditorList");
     if (!list) return;
@@ -2101,6 +2333,7 @@ function refreshActiveOrderAnalysisSummary() {
     renderHistory();
     renderBackups();
     renderPurchaseStatus();
+    renderReturnAdjustmentPanel();
     renderProductCostEditor();
     renderInventoryItemOrderTrend();
     refreshActiveOrderAnalysisSummary();
@@ -2732,7 +2965,10 @@ function refreshActiveOrderAnalysisSummary() {
   function renderHistory() {
     const tbody = $("historyTable");
     if (!tbody) return;
-    const rows = (state.history || []).slice(0, 80).map((item, index) => {
+    const historyItems = isEditorSession()
+      ? (state.history || [])
+      : (state.history || []).filter((item) => item?.type !== "취소/반품");
+    const rows = historyItems.slice(0, 80).map((item, index) => {
       const key = item.id || `idx-${index}`;
       return `
         <tr class="history-row" data-history-key="${escapeHtml(key)}">
@@ -2768,6 +3004,12 @@ function refreshActiveOrderAnalysisSummary() {
       removePurchaseDraftRow(button.dataset.purchaseDraftRemove);
     });
     $("purchaseAddBtn")?.addEventListener("click", addPurchaseItemFromForm);
+    $("returnAdjustmentSku")?.addEventListener("change", refreshReturnAdjustmentUnitOptions);
+    $("returnAdjustmentCard")?.addEventListener("click", (event) => {
+      const button = event.target.closest("#returnAdjustmentProcessBtn");
+      if (!button) return;
+      handleReturnAdjustmentProcessClick(event);
+    });
     $("purchaseList")?.addEventListener("click", (event) => {
       const target = event.target.closest("[data-purchase-action]");
       if (!target) return;
@@ -2974,11 +3216,12 @@ function refreshActiveOrderAnalysisSummary() {
     saveState(`${number(detailItems.length)}개 품목 일괄 입고`);
   }
 
-  function pushHistory(type, memo, qtyText, details = []) {
+  function pushHistory(type, memo, qtyText, details = [], options = {}) {
     state.history = state.history || [];
+    const at = options?.at ? String(options.at) : new Date().toISOString();
     const record = {
       id: createHistoryId(),
-      at: new Date().toISOString(),
+      at,
       type,
       memo,
       qtyText,
@@ -3012,7 +3255,9 @@ function refreshActiveOrderAnalysisSummary() {
   }
 
   function findHistoryByKey(key) {
-    const list = state.history || [];
+    const list = isEditorSession()
+      ? (state.history || [])
+      : (state.history || []).filter((item) => item?.type !== "취소/반품");
     if (!key) return null;
     if (key.startsWith("idx-")) return list[Number(key.replace("idx-", ""))] || null;
     return list.find((item) => item.id === key) || null;
@@ -3028,52 +3273,61 @@ function refreshActiveOrderAnalysisSummary() {
 
 
   function buildSkuOutboundTrend(sku) {
+    const days = 30;
     const today = startOfDay(new Date());
-    const start = addDays(today, -29);
-    const endExclusive = addDays(today, 1);
-    const dailyTotals = new Map();
-    let storedTotal = 0;
-    let latestDate = null;
+    const keys = Array.from({ length: days }, (_, index) => {
+      const date = addDays(today, index - days + 1);
+      return { key: dateKey(date), label: shortDateLabel(date), date, value: 0 };
+    });
+    const dailyTotals = new Map(keys.map((item) => [item.key, 0]));
+    let storedGrossTotal = 0;
+    let storedNetTotal = 0;
+    let recentRawTotal = 0;
+    let latestAt = null;
 
     (state.history || []).forEach((record) => {
-      const at = new Date(record.at);
-      if (Number.isNaN(at.getTime())) return;
       const details = Array.isArray(record.details) ? record.details : [];
       details.forEach((detail) => {
         if (detail?.sku !== sku) return;
-        if (detail.direction && detail.direction !== "out") return;
-        const units = Math.max(0, cleanNumber(detail.units));
-        if (!units) return;
-        storedTotal += units;
-        if (!latestDate || at > latestDate) latestDate = at;
-        if (at >= start && at < endExclusive) {
-          const key = dateKey(at);
-          dailyTotals.set(key, (dailyTotals.get(key) || 0) + units);
+        const units = cleanNumber(detail.units);
+        if (units <= 0) return;
+        const direction = detail.direction === "in" ? "in" : "out";
+        const isOutbound = direction === "out";
+        const isReturnRestore = direction === "in" && (detail.affectsNetOutbound || detail.source === "returnAdjustment");
+        if (!isOutbound && !isReturnRestore) return;
+
+        const signedUnits = isOutbound ? units : -units;
+        storedNetTotal += signedUnits;
+        if (isOutbound) storedGrossTotal += units;
+
+        const at = record.at ? new Date(record.at) : null;
+        if (!at || Number.isNaN(at.getTime())) return;
+        if (!latestAt || at > latestAt) latestAt = at;
+        const key = dateKey(at);
+        if (dailyTotals.has(key)) {
+          dailyTotals.set(key, (dailyTotals.get(key) || 0) + signedUnits);
+          recentRawTotal += signedUnits;
         }
       });
     });
 
-    const points = [];
-    for (let offset = 29; offset >= 0; offset -= 1) {
-      const date = addDays(today, -offset);
-      const key = dateKey(date);
-      points.push({ key, label: formatMonthDay(date), value: dailyTotals.get(key) || 0 });
-    }
-
-    const recentTotal = points.reduce((sum, point) => sum + point.value, 0);
-    const activeDays = points.filter((point) => point.value > 0);
-    const maxDay = activeDays.reduce((best, point) => (!best || point.value > best.value ? point : best), null);
-
+    const points = keys.map((item) => {
+      const rawValue = dailyTotals.get(item.key) || 0;
+      return { ...item, rawValue, value: Math.max(0, Math.round(rawValue)) };
+    });
+    const recentTotal = Math.max(0, Math.round(recentRawTotal));
+    const activeDays = points.filter((point) => point.rawValue > 0);
+    const maxDay = activeDays.length ? activeDays.reduce((best, point) => point.rawValue > best.rawValue ? point : best, activeDays[0]) : null;
     return {
       points,
-      recentTotal,
-      storedTotal,
       activeDays,
       maxDay,
-      latestDate
+      recentTotal,
+      storedTotal: Math.max(0, Math.round(storedNetTotal)),
+      grossStoredTotal: storedGrossTotal,
+      latestAt
     };
   }
-
 
   function formatForecastDate(date) {
     if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "-";
@@ -3112,12 +3366,12 @@ function refreshActiveOrderAnalysisSummary() {
       return {
         tone: "empty",
         label: "예상 소진일",
-        headline: "계산할 주문 데이터 부족",
-        detail: "최근 30일 안에 이 품목의 엑셀 주문 차감 기록이 없어 예상 소진일을 계산하지 않았습니다.",
+        headline: "계산할 순출고 데이터 부족",
+        detail: "최근 30일 순출고량이 0 이하라 예상 소진일을 계산하지 않았습니다.",
         metrics: [
           ["현재 재고", `${number(currentUnits)}개`],
-          ["최근 7일", `${number(recentTotal7)}개`],
-          ["최근 30일", `${number(recentTotal30)}개`]
+          ["최근 7일 순출고", `${number(recentTotal7)}개`],
+          ["최근 30일 순출고", `${number(recentTotal30)}개`]
         ]
       };
     }
@@ -3130,13 +3384,13 @@ function refreshActiveOrderAnalysisSummary() {
       tone,
       label: "예상 소진일",
       headline: formatForecastDate(estimatedDate),
-      detail: `최근 30일 일평균 ${formatDailyOutboundRate(average30)} 기준 · 약 ${number(daysLeft)}일 후 소진 예상`,
+      detail: `최근 30일 순출고 일평균 ${formatDailyOutboundRate(average30)} 기준 · 약 ${number(daysLeft)}일 후 소진 예상`,
       metrics: [
         ["현재 재고", `${number(currentUnits)}개`],
-        ["최근 7일", `${number(recentTotal7)}개`],
-        ["최근 30일", `${number(recentTotal30)}개`],
-        ["7일 일평균", formatDailyOutboundRate(average7)],
-        ["30일 일평균", formatDailyOutboundRate(average30)]
+        ["최근 7일 순출고", `${number(recentTotal7)}개`],
+        ["최근 30일 순출고", `${number(recentTotal30)}개`],
+        ["7일 순출고 평균", formatDailyOutboundRate(average7)],
+        ["30일 순출고 평균", formatDailyOutboundRate(average30)]
       ]
     };
   }
@@ -3175,14 +3429,14 @@ function refreshActiveOrderAnalysisSummary() {
     }
 
     meta.textContent = hasData
-      ? `최근 30일 ${formatStock(sku, data.recentTotal)} 출고 · 저장 기록 전체 ${formatStock(sku, data.storedTotal)}`
+      ? `최근 30일 순출고 ${formatStock(sku, data.recentTotal)} · 저장 기록 전체 순출고 ${formatStock(sku, data.storedTotal)}`
       : "엑셀 주문 차감 적용 이후 저장된 품목별 출고 기록이 아직 없습니다.";
     empty.textContent = hasData
       ? "저장된 출고 기록은 있지만, 최근 30일 안에 이 품목의 출고 기록은 없습니다."
       : "엑셀 주문 차감 적용 이후 저장된 품목별 출고 기록이 아직 없습니다.";
 
     summary.innerHTML = `
-      <div><span>최근 30일 합계</span><strong>${escapeHtml(formatStock(sku, data.recentTotal))}</strong></div>
+      <div><span>최근 30일 순출고</span><strong>${escapeHtml(formatStock(sku, data.recentTotal))}</strong></div>
       <div><span>출고 발생일</span><strong>${number(data.activeDays.length)}일</strong></div>
       <div><span>발생일 평균</span><strong>${escapeHtml(formatStock(sku, recentAverage))}</strong></div>
       <div><span>최대 출고일</span><strong>${data.maxDay ? `${escapeHtml(data.maxDay.label)} · ${escapeHtml(formatStock(sku, data.maxDay.value))}` : "-"}</strong></div>
@@ -3195,7 +3449,7 @@ function refreshActiveOrderAnalysisSummary() {
           <span>${escapeHtml(point.key)}</span>
           <strong>${escapeHtml(formatStock(sku, point.value))}</strong>
         </div>`).join("")
-      : `<div class="detail-empty">최근 30일 안에 이 품목으로 저장된 주문 출고 기록이 없습니다.</div>`;
+      : `<div class="detail-empty">최근 30일 안에 이 품목으로 저장된 순출고 기록이 없습니다.</div>`;
 
     empty.hidden = hasRecentData;
     canvas.hidden = !hasRecentData;
@@ -3242,18 +3496,18 @@ function refreshActiveOrderAnalysisSummary() {
         <div class="sku-order-trend-head">
           <div>
             <p class="eyebrow">ORDER OUT TREND</p>
-            <strong>날짜별 주문 출고 추적</strong>
+            <strong>날짜별 순출고 추적</strong>
           </div>
           <span>최근 30일</span>
         </div>
         <p id="inventoryItemOrderTrendMeta" class="sku-order-trend-meta">출고 기록을 불러오는 중입니다.</p>
         <div class="sku-order-chart-stage">
-          <canvas id="inventoryItemOrderChart" height="260" aria-label="날짜별 주문 출고 그래프"></canvas>
+          <canvas id="inventoryItemOrderChart" height="260" aria-label="날짜별 순출고 그래프"></canvas>
           <div id="inventoryItemOrderChartEmpty" class="detail-empty" hidden>엑셀 주문 차감 적용 이후 저장된 품목별 출고 기록이 아직 없습니다.</div>
         </div>
         <div id="inventoryItemOrderTrendSummary" class="sku-order-trend-summary"></div>
         <div class="sku-order-trend-recent">
-          <span>최근 출고일</span>
+          <span>최근 순출고일</span>
           <div id="inventoryItemOrderTrendList" class="sku-order-trend-list"></div>
         </div>
       </section>
