@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0f1220" />
   <title>리본컴퍼니 관리 시스템</title>
-  <link rel="stylesheet" href="./style.css?v=reborn-mobile-product-list-20260429-01" />
+  <link rel="stylesheet" href="./style.css?v=reborn-price-admin-20260429-01" />
 </head>
 <body>
   <div class="app-shell">
@@ -366,6 +366,20 @@
               </div>
             </section>
 
+
+            <section class="card product-cost-card" id="productCostEditorCard" data-admin-only="true" data-collapsible data-collapse-key="product-cost-editor" data-collapse-default="closed">
+              <div class="card-title-row compact-title-row">
+                <div>
+                  <h2>품목 원가 수정</h2>
+                  <p>입고 시점의 실제 단가를 반영하면 재고자산과 마진 계산기 추천 원가가 함께 갱신됩니다.</p>
+                </div>
+              </div>
+              <div class="product-cost-search-wrap">
+                <input id="productCostSearch" type="search" placeholder="품목명 또는 그룹 검색" autocomplete="off" />
+              </div>
+              <div id="productCostEditorList" class="product-cost-list"></div>
+            </section>
+
             <section class="card sync-card" id="syncCard" aria-label="Supabase 동기화 상태" data-collapsible data-collapse-key="sync-card">
               <div class="card-title-row sync-title-row">
                 <div>
@@ -503,6 +517,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./script.js?v=reborn-margin-product-search-20260429-01"></script>
+  <script src="./script.js?v=reborn-price-admin-20260429-01"></script>
 </body>
 </html>
