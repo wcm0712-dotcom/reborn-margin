@@ -1442,6 +1442,7 @@
     renderBoxStockInputs();
     renderStockMoveRows();
     renderPurchaseProductOptions();
+    ensurePurchaseDateInputDefault();
     bindWmsEvents();
     renderAll();
     enhanceNativeSelects($("page-wms") || document);
@@ -1488,14 +1489,38 @@ function refreshActiveOrderAnalysisSummary() {
     return `po_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   }
 
+  function normalizePurchaseDate(value, fallbackDate) {
+    const raw = String(value || "").trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+    const parsed = raw ? dateKey(raw) : "";
+    if (parsed) return parsed;
+    return dateKey(fallbackDate || new Date());
+  }
+
+  function purchaseDateLabel(value) {
+    const key = normalizePurchaseDate(value, new Date());
+    const date = new Date(`${key}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return key || "날짜 미지정";
+    return date.toLocaleDateString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", weekday: "short" });
+  }
+
+  function ensurePurchaseDateInputDefault() {
+    const input = $("purchaseDateInput");
+    if (input && !input.value) input.value = todayKey();
+  }
+
   function normalizePurchaseItem(item) {
     if (!item || typeof item !== "object") return null;
     const productKey = typeof item.productKey === "string" ? item.productKey : "";
     const def = productKey ? getDefByKey(productKey) : null;
     const name = String(item.name || productKey || "").trim();
     if (!name) return null;
+    const createdAt = String(item.createdAt || new Date().toISOString());
+    const orderDate = normalizePurchaseDate(item.orderDate || item.purchaseDate || item.expectedDate, createdAt);
     return {
       id: String(item.id || generatePurchaseId()),
+      batchId: String(item.batchId || ""),
+      batchName: String(item.batchName || ""),
       productKey,
       name,
       qty: cleanNumber(item.qty),
@@ -1503,7 +1528,8 @@ function refreshActiveOrderAnalysisSummary() {
       unitPrice: cleanNumber(item.unitPrice || def?.cost || 0),
       status: String(item.status || "발주중"),
       memo: String(item.memo || ""),
-      createdAt: String(item.createdAt || new Date().toISOString()),
+      orderDate,
+      createdAt,
     };
   }
 
@@ -1534,60 +1560,182 @@ function refreshActiveOrderAnalysisSummary() {
     return `${formattedQty}${purchaseUnitLabel(item)}`;
   }
 
-  function renderPurchaseProductOptions() {
-    const select = $("purchaseProductSelect");
-    if (!select) return;
-    const current = select.value;
-    select.innerHTML = `<option value="">직접 입력</option>` + Object.entries(INVENTORY_DEFS).map(([sku, def]) => `
-      <option value="${escapeHtml(sku)}">${escapeHtml(sku)} · ${escapeHtml(def.group || "기타")}</option>
-    `).join("");
-    select.value = INVENTORY_DEFS[current] ? current : "";
+  function createPurchaseDraftRow(values = {}) {
+    return {
+      id: String(values.id || `pd_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`),
+      productKey: String(values.productKey || ""),
+      name: String(values.name || ""),
+      qty: values.qty === undefined || values.qty === null ? "" : String(values.qty),
+      unit: String(values.unit || "pallet"),
+      unitPrice: values.unitPrice === undefined || values.unitPrice === null ? "" : String(values.unitPrice),
+    };
   }
 
-  function syncPurchaseFormFromProduct() {
-    const productSelect = $("purchaseProductSelect");
-    const nameInput = $("purchaseNameInput");
-    const unitPriceInput = $("purchaseUnitPriceInput");
-    const def = productSelect?.value ? getDefByKey(productSelect.value) : null;
-    if (def) {
-      if (nameInput) nameInput.value = productSelect.value;
-      if (unitPriceInput) unitPriceInput.value = String(getSkuCost(productSelect.value));
-    }
+  let purchaseDraftRows = [createPurchaseDraftRow()];
+
+  function purchaseProductOptionsHtml(selected = "") {
+    return `<option value="">직접 입력</option>` + Object.entries(INVENTORY_DEFS).map(([sku, def]) => `
+      <option value="${escapeHtml(sku)}" ${sku === selected ? "selected" : ""}>${escapeHtml(sku)} · ${escapeHtml(def.group || "기타")}</option>
+    `).join("");
+  }
+
+  function purchaseDraftUnitOptions(selected = "pallet") {
+    const options = [
+      ["pallet", "파렛"],
+      ["box", "완박스/묶음"],
+      ["unit", "낱개/장"],
+    ];
+    return options.map(([value, label]) => `<option value="${value}" ${value === selected ? "selected" : ""}>${label}</option>`).join("");
+  }
+
+  function collectPurchaseDraftRowsFromDom() {
+    const wrap = $("purchaseDraftRows");
+    if (!wrap || !wrap.children.length) return;
+    purchaseDraftRows = Array.from(wrap.querySelectorAll("[data-purchase-draft-id]")).map((row) => createPurchaseDraftRow({
+      id: row.dataset.purchaseDraftId,
+      productKey: row.querySelector("[data-purchase-draft-field='productKey']")?.value || "",
+      name: row.querySelector("[data-purchase-draft-field='name']")?.value || "",
+      qty: row.querySelector("[data-purchase-draft-field='qty']")?.value || "",
+      unit: row.querySelector("[data-purchase-draft-field='unit']")?.value || "pallet",
+      unitPrice: row.querySelector("[data-purchase-draft-field='unitPrice']")?.value || "",
+    }));
+    if (!purchaseDraftRows.length) purchaseDraftRows = [createPurchaseDraftRow()];
+  }
+
+  function renderPurchaseDraftRows() {
+    const wrap = $("purchaseDraftRows");
+    if (!wrap) return;
+    if (!Array.isArray(purchaseDraftRows) || !purchaseDraftRows.length) purchaseDraftRows = [createPurchaseDraftRow()];
+    wrap.innerHTML = purchaseDraftRows.map((row, index) => `
+      <div class="purchase-draft-row" data-purchase-draft-id="${escapeHtml(row.id)}">
+        <div class="purchase-draft-index">${number(index + 1)}</div>
+        <label>
+          <span>등록 품목</span>
+          <select data-purchase-draft-field="productKey">${purchaseProductOptionsHtml(row.productKey)}</select>
+        </label>
+        <label>
+          <span>품목명</span>
+          <input data-purchase-draft-field="name" type="text" value="${escapeHtml(row.name)}" placeholder="예: 브이콘 50g / SAMPLE-A" />
+        </label>
+        <label>
+          <span>수량</span>
+          <input data-purchase-draft-field="qty" type="number" min="0" step="0.01" value="${escapeHtml(row.qty)}" placeholder="예: 1" />
+        </label>
+        <label>
+          <span>단위</span>
+          <select data-purchase-draft-field="unit">${purchaseDraftUnitOptions(row.unit)}</select>
+        </label>
+        <label>
+          <span>낱개 단가</span>
+          <input data-purchase-draft-field="unitPrice" type="number" min="0" step="0.01" value="${escapeHtml(row.unitPrice)}" placeholder="자동 또는 직접 입력" />
+        </label>
+        <button type="button" class="icon-btn purchase-remove-draft" data-purchase-draft-remove="${escapeHtml(row.id)}" aria-label="발주 입력 행 삭제" ${purchaseDraftRows.length <= 1 ? "disabled" : ""}>×</button>
+      </div>
+    `).join("");
+  }
+
+  function renderPurchaseProductOptions() {
+    const wrap = $("purchaseDraftRows");
+    if (!wrap) return;
+    collectPurchaseDraftRowsFromDom();
+    renderPurchaseDraftRows();
+  }
+
+  function syncPurchaseFormFromProduct(rowId, productKey) {
+    const wrap = $("purchaseDraftRows");
+    const row = Array.from(wrap?.querySelectorAll("[data-purchase-draft-id]") || []).find((item) => item.dataset.purchaseDraftId === rowId);
+    const def = productKey ? getDefByKey(productKey) : null;
+    if (!row || !def) return;
+    const nameInput = row.querySelector("[data-purchase-draft-field='name']");
+    const unitPriceInput = row.querySelector("[data-purchase-draft-field='unitPrice']");
+    if (nameInput) nameInput.value = productKey;
+    if (unitPriceInput) unitPriceInput.value = String(getSkuCost(productKey));
+  }
+
+  function addPurchaseDraftRow() {
+    if (!requireEditor("발주 품목 줄 추가")) return;
+    collectPurchaseDraftRowsFromDom();
+    purchaseDraftRows.push(createPurchaseDraftRow());
+    renderPurchaseDraftRows();
+  }
+
+  function removePurchaseDraftRow(rowId) {
+    if (!requireEditor("발주 품목 줄 삭제")) return;
+    collectPurchaseDraftRowsFromDom();
+    purchaseDraftRows = purchaseDraftRows.filter((row) => row.id !== rowId);
+    if (!purchaseDraftRows.length) purchaseDraftRows = [createPurchaseDraftRow()];
+    renderPurchaseDraftRows();
   }
 
   function resetPurchaseForm() {
-    const productSelect = $("purchaseProductSelect");
-    if (productSelect) productSelect.value = "";
-    ["purchaseNameInput", "purchaseQtyInput", "purchaseUnitPriceInput", "purchaseStatusInput", "purchaseMemoInput"].forEach((id) => {
+    purchaseDraftRows = [createPurchaseDraftRow()];
+    renderPurchaseDraftRows();
+    ["purchaseStatusInput", "purchaseMemoInput", "purchaseBatchNameInput"].forEach((id) => {
       const el = $(id);
       if (el) el.value = "";
     });
-    const unitSelect = $("purchaseUnitSelect");
-    if (unitSelect) unitSelect.value = "pallet";
+    const dateInput = $("purchaseDateInput");
+    if (dateInput) dateInput.value = todayKey();
+  }
+
+  function makeAutoPurchaseBatchName(rows) {
+    const validRows = Array.isArray(rows) ? rows.filter((row) => String(row?.name || "").trim()) : [];
+    if (!validRows.length) return "발주 묶음";
+    if (validRows.length === 1) return String(validRows[0].name || "발주 묶음").trim();
+    return `${String(validRows[0].name || "발주 묶음").trim()} 외 ${number(validRows.length - 1)}품목`;
   }
 
   function addPurchaseItemFromForm() {
     if (!requireEditor("발주 현황 추가")) return;
-    const productKey = $("purchaseProductSelect")?.value || "";
-    const def = productKey ? getDefByKey(productKey) : null;
-    const name = ($("purchaseNameInput")?.value || productKey || "").trim();
-    const qty = cleanNumber($("purchaseQtyInput")?.value || 0);
-    const unit = $("purchaseUnitSelect")?.value || "unit";
-    const unitPrice = cleanNumber($("purchaseUnitPriceInput")?.value || (productKey ? getSkuCost(productKey) : 0));
-    const status = ($("purchaseStatusInput")?.value || "발주중").trim();
+    collectPurchaseDraftRowsFromDom();
+    const status = ($("purchaseStatusInput")?.value || "발주중").trim() || "발주중";
     const memo = ($("purchaseMemoInput")?.value || "").trim();
-    if (!name || qty <= 0) {
-      showWmsStatus("발주 품목명과 수량을 확인해 주세요.", false);
+    const requestedBatchName = ($("purchaseBatchNameInput")?.value || "").trim();
+    const orderDate = normalizePurchaseDate($("purchaseDateInput")?.value || todayKey(), new Date());
+    const createdAt = new Date().toISOString();
+    const rows = purchaseDraftRows
+      .map((row) => {
+        const productKey = INVENTORY_DEFS[row.productKey] ? row.productKey : "";
+        const name = (row.name || productKey || "").trim();
+        const qty = cleanNumber(row.qty || 0);
+        const unit = row.unit || "unit";
+        const unitPrice = cleanNumber(row.unitPrice || (productKey ? getSkuCost(productKey) : 0));
+        return { productKey, name, qty, unit, unitPrice };
+      })
+      .filter((row) => row.productKey || row.name || row.qty > 0 || row.unitPrice > 0);
+
+    if (!rows.length) {
+      showWmsStatus("추가할 발주 품목을 1개 이상 입력해 주세요.", false);
       return;
     }
-    if (unitPrice < 0) {
-      showWmsStatus("발주 단가를 확인해 주세요.", false);
+
+    const invalid = rows.find((row) => !row.name || row.qty <= 0 || row.unitPrice < 0);
+    if (invalid) {
+      showWmsStatus("발주 품목명, 수량, 단가를 확인해 주세요.", false);
       return;
     }
-    state.orderStatus.unshift(normalizePurchaseItem({ id: generatePurchaseId(), productKey, name, qty, unit, unitPrice, status, memo, createdAt: new Date().toISOString() }));
+
+    const batchId = generatePurchaseId();
+    const batchName = rows.length > 1 ? (requestedBatchName || makeAutoPurchaseBatchName(rows)) : "";
+    const additions = rows.map((row) => normalizePurchaseItem({
+      id: generatePurchaseId(),
+      batchId,
+      batchName,
+      productKey: row.productKey,
+      name: row.name,
+      qty: row.qty,
+      unit: row.unit,
+      unitPrice: row.unitPrice,
+      status,
+      memo,
+      orderDate,
+      createdAt,
+    })).filter(Boolean);
+
+    state.orderStatus = [...additions, ...(Array.isArray(state.orderStatus) ? state.orderStatus : [])];
     resetPurchaseForm();
     renderAll();
-    saveState("발주 현황이 추가되었습니다.");
+    saveState(additions.length > 1 ? `발주 품목 ${number(additions.length)}개가 추가되었습니다.` : "발주 현황이 추가되었습니다.");
   }
 
   function removePurchaseItem(id) {
@@ -1601,9 +1749,32 @@ function refreshActiveOrderAnalysisSummary() {
     if (!requireEditor("발주 현황 수정")) return;
     const item = state.orderStatus.find((entry) => entry.id === id);
     if (!item) return;
-    item[field] = field === "qty" || field === "unitPrice" ? cleanNumber(value) : String(value || "");
+    if (field === "qty" || field === "unitPrice") {
+      item[field] = cleanNumber(value);
+    } else if (field === "orderDate") {
+      item[field] = normalizePurchaseDate(value, item.createdAt || new Date());
+    } else {
+      item[field] = String(value || "");
+    }
     renderPurchaseStatus();
     saveState("발주 현황이 수정되었습니다.", { silent: true });
+  }
+
+  function updatePurchaseBatchName(batchId, value) {
+    if (!requireEditor("발주 묶음 대표 이름 수정")) return;
+    const id = String(batchId || "");
+    if (!id) return;
+    const nextName = String(value || "").trim();
+    let changed = false;
+    state.orderStatus.forEach((entry) => {
+      if (String(entry.batchId || "") === id) {
+        entry.batchName = nextName;
+        changed = true;
+      }
+    });
+    if (!changed) return;
+    renderPurchaseStatus();
+    saveState("발주 묶음 대표 이름이 수정되었습니다.", { silent: true });
   }
 
   function formatPurchaseQtyValue(qty) {
@@ -1616,14 +1787,33 @@ function refreshActiveOrderAnalysisSummary() {
     return item.productKey && getDefByKey(item.productKey)?.isBox ? "장" : "개";
   }
 
-  function getPurchaseGroupKey(item) {
-    return item.productKey || item.name.trim();
+  function buildPurchaseBatchCounts(items) {
+    const counts = new Map();
+    items.forEach((item) => {
+      const batchId = String(item.batchId || "");
+      if (!batchId) return;
+      counts.set(batchId, (counts.get(batchId) || 0) + 1);
+    });
+    return counts;
+  }
+
+  function getPurchaseGroupKey(item, batchCounts = new Map()) {
+    const batchId = String(item.batchId || "");
+    if (batchId && (batchCounts.get(batchId) || 0) > 1) return `batch__${batchId}`;
+    return `product__${item.productKey || item.name.trim()}`;
+  }
+
+  function getPurchaseItemDate(item) {
+    return normalizePurchaseDate(item?.orderDate || item?.purchaseDate || item?.expectedDate, item?.createdAt || new Date());
   }
 
   function buildPurchaseGroups(items) {
     const groups = new Map();
+    const batchCounts = buildPurchaseBatchCounts(items);
+
     items.forEach((item) => {
-      const key = getPurchaseGroupKey(item);
+      const key = getPurchaseGroupKey(item, batchCounts);
+      const isBatchGroup = key.startsWith("batch__");
       const amount = calculatePurchaseItemAmount(item);
       const unitLabel = purchaseUnitLabel(item);
       const baseUnits = cleanNumber(item.qty) * purchaseUnitsPerSelectedUnit(item);
@@ -1634,8 +1824,11 @@ function refreshActiveOrderAnalysisSummary() {
       if (!groups.has(key)) {
         groups.set(key, {
           key,
+          type: isBatchGroup ? "batch" : "product",
+          batchId: isBatchGroup ? String(item.batchId || "") : "",
+          batchName: isBatchGroup ? String(item.batchName || "") : "",
           name: item.productKey || item.name,
-          productKey: item.productKey,
+          productKey: isBatchGroup ? "" : item.productKey,
           items: [],
           amount: 0,
           count: 0,
@@ -1643,6 +1836,7 @@ function refreshActiveOrderAnalysisSummary() {
           baseUnitLabel,
           unitTotals: new Map(),
           statusCounts: new Map(),
+          productNames: new Set(),
           latestCreatedTime: 0,
         });
       }
@@ -1654,6 +1848,8 @@ function refreshActiveOrderAnalysisSummary() {
       group.baseUnits += baseUnits;
       group.latestCreatedTime = Math.max(group.latestCreatedTime, createdTime);
       group.statusCounts.set(item.status || "발주중", (group.statusCounts.get(item.status || "발주중") || 0) + 1);
+      group.productNames.add(item.productKey || item.name);
+      if (isBatchGroup && !group.batchName && item.batchName) group.batchName = String(item.batchName || "");
 
       const unitKey = `${item.unit || "unit"}__${unitLabel}`;
       const prev = group.unitTotals.get(unitKey) || { label: unitLabel, qty: 0 };
@@ -1661,13 +1857,31 @@ function refreshActiveOrderAnalysisSummary() {
       group.unitTotals.set(unitKey, prev);
     });
 
-    return Array.from(groups.values()).sort((a, b) => {
+    const result = Array.from(groups.values()).map((group) => {
+      group.productCount = group.productNames.size || group.items.length;
+      if (group.type === "batch") {
+        group.name = group.batchName || makeAutoPurchaseBatchName(group.items);
+        group.itemPreview = Array.from(group.productNames).slice(0, 3).join(" · ");
+        if (group.productCount > 3) group.itemPreview += ` 외 ${number(group.productCount - 3)}품목`;
+      } else {
+        group.itemPreview = purchaseGroupQtyLabel(group);
+      }
+      return group;
+    });
+
+    return result.sort((a, b) => {
+      if (b.latestCreatedTime !== a.latestCreatedTime) return b.latestCreatedTime - a.latestCreatedTime;
       if (b.amount !== a.amount) return b.amount - a.amount;
       return String(a.name).localeCompare(String(b.name), "ko-KR");
     });
   }
 
   function purchaseGroupQtyLabel(group) {
+    if (group?.type === "batch") {
+      const productText = `${number(group.productCount || group.items?.length || 0)}품목 묶음`;
+      const itemText = `${number(group.count || 0)}건`;
+      return `${productText} · ${itemText}`;
+    }
     const unitParts = Array.from(group.unitTotals.values()).map((unit) => `${formatPurchaseQtyValue(unit.qty)}${unit.label}`);
     const unitSummary = unitParts.join(" + ");
     const baseUnits = Math.round(cleanNumber(group.baseUnits));
@@ -1682,20 +1896,42 @@ function refreshActiveOrderAnalysisSummary() {
     return parts.join(" · ") || "발주중";
   }
 
+  function buildPurchaseDateSections(items) {
+    const sections = new Map();
+    items.forEach((item) => {
+      const key = getPurchaseItemDate(item);
+      if (!sections.has(key)) sections.set(key, []);
+      sections.get(key).push(item);
+    });
+    return Array.from(sections.entries())
+      .sort(([a], [b]) => String(a).localeCompare(String(b)))
+      .map(([date, dateItems]) => ({
+        date,
+        label: purchaseDateLabel(date),
+        items: dateItems,
+        groups: buildPurchaseGroups(dateItems),
+        amount: dateItems.reduce((sum, item) => sum + calculatePurchaseItemAmount(item), 0),
+      }));
+  }
+
   function renderPurchaseSummary(items) {
     const summary = $("purchaseSummaryList");
     const grandTotal = $("purchaseGrandTotal");
     if (!summary) return;
     const groups = buildPurchaseGroups(items);
     const total = groups.reduce((sum, group) => sum + group.amount, 0);
+    const batchCount = groups.filter((group) => group.type === "batch").length;
     if (grandTotal) grandTotal.textContent = money(total);
     if (!items.length) {
       summary.innerHTML = "";
       return;
     }
+    const dateCount = new Set(items.map(getPurchaseItemDate)).size;
     summary.innerHTML = `
       <div class="purchase-summary-compact">
-        <span>품목 ${number(groups.length)}개</span>
+        <span>날짜 ${number(dateCount)}일</span>
+        <span>카드 ${number(groups.length)}개</span>
+        <span>묶음 ${number(batchCount)}개</span>
         <span>발주 ${number(items.length)}건</span>
         <strong>${money(total)}</strong>
       </div>`;
@@ -1715,58 +1951,80 @@ function refreshActiveOrderAnalysisSummary() {
     }
     if (empty) empty.hidden = true;
 
-    const groups = buildPurchaseGroups(items);
-    list.innerHTML = groups.map((group) => {
-      const latest = group.latestCreatedTime ? new Date(group.latestCreatedTime) : null;
-      const latestLabel = latest && !Number.isNaN(latest.getTime()) ? latest.toLocaleDateString("ko-KR") : "-";
-      const statusLabel = purchaseGroupStatusLabel(group);
-      const adminDetails = isEditorSession() ? `
-        <details class="purchase-card-details" data-admin-only="true">
-          <summary>관리자 상세 · 개별 ${number(group.count)}건 수정/삭제</summary>
-          <div class="purchase-detail-list">
-            ${group.items.map((item) => {
-              const amount = calculatePurchaseItemAmount(item);
-              const created = item.createdAt ? new Date(item.createdAt) : null;
-              const createdLabel = created && !Number.isNaN(created.getTime()) ? created.toLocaleDateString("ko-KR") : "-";
-              return `
-                <article class="purchase-detail-row">
-                  <div class="purchase-detail-head">
-                    <strong>${escapeHtml(item.name)}</strong>
-                    <span>${escapeHtml(purchaseQtyLabel(item))}</span>
-                    <span>${money(amount)}</span>
-                    <span>${escapeHtml(createdLabel)}</span>
-                  </div>
-                  <div class="purchase-row-admin" data-admin-only="true">
-                    <label><span>수량</span><input type="number" min="0" step="0.01" value="${escapeHtml(String(item.qty))}" data-purchase-action="qty" data-purchase-id="${escapeHtml(item.id)}" aria-label="발주 수량 수정" /></label>
-                    <label><span>낱개 단가</span><input type="number" min="0" step="0.01" value="${escapeHtml(String(item.unitPrice))}" data-purchase-action="unitPrice" data-purchase-id="${escapeHtml(item.id)}" aria-label="발주 단가 수정" /></label>
-                    <label><span>상태</span><input type="text" value="${escapeHtml(item.status)}" data-purchase-action="status" data-purchase-id="${escapeHtml(item.id)}" aria-label="발주 상태 수정" /></label>
-                    <label><span>메모</span><input type="text" value="${escapeHtml(item.memo)}" data-purchase-action="memo" data-purchase-id="${escapeHtml(item.id)}" aria-label="발주 메모 수정" /></label>
-                    <button type="button" class="btn ghost danger-lite" data-purchase-action="remove" data-purchase-id="${escapeHtml(item.id)}">삭제</button>
-                  </div>
-                </article>`;
-            }).join("")}
-          </div>
-        </details>` : "";
+    const sections = buildPurchaseDateSections(items);
+    list.innerHTML = sections.map((section) => `
+      <section class="purchase-date-section">
+        <div class="purchase-date-head">
+          <strong>${escapeHtml(section.label)}</strong>
+          <span>${number(section.items.length)}건 · 카드 ${number(section.groups.length)}개 · ${money(section.amount)}</span>
+        </div>
+        <div class="purchase-date-grid">
+          ${section.groups.map((group) => {
+            const statusLabel = purchaseGroupStatusLabel(group);
+            const isBundle = group.type === "batch" && group.items.length > 1;
+            const adminBatchEditor = isEditorSession() && isBundle ? `
+              <div class="purchase-bundle-admin" data-admin-only="true">
+                <label>
+                  <span>묶음 대표 이름</span>
+                  <input type="text" value="${escapeHtml(group.batchName || group.name)}" data-purchase-action="batchName" data-purchase-batch-id="${escapeHtml(group.batchId)}" aria-label="발주 묶음 대표 이름 수정" />
+                </label>
+              </div>` : "";
 
-      return `
-        <article class="purchase-card">
-          <div class="purchase-card-main">
-            <div class="purchase-card-name">
-              <strong>${escapeHtml(group.name)}</strong>
-              <span>${escapeHtml(purchaseGroupQtyLabel(group))}</span>
-            </div>
-            <div class="purchase-card-amount">
-              <strong>${money(group.amount)}</strong>
-              <span>${number(group.count)}건</span>
-            </div>
-          </div>
-          <div class="purchase-card-meta">
-            <span>${escapeHtml(statusLabel)}</span>
-            <span>최근 ${escapeHtml(latestLabel)}</span>
-          </div>
-          ${adminDetails}
-        </article>`;
-    }).join("");
+            return `
+              <details class="purchase-card purchase-card-toggle${isBundle ? " purchase-bundle-card" : ""}">
+                <summary class="purchase-card-summary">
+                  <div class="purchase-card-main">
+                    <div class="purchase-card-name">
+                      <strong>${escapeHtml(group.name)}</strong>
+                      <span>${escapeHtml(isBundle ? (group.itemPreview || purchaseGroupQtyLabel(group)) : purchaseGroupQtyLabel(group))}</span>
+                    </div>
+                    <div class="purchase-card-amount">
+                      <strong>${money(group.amount)}</strong>
+                      <span>${isBundle ? `${number(group.productCount)}품목` : `${number(group.count)}건`}</span>
+                    </div>
+                  </div>
+                  <div class="purchase-card-meta">
+                    <span>${escapeHtml(isBundle ? "묶음 발주" : "품목 발주")}</span>
+                    <span>${escapeHtml(statusLabel)}</span>
+                    <span>${escapeHtml(section.label)}</span>
+                    <span class="purchase-card-open-text">상세 보기</span>
+                  </div>
+                </summary>
+                <div class="purchase-card-detail-body">
+                  ${adminBatchEditor}
+                  <div class="purchase-detail-list">
+                    ${group.items.map((item) => {
+                      const amount = calculatePurchaseItemAmount(item);
+                      const created = item.createdAt ? new Date(item.createdAt) : null;
+                      const createdLabel = created && !Number.isNaN(created.getTime()) ? created.toLocaleDateString("ko-KR") : "-";
+                      const adminRow = isEditorSession() ? `
+                        <div class="purchase-row-admin" data-admin-only="true">
+                          <label><span>날짜</span><input type="date" value="${escapeHtml(getPurchaseItemDate(item))}" data-purchase-action="orderDate" data-purchase-id="${escapeHtml(item.id)}" aria-label="발주 날짜 수정" /></label>
+                          <label><span>수량</span><input type="number" min="0" step="0.01" value="${escapeHtml(String(item.qty))}" data-purchase-action="qty" data-purchase-id="${escapeHtml(item.id)}" aria-label="발주 수량 수정" /></label>
+                          <label><span>낱개 단가</span><input type="number" min="0" step="0.01" value="${escapeHtml(String(item.unitPrice))}" data-purchase-action="unitPrice" data-purchase-id="${escapeHtml(item.id)}" aria-label="발주 단가 수정" /></label>
+                          <label><span>상태</span><input type="text" value="${escapeHtml(item.status)}" data-purchase-action="status" data-purchase-id="${escapeHtml(item.id)}" aria-label="발주 상태 수정" /></label>
+                          <label><span>메모</span><input type="text" value="${escapeHtml(item.memo)}" data-purchase-action="memo" data-purchase-id="${escapeHtml(item.id)}" aria-label="발주 메모 수정" /></label>
+                          <button type="button" class="btn ghost danger-lite" data-purchase-action="remove" data-purchase-id="${escapeHtml(item.id)}">삭제</button>
+                        </div>` : "";
+                      return `
+                        <article class="purchase-detail-row">
+                          <div class="purchase-detail-head">
+                            <strong>${escapeHtml(item.name)}</strong>
+                            <span>${escapeHtml(purchaseQtyLabel(item))}</span>
+                            <span>${money(amount)}</span>
+                            <span>${escapeHtml(item.status || "발주중")}</span>
+                            <span>등록 ${escapeHtml(createdLabel)}</span>
+                            ${item.memo ? `<span>메모 ${escapeHtml(item.memo)}</span>` : ""}
+                          </div>
+                          ${adminRow}
+                        </article>`;
+                    }).join("")}
+                  </div>
+                </div>
+              </details>`;
+          }).join("")}
+        </div>
+      </section>`).join("");
     updateEditorLock();
   }
 
@@ -2496,7 +2754,19 @@ function refreshActiveOrderAnalysisSummary() {
 
   function bindWmsEvents() {
 
-    $("purchaseProductSelect")?.addEventListener("change", syncPurchaseFormFromProduct);
+    $("purchaseAddRowBtn")?.addEventListener("click", addPurchaseDraftRow);
+    $("purchaseDraftRows")?.addEventListener("change", (event) => {
+      const target = event.target.closest("[data-purchase-draft-field]");
+      if (!target) return;
+      const row = target.closest("[data-purchase-draft-id]");
+      if (!row) return;
+      if (target.dataset.purchaseDraftField === "productKey") syncPurchaseFormFromProduct(row.dataset.purchaseDraftId, target.value);
+    });
+    $("purchaseDraftRows")?.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-purchase-draft-remove]");
+      if (!button) return;
+      removePurchaseDraftRow(button.dataset.purchaseDraftRemove);
+    });
     $("purchaseAddBtn")?.addEventListener("click", addPurchaseItemFromForm);
     $("purchaseList")?.addEventListener("click", (event) => {
       const target = event.target.closest("[data-purchase-action]");
@@ -2507,7 +2777,11 @@ function refreshActiveOrderAnalysisSummary() {
       const target = event.target.closest("[data-purchase-action]");
       if (!target) return;
       const action = target.dataset.purchaseAction;
-      if (["qty", "unitPrice", "status", "memo"].includes(action)) updatePurchaseItemField(target.dataset.purchaseId, action, target.value);
+      if (action === "batchName") {
+        updatePurchaseBatchName(target.dataset.purchaseBatchId, target.value);
+        return;
+      }
+      if (["orderDate", "qty", "unitPrice", "status", "memo"].includes(action)) updatePurchaseItemField(target.dataset.purchaseId, action, target.value);
     });
 
     $("productCostSearch")?.addEventListener("input", renderProductCostEditor);
@@ -2800,6 +3074,73 @@ function refreshActiveOrderAnalysisSummary() {
     };
   }
 
+
+  function formatForecastDate(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "-";
+    return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일`;
+  }
+
+  function formatDailyOutboundRate(units) {
+    const value = Number(units) || 0;
+    const digits = value > 0 && value < 10 ? 1 : 0;
+    return `${value.toLocaleString("ko-KR", { maximumFractionDigits: digits })}개/일`;
+  }
+
+  function buildSkuStockoutForecast(sku, trendData) {
+    const currentUnits = cleanNumber(state.stock[sku]?.units);
+    const points = Array.isArray(trendData?.points) ? trendData.points : [];
+    const recentTotal30 = Math.max(0, cleanNumber(trendData?.recentTotal));
+    const recentTotal7 = points.slice(-7).reduce((sum, point) => sum + (cleanNumber(point?.value) || 0), 0);
+    const average30 = recentTotal30 / 30;
+    const average7 = recentTotal7 / 7;
+
+    if (currentUnits <= 0) {
+      return {
+        tone: "danger",
+        label: "예상 소진일",
+        headline: "이미 소진 또는 마이너스 재고",
+        detail: "현재 재고가 0개 이하입니다. 입고 예정 수량 확인이 필요합니다.",
+        metrics: [
+          ["현재 재고", `${number(currentUnits)}개`],
+          ["30일 출고", `${number(recentTotal30)}개`],
+          ["예측 기준", "재고 없음"]
+        ]
+      };
+    }
+
+    if (recentTotal30 <= 0 || average30 <= 0) {
+      return {
+        tone: "empty",
+        label: "예상 소진일",
+        headline: "계산할 주문 데이터 부족",
+        detail: "최근 30일 안에 이 품목의 엑셀 주문 차감 기록이 없어 예상 소진일을 계산하지 않았습니다.",
+        metrics: [
+          ["현재 재고", `${number(currentUnits)}개`],
+          ["최근 7일", `${number(recentTotal7)}개`],
+          ["최근 30일", `${number(recentTotal30)}개`]
+        ]
+      };
+    }
+
+    const daysLeft = Math.max(1, Math.ceil(currentUnits / average30));
+    const estimatedDate = addDays(startOfDay(new Date()), daysLeft);
+    const tone = daysLeft <= 7 ? "danger" : daysLeft <= 30 ? "warning" : "safe";
+
+    return {
+      tone,
+      label: "예상 소진일",
+      headline: formatForecastDate(estimatedDate),
+      detail: `최근 30일 일평균 ${formatDailyOutboundRate(average30)} 기준 · 약 ${number(daysLeft)}일 후 소진 예상`,
+      metrics: [
+        ["현재 재고", `${number(currentUnits)}개`],
+        ["최근 7일", `${number(recentTotal7)}개`],
+        ["최근 30일", `${number(recentTotal30)}개`],
+        ["7일 일평균", formatDailyOutboundRate(average7)],
+        ["30일 일평균", formatDailyOutboundRate(average30)]
+      ]
+    };
+  }
+
   function renderInventoryItemOrderTrend() {
     if (!activeInventoryDetailSku) return;
     const overlay = $("inventoryItemOverlay");
@@ -2809,6 +3150,7 @@ function refreshActiveOrderAnalysisSummary() {
     const meta = $("inventoryItemOrderTrendMeta");
     const summary = $("inventoryItemOrderTrendSummary");
     const list = $("inventoryItemOrderTrendList");
+    const forecastBox = $("inventoryItemStockoutForecast");
     if (!canvas || !empty || !meta || !summary || !list) return;
 
     const sku = activeInventoryDetailSku;
@@ -2816,6 +3158,21 @@ function refreshActiveOrderAnalysisSummary() {
     const hasData = data.storedTotal > 0;
     const hasRecentData = data.recentTotal > 0;
     const recentAverage = data.activeDays.length ? Math.round(data.recentTotal / data.activeDays.length) : 0;
+    const forecast = buildSkuStockoutForecast(sku, data);
+
+    if (forecastBox) {
+      forecastBox.className = `sku-stockout-forecast-card ${forecast.tone}`;
+      forecastBox.innerHTML = `
+        <div class="sku-stockout-forecast-main">
+          <span>${escapeHtml(forecast.label)}</span>
+          <strong>${escapeHtml(forecast.headline)}</strong>
+          <p>${escapeHtml(forecast.detail)}</p>
+        </div>
+        <div class="sku-stockout-forecast-metrics">
+          ${forecast.metrics.map(([label, value]) => `<div><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`).join("")}
+        </div>
+      `;
+    }
 
     meta.textContent = hasData
       ? `최근 30일 ${formatStock(sku, data.recentTotal)} 출고 · 저장 기록 전체 ${formatStock(sku, data.storedTotal)}`
@@ -2874,6 +3231,13 @@ function refreshActiveOrderAnalysisSummary() {
         ${rows.map(([label, value]) => `<div class="inventory-detail-line"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}
       </div>
       ${def.isBox ? `<p class="detail-note">박스 재고는 파렛/묶음/장 기준으로 직접 수정할 수 있습니다.</p>` : `<p class="detail-note">이 품목의 입고는 입고 직접 입력에서 여러 줄로 한 번에 적용할 수 있습니다.</p>`}
+      <section class="sku-stockout-forecast-card empty" id="inventoryItemStockoutForecast">
+        <div class="sku-stockout-forecast-main">
+          <span>예상 소진일</span>
+          <strong>계산 중</strong>
+          <p>엑셀 주문 처리 기록을 기준으로 계산하고 있습니다.</p>
+        </div>
+      </section>
       <section class="sku-order-trend-card" id="inventoryItemOrderTrend">
         <div class="sku-order-trend-head">
           <div>
