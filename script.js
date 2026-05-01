@@ -851,6 +851,175 @@
     updateEditorLock();
   }
 
+
+  let passwordRecoveryInitialized = false;
+  let passwordRecoveryMode = false;
+
+  function getPasswordRecoveryUrlState() {
+    const hash = String(location.hash || "").replace(/^#/, "");
+    const search = String(location.search || "").replace(/^\?/, "");
+    const hashParams = new URLSearchParams(hash);
+    const searchParams = new URLSearchParams(search);
+    const error = hashParams.get("error") || searchParams.get("error") || "";
+    const errorCode = hashParams.get("error_code") || searchParams.get("error_code") || "";
+    const rawDescription = hashParams.get("error_description") || searchParams.get("error_description") || "";
+    const errorDescription = rawDescription ? rawDescription.replace(/\+/g, " ") : "";
+    const type = hashParams.get("type") || searchParams.get("type") || "";
+    const hasSessionTokens = hashParams.has("access_token") || hashParams.has("refresh_token");
+    const isRecovery = type === "recovery" || hasSessionTokens || Boolean(error) || Boolean(errorCode);
+    return { isRecovery, type, hasSessionTokens, error, errorCode, errorDescription };
+  }
+
+  function setPasswordRecoveryStatus(message, tone = "muted") {
+    const status = $("passwordRecoveryStatus");
+    if (!status) return;
+    status.textContent = message || "";
+    status.classList.remove("is-success", "is-danger", "is-warn");
+    if (tone === "success") status.classList.add("is-success");
+    if (tone === "danger") status.classList.add("is-danger");
+    if (tone === "warn") status.classList.add("is-warn");
+  }
+
+  function showPasswordRecoveryOverlay(message = "새 비밀번호를 입력해 주세요.", tone = "muted") {
+    const overlay = $("passwordRecoveryOverlay");
+    if (!overlay) return;
+    overlay.hidden = false;
+    document.body.classList.add("password-recovery-open");
+    setPasswordRecoveryStatus(message, tone);
+    window.setTimeout(() => $("recoveryPassword")?.focus(), 80);
+  }
+
+  function hidePasswordRecoveryOverlay() {
+    const overlay = $("passwordRecoveryOverlay");
+    if (!overlay) return;
+    overlay.hidden = true;
+    document.body.classList.remove("password-recovery-open");
+  }
+
+  function clearPasswordRecoveryUrl() {
+    const cleanPath = `${location.origin}${location.pathname}#home`;
+    history.replaceState(null, "", cleanPath);
+  }
+
+  function koreanPasswordRecoveryError(urlState) {
+    const code = urlState?.errorCode || "";
+    const description = urlState?.errorDescription || "";
+    if (code === "otp_expired" || /expired/i.test(description)) {
+      return "비밀번호 재설정 링크가 만료되었습니다. Supabase에서 재설정 메일을 새로 보낸 뒤, 가장 최근 메일의 링크를 다시 눌러주세요.";
+    }
+    if (code || description) {
+      return `비밀번호 재설정 링크를 확인할 수 없습니다. ${description || code}`;
+    }
+    return "비밀번호 재설정 세션을 확인할 수 없습니다. 재설정 메일을 새로 보낸 뒤 다시 시도해 주세요.";
+  }
+
+  async function initPasswordRecoveryFlow() {
+    if (passwordRecoveryInitialized) return;
+    passwordRecoveryInitialized = true;
+
+    const client = getSupabaseClient();
+    const overlay = $("passwordRecoveryOverlay");
+    if (!client?.auth || !overlay) return;
+
+    const closeRecovery = async ({ signOut = true, clearUrl = true } = {}) => {
+      hidePasswordRecoveryOverlay();
+      $("recoveryPassword") && ($("recoveryPassword").value = "");
+      $("recoveryPasswordConfirm") && ($("recoveryPasswordConfirm").value = "");
+      if (signOut && passwordRecoveryMode) {
+        await client.auth.signOut();
+        adminSession = null;
+        adminLoginPanelOpen = false;
+        refreshUiAfterAdminAuthChange();
+      }
+      passwordRecoveryMode = false;
+      if (clearUrl) clearPasswordRecoveryUrl();
+    };
+
+    $("passwordRecoveryClose")?.addEventListener("click", () => closeRecovery());
+    $("cancelPasswordRecovery")?.addEventListener("click", () => closeRecovery());
+
+    $("submitPasswordRecovery")?.addEventListener("click", async () => {
+      const submitButton = $("submitPasswordRecovery");
+      const password = $("recoveryPassword")?.value || "";
+      const confirm = $("recoveryPasswordConfirm")?.value || "";
+
+      if (password.length < 8) {
+        setPasswordRecoveryStatus("새 비밀번호는 최소 8자 이상으로 입력해 주세요.", "danger");
+        return;
+      }
+
+      if (password !== confirm) {
+        setPasswordRecoveryStatus("새 비밀번호와 확인값이 서로 다릅니다.", "danger");
+        return;
+      }
+
+      const { data: sessionData } = await client.auth.getSession();
+      if (!sessionData?.session) {
+        setPasswordRecoveryStatus("비밀번호 재설정 세션이 없습니다. 재설정 메일을 새로 보낸 뒤 다시 시도해 주세요.", "danger");
+        return;
+      }
+
+      submitButton && (submitButton.disabled = true);
+      setPasswordRecoveryStatus("비밀번호를 변경하는 중입니다...", "warn");
+
+      const { error } = await client.auth.updateUser({ password });
+
+      if (error) {
+        setPasswordRecoveryStatus(`비밀번호 변경 실패: ${error.message}`, "danger");
+        submitButton && (submitButton.disabled = false);
+        return;
+      }
+
+      setPasswordRecoveryStatus("비밀번호가 변경되었습니다. 보안을 위해 로그아웃 처리됩니다. 새 비밀번호로 다시 로그인해 주세요.", "success");
+      $("recoveryPassword") && ($("recoveryPassword").value = "");
+      $("recoveryPasswordConfirm") && ($("recoveryPasswordConfirm").value = "");
+
+      window.setTimeout(() => {
+        submitButton && (submitButton.disabled = false);
+        closeRecovery({ signOut: true, clearUrl: true });
+        revealAdminLogin();
+      }, 1300);
+    });
+
+    client.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        passwordRecoveryMode = true;
+        adminSession = session || null;
+        adminLoginPanelOpen = false;
+        showPasswordRecoveryOverlay("새 비밀번호를 입력해 주세요.", "success");
+      }
+    });
+
+    const urlState = getPasswordRecoveryUrlState();
+    if (!urlState.isRecovery) return;
+
+    if (urlState.error || urlState.errorCode) {
+      passwordRecoveryMode = false;
+      showPasswordRecoveryOverlay(koreanPasswordRecoveryError(urlState), "danger");
+      return;
+    }
+
+    passwordRecoveryMode = true;
+    showPasswordRecoveryOverlay("비밀번호 재설정 링크를 확인하는 중입니다...", "warn");
+
+    window.setTimeout(async () => {
+      const { data, error } = await client.auth.getSession();
+      if (error) {
+        setPasswordRecoveryStatus(`재설정 세션 확인 실패: ${error.message}`, "danger");
+        return;
+      }
+
+      if (!data?.session) {
+        setPasswordRecoveryStatus("재설정 세션을 찾지 못했습니다. 메일 링크가 만료되었을 수 있으니 새 재설정 메일을 보내 다시 시도해 주세요.", "danger");
+        return;
+      }
+
+      adminSession = data.session;
+      setPasswordRecoveryStatus("새 비밀번호를 입력해 주세요.", "success");
+      $("recoveryPassword")?.focus();
+    }, 350);
+  }
+
   async function initAdminAuth() {
     const client = getSupabaseClient();
     const panel = $("adminAuthPanel");
@@ -1270,6 +1439,23 @@
     warning.textContent = ".xls는 오래된 엑셀 형식이라 일부 인식 오류가 발생할 수 있습니다. 가능하면 .xlsx로 변환 후 업로드해 주세요. 분석은 계속 시도할 수 있습니다.";
   }
 
+
+  function isSupabaseAuthRedirectHash(hash = location.hash) {
+    const raw = String(hash || "");
+    return raw.includes("access_token=")
+      || raw.includes("refresh_token=")
+      || raw.includes("type=recovery")
+      || raw.includes("error_code=")
+      || raw.includes("error_description=");
+  }
+
+  function isSupabaseAuthRedirectSearch(search = location.search) {
+    const raw = String(search || "");
+    return raw.includes("type=recovery")
+      || raw.includes("error_code=")
+      || raw.includes("error_description=");
+  }
+
   function initRouting() {
     const routes = ["home", "margin", "wms"];
     const buttons = [...document.querySelectorAll("[data-route]")];
@@ -1281,7 +1467,8 @@
       document.body.classList.toggle("route-home", safeRoute === "home");
       document.body.classList.toggle("route-margin", safeRoute === "margin");
       document.body.classList.toggle("route-wms", safeRoute === "wms");
-      if (location.hash !== `#${safeRoute}`) history.replaceState(null, "", `#${safeRoute}`);
+      const hasAuthRedirectParams = isSupabaseAuthRedirectHash(location.hash) || isSupabaseAuthRedirectSearch(location.search);
+      if (!hasAuthRedirectParams && location.hash !== `#${safeRoute}`) history.replaceState(null, "", `#${safeRoute}`);
       if (safeRoute === "wms") requestAnimationFrame(renderOrderChart);
       window.scrollTo({ top: 0, behavior: "smooth" });
     };
@@ -4594,6 +4781,7 @@ function refreshActiveOrderAnalysisSummary() {
   }
 
   document.addEventListener("DOMContentLoaded", () => {
+    initPasswordRecoveryFlow();
     initRouting();
     initMarginCalculator();
     initWms();
