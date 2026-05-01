@@ -502,6 +502,7 @@
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     addBackup(reason, { cloud });
     renderAll();
+    refreshInventoryItemOrderTrendIfOpen();
     if (cloud) queueSupabaseAppStateSave(reason);
   }
 
@@ -646,6 +647,12 @@
   function initAdminLoginReveal() {
     let tapCount = 0;
     let tapTimer = null;
+    const visibleRevealButton = document.querySelector("#adminLoginRevealButton");
+    if (visibleRevealButton) {
+      visibleRevealButton.addEventListener("click", () => {
+        revealAdminLogin();
+      });
+    }
 
     const resetTapCount = () => {
       tapCount = 0;
@@ -731,7 +738,11 @@
     const logs = Array.isArray(state.adminActionLogs) ? state.adminActionLogs.map(normalizeAdminActionLog).filter(Boolean) : [];
     state.adminActionLogs = logs.slice(0, ADMIN_ACTION_LOG_STORAGE_LIMIT);
     if (summary) {
-      summary.textContent = logs.length ? "최근 " + number(Math.min(logs.length, ADMIN_ACTION_LOG_DISPLAY_LIMIT)) + "건 표시 / 전체 " + number(logs.length) + "건" : "기록 없음";
+      if (logs.length) {
+        summary.innerHTML = '<span class="summary-pill primary">최근 ' + number(Math.min(logs.length, ADMIN_ACTION_LOG_DISPLAY_LIMIT)) + '건 표시</span><span class="summary-pill muted">전체 ' + number(logs.length) + '건</span>';
+      } else {
+        summary.textContent = "기록 없음";
+      }
     }
     if (!list) return;
     const visible = logs.slice(0, ADMIN_ACTION_LOG_DISPLAY_LIMIT);
@@ -2791,7 +2802,13 @@ function refreshActiveOrderAnalysisSummary() {
     }
 
     const restoreCount = records.filter((record) => record.restores).length;
-    if (summary) summary.textContent = records.length ? `총 ${number(records.length)}건 · 재고 복구 ${number(restoreCount)}건` : "처리 기록 없음";
+    if (summary) {
+      if (records.length) {
+        summary.innerHTML = '<span class="summary-pill primary">총 ' + number(records.length) + '건</span><span class="summary-pill success">재고 복구 ' + number(restoreCount) + '건</span>';
+      } else {
+        summary.textContent = "처리 기록 없음";
+      }
+    }
     list.classList.toggle("is-scrollable", records.length > 3);
 
     list.innerHTML = records.length ? records.slice(0, 40).map((record) => {
@@ -2999,12 +3016,34 @@ function refreshActiveOrderAnalysisSummary() {
     if (applyBtn) applyBtn.textContent = direction === "out" ? "직접 출고 적용" : "입고 적용";
     const quickBtn = $("quickInboundExample");
     if (quickBtn) quickBtn.hidden = direction === "out";
+    document.querySelectorAll("#stockMoveRows .move-row").forEach((row) => {
+      const label = row.querySelector(".moveUnitPriceLabel");
+      if (label) label.textContent = direction === "out" ? "출고 단가" : "입고 단가";
+      const priceInput = row.querySelector(".moveUnitPrice");
+      if (priceInput) {
+        const sku = row.querySelector(".moveSku")?.value || "";
+        priceInput.placeholder = sku ? `현재 ${money(getSkuCost(sku))}` : "예: 2200";
+      }
+    });
     updateMoveBatchSummary();
   }
 
   function buildStockMoveAt(dateValue) {
     const date = normalizePurchaseDate(dateValue || todayKey(), new Date());
     return new Date(`${date}T12:00:00`).toISOString();
+  }
+
+  function resolveDirectOutboundUnitPrice(row, sku) {
+    const raw = String(row?.unitPriceRaw || "").replace(/,/g, "").trim();
+    const hasManualPrice = raw !== "";
+    const inputPrice = cleanNumber(row?.unitPrice);
+    if (hasManualPrice && (!Number.isFinite(inputPrice) || inputPrice <= 0)) {
+      return { ok: false, unitPrice: 0, source: "invalid", message: `${sku} 출고 단가는 0보다 큰 숫자로 입력해주세요.` };
+    }
+    if (inputPrice > 0) return { ok: true, unitPrice: inputPrice, source: "manual" };
+    const fallbackPrice = getSkuCost(sku);
+    if (fallbackPrice > 0) return { ok: true, unitPrice: fallbackPrice, source: "productCost" };
+    return { ok: false, unitPrice: 0, source: "missing", message: `${sku} 출고 단가를 입력하거나 품목 원가를 먼저 등록해주세요.` };
   }
 
   function renderStockMoveRows() {
@@ -3019,7 +3058,10 @@ function refreshActiveOrderAnalysisSummary() {
     if (!wrap) return;
     const rowId = `move-row-${++stockMoveRowSeq}`;
     const selectedSku = defaults.sku || Object.keys(INVENTORY_DEFS)[0] || "";
-    const currentPricePlaceholder = selectedSku ? `현재 ${money(getSkuCost(selectedSku))}` : "현재 원가 유지";
+    const defaultUnitPrice = defaults.unitPrice ?? (selectedSku ? getSkuCost(selectedSku) : "");
+    const currentPricePlaceholder = selectedSku ? `현재 ${money(getSkuCost(selectedSku))}` : "예: 2200";
+    const direction = getStockMoveDirection();
+    const priceLabel = direction === "out" ? "출고 단가" : "입고 단가";
     const row = document.createElement("div");
     row.className = "move-row";
     row.dataset.rowId = rowId;
@@ -3041,8 +3083,8 @@ function refreshActiveOrderAnalysisSummary() {
         <input class="moveEaches" type="number" inputmode="numeric" min="0" value="${defaults.eaches || 0}" />
       </label>
       <label class="field move-qty move-price">
-        <span>입고 단가</span>
-        <input class="moveUnitPrice" type="number" inputmode="decimal" min="0" step="0.01" value="${escapeHtml(String(defaults.unitPrice ?? ""))}" placeholder="${escapeHtml(currentPricePlaceholder)}" title="비워두면 현재 품목 원가를 유지합니다." />
+        <span class="moveUnitPriceLabel">${escapeHtml(priceLabel)}</span>
+        <input class="moveUnitPrice" type="text" inputmode="numeric" value="${escapeHtml(String(defaultUnitPrice || ""))}" placeholder="${escapeHtml(currentPricePlaceholder)}" title="비워두면 현재 품목 원가를 사용합니다." />
       </label>
       <button type="button" class="icon-btn removeMoveRow" aria-label="입력 행 삭제">×</button>
     `;
@@ -3053,7 +3095,11 @@ function refreshActiveOrderAnalysisSummary() {
       el.addEventListener("change", () => {
         if (el.classList.contains("moveSku")) {
           const priceInput = row.querySelector(".moveUnitPrice");
-          if (priceInput && !priceInput.value.trim()) priceInput.placeholder = `현재 ${money(getSkuCost(el.value))}`;
+          const nextCost = getSkuCost(el.value);
+          if (priceInput) {
+            priceInput.value = nextCost || "";
+            priceInput.placeholder = nextCost ? `현재 ${money(nextCost)}` : "예: 2200";
+          }
         }
         updateMoveBatchSummary();
       });
@@ -3066,7 +3112,7 @@ function refreshActiveOrderAnalysisSummary() {
       }
       updateMoveBatchSummary();
     });
-    updateMoveBatchSummary();
+    updateStockMoveDirectionUi();
   }
 
   function clearStockMoveRows(options = {}) {
@@ -3095,7 +3141,7 @@ function refreshActiveOrderAnalysisSummary() {
         boxes: cleanNumber(row.querySelector(".moveBoxes")?.value),
         eaches: cleanNumber(row.querySelector(".moveEaches")?.value)
       };
-      return { sku, input, units: sku ? unitsFromInput(sku, input) : 0, unitPrice: priceValue === "" ? null : cleanNumber(priceValue) };
+      return { sku, input, units: sku ? unitsFromInput(sku, input) : 0, unitPriceRaw: priceValue, unitPrice: priceValue === "" ? null : cleanNumber(priceValue) };
     });
   }
 
@@ -3423,17 +3469,27 @@ function refreshActiveOrderAnalysisSummary() {
 
     const isNarrowChart = cssWidth < 520;
     const pad = isNarrowChart
-      ? { top: 32, right: 14, bottom: 58, left: 38 }
-      : { top: 34, right: 24, bottom: 56, left: 52 };
+      ? { top: 36, right: 18, bottom: 60, left: 44 }
+      : { top: 38, right: 28, bottom: 58, left: 56 };
     const width = cssWidth - pad.left - pad.right;
     const height = cssHeight - pad.top - pad.bottom;
     const maxValue = Math.max(1, ...points.map((point) => point.value));
     const yMax = Math.max(5, Math.ceil(maxValue / 5) * 5);
 
-    ctx.font = "12px Pretendard, system-ui, sans-serif";
+    const gridColor = "rgba(15, 23, 42, 0.10)";
+    const axisTextColor = "rgba(51, 65, 85, 0.88)";
+    const mainLineColor = "rgba(148, 27, 29, 0.92)";
+    const pointFillColor = "#ffffff";
+    const pointStrokeColor = "rgba(148, 27, 29, 0.86)";
+    const labelBgColor = "rgba(255, 255, 255, 0.92)";
+    const labelBorderColor = "rgba(15, 23, 42, 0.12)";
+    const labelTextColor = "#020617";
+
+    ctx.font = "700 12px Pretendard, system-ui, sans-serif";
     ctx.lineWidth = 1;
-    ctx.strokeStyle = "rgba(255,255,255,0.10)";
-    ctx.fillStyle = "rgba(232,238,255,0.58)";
+    ctx.strokeStyle = gridColor;
+    ctx.fillStyle = axisTextColor;
+    ctx.textAlign = "left";
     for (let i = 0; i <= 4; i += 1) {
       const y = pad.top + height * (i / 4);
       const value = Math.round(yMax * (1 - i / 4));
@@ -3441,7 +3497,7 @@ function refreshActiveOrderAnalysisSummary() {
       ctx.moveTo(pad.left, y);
       ctx.lineTo(cssWidth - pad.right, y);
       ctx.stroke();
-      ctx.fillText(number(value), 12, y + 4);
+      ctx.fillText(number(value), 10, y + 4);
     }
 
     const coords = points.map((point, index) => {
@@ -3451,15 +3507,18 @@ function refreshActiveOrderAnalysisSummary() {
     });
 
     const gradient = ctx.createLinearGradient(0, pad.top, 0, pad.top + height);
-    gradient.addColorStop(0, "rgba(255,94,158,0.28)");
-    gradient.addColorStop(1, "rgba(139,92,246,0.02)");
+    gradient.addColorStop(0, "rgba(148, 27, 29, 0.16)");
+    gradient.addColorStop(0.58, "rgba(37, 99, 235, 0.07)");
+    gradient.addColorStop(1, "rgba(255, 255, 255, 0.02)");
     ctx.beginPath();
     coords.forEach((point, index) => {
       if (index === 0) ctx.moveTo(point.x, point.y);
       else ctx.lineTo(point.x, point.y);
     });
-    ctx.lineTo(coords[coords.length - 1].x, pad.top + height);
-    ctx.lineTo(coords[0].x, pad.top + height);
+    if (coords.length) {
+      ctx.lineTo(coords[coords.length - 1].x, pad.top + height);
+      ctx.lineTo(coords[0].x, pad.top + height);
+    }
     ctx.closePath();
     ctx.fillStyle = gradient;
     ctx.fill();
@@ -3472,26 +3531,54 @@ function refreshActiveOrderAnalysisSummary() {
     ctx.lineWidth = 3;
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
-    ctx.strokeStyle = "rgba(255,94,158,0.96)";
+    ctx.strokeStyle = mainLineColor;
     ctx.stroke();
 
-    coords.forEach((point) => {
+    function roundedRect(x, y, w, h, r) {
+      const radius = Math.min(r, w / 2, h / 2);
       ctx.beginPath();
-      ctx.fillStyle = "rgba(17,22,38,0.95)";
-      ctx.strokeStyle = "rgba(255,255,255,0.82)";
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + w - radius, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+      ctx.lineTo(x + w, y + h - radius);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+      ctx.lineTo(x + radius, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+    }
+
+    coords.forEach((point, index) => {
+      ctx.beginPath();
+      ctx.fillStyle = pointFillColor;
+      ctx.strokeStyle = pointStrokeColor;
       ctx.lineWidth = 2;
       ctx.arc(point.x, point.y, 5, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = "rgba(255,255,255,0.88)";
-      ctx.font = "700 12px Pretendard, system-ui, sans-serif";
+
+      ctx.font = "800 12px Pretendard, system-ui, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText(number(point.value), point.x, Math.max(18, point.y - 12));
+      const valueText = number(point.value);
+      const labelWidth = Math.max(28, ctx.measureText(valueText).width + 14);
+      const labelHeight = 20;
+      const stagger = isNarrowChart ? (index % 2 ? 20 : 10) : 12;
+      const labelX = Math.min(Math.max(point.x - labelWidth / 2, 4), cssWidth - labelWidth - 4);
+      const labelY = Math.max(8, point.y - labelHeight - stagger);
+      roundedRect(labelX, labelY, labelWidth, labelHeight, 9);
+      ctx.fillStyle = labelBgColor;
+      ctx.fill();
+      ctx.strokeStyle = labelBorderColor;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = labelTextColor;
+      ctx.fillText(valueText, labelX + labelWidth / 2, labelY + 14);
     });
 
     ctx.textAlign = "center";
-    ctx.fillStyle = "rgba(232,238,255,0.62)";
-    ctx.font = "700 12px Pretendard, system-ui, sans-serif";
+    ctx.fillStyle = axisTextColor;
+    ctx.font = "800 12px Pretendard, system-ui, sans-serif";
     const labelStep = points.length > 14 ? Math.ceil(points.length / (isNarrowChart ? 6 : 10)) : (isNarrowChart && points.length > 7 ? 2 : 1);
     coords.forEach((point, index) => {
       if (labelStep > 1 && index % labelStep !== 0 && index !== coords.length - 1) return;
@@ -3821,6 +3908,22 @@ function refreshActiveOrderAnalysisSummary() {
       return;
     }
 
+    const outboundPriceBySku = new Map();
+    if (isOutbound) {
+      for (const row of rows) {
+        const sku = canonicalSku(row.sku);
+        const priceInfo = resolveDirectOutboundUnitPrice(row, sku);
+        if (!priceInfo.ok) {
+          alert(priceInfo.message);
+          return;
+        }
+        const previous = outboundPriceBySku.get(sku) || { value: 0, manual: false };
+        previous.value += row.units * priceInfo.unitPrice;
+        previous.manual = previous.manual || priceInfo.source === "manual";
+        outboundPriceBySku.set(sku, previous);
+      }
+    }
+
     addBackup(isOutbound ? "직접 출고 적용 전 자동 백업" : "입고 입력 적용 전 자동 백업");
     const bySku = new Map();
     const changedPrices = [];
@@ -3841,14 +3944,32 @@ function refreshActiveOrderAnalysisSummary() {
       state.stock[sku].units = isOutbound ? current - units : current + units;
     });
 
-    const detailItems = [...bySku.entries()].map(([sku, units]) => ({
-      sku,
-      units,
-      direction,
-      source: isOutbound ? STOCK_MOVE_SOURCES.manualOutbound : STOCK_MOVE_SOURCES.manualInbound,
-      orderCount: 0,
-      text: formatMovementDetail(sku, units, direction)
-    }));
+    const detailItems = [...bySku.entries()].map(([sku, units]) => {
+      if (!isOutbound) {
+        return {
+          sku,
+          units,
+          direction,
+          source: STOCK_MOVE_SOURCES.manualInbound,
+          orderCount: 0,
+          text: formatMovementDetail(sku, units, direction)
+        };
+      }
+      const priceMeta = outboundPriceBySku.get(sku);
+      const unitPrice = priceMeta && units > 0 ? Math.round((priceMeta.value / units) * 100) / 100 : getSkuCost(sku);
+      const value = priceMeta ? priceMeta.value : calcMovementAssetValue([{ sku, units }]);
+      return {
+        sku,
+        units,
+        direction,
+        source: STOCK_MOVE_SOURCES.manualOutbound,
+        orderCount: 0,
+        unitPrice,
+        unitPriceSource: priceMeta?.manual ? "manual" : "productCost",
+        value,
+        text: formatMovementDetail(sku, units, direction, { unitPrice, value })
+      };
+    });
 
     const totalUnits = detailItems.reduce((sum, item) => sum + item.units, 0);
     const priceMemo = !isOutbound && changedPrices.length ? ` · 단가 변경 ${number(changedPrices.length)}건` : "";
@@ -3891,9 +4012,12 @@ function refreshActiveOrderAnalysisSummary() {
     return `hist-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
 
-  function formatMovementDetail(sku, units, direction = "out") {
+  function formatMovementDetail(sku, units, direction = "out", options = {}) {
     const action = direction === "in" ? "입고" : "출고";
-    return `${formatStock(sku, units)} ${action}`;
+    const unitPrice = cleanNumber(options?.unitPrice);
+    const value = cleanNumber(options?.value) || (unitPrice > 0 ? units * unitPrice : 0);
+    const priceText = unitPrice > 0 ? ` · 단가 ${money(unitPrice)} · 금액 ${money(value)}` : "";
+    return `${formatStock(sku, units)} ${action}${priceText}`;
   }
 
   function fillInboundExample() {
@@ -3929,193 +4053,476 @@ function refreshActiveOrderAnalysisSummary() {
   }
 
 
-  function buildSkuOutboundTrend(sku) {
-    sku = canonicalSku(sku);
-    const days = 30;
-    const today = startOfDay(new Date());
-    const keys = Array.from({ length: days }, (_, index) => {
-      const date = addDays(today, index - days + 1);
-      return { key: dateKey(date), label: shortDateLabel(date), date, value: 0 };
+  function safeParseStorageJson(raw) {
+  if (!raw || typeof raw !== "string") return null;
+  try {
+    return JSON.parse(raw);
+  } catch (_) {
+    return null;
+  }
+}
+
+function isOutboundStorageKey(key) {
+  if (!key) return false;
+  return /reborn|ribbon|wms|inventory|stock|excel|order|history|movement|outbound|app_state/i.test(key)
+    && !/manifest|theme|setting|preference/i.test(key);
+}
+
+function getCandidateStorageKeys() {
+  const keys = new Set([STORAGE_KEY]);
+  try {
+    Object.keys(localStorage || {}).forEach((key) => {
+      if (isOutboundStorageKey(key)) keys.add(key);
     });
-    const dailyTotals = new Map(keys.map((item) => [item.key, 0]));
-    let storedGrossTotal = 0;
-    let storedNetTotal = 0;
-    let recentRawTotal = 0;
-    let latestAt = null;
+  } catch (_) {}
+  return [...keys];
+}
 
-    (state.history || []).forEach((record) => {
-      const details = Array.isArray(record.details) ? record.details : [];
-      details.forEach((detail) => {
-        if (canonicalSku(detail?.sku) !== sku) return;
-        const units = cleanNumber(detail.units);
-        if (units <= 0) return;
-        const direction = detail.direction === "in" ? "in" : "out";
-        const isOutbound = direction === "out";
-        const isReturnRestore = direction === "in" && (detail.affectsNetOutbound || detail.source === "returnAdjustment");
-        if (!isOutbound && !isReturnRestore) return;
+function asArray(value) {
+  if (Array.isArray(value)) return value;
+  if (!value) return [];
+  if (typeof value === "object" && Array.isArray(value.items)) return value.items;
+  return [];
+}
 
-        const signedUnits = isOutbound ? units : -units;
-        storedNetTotal += signedUnits;
-        if (isOutbound) storedGrossTotal += units;
+function getObjectText(value) {
+  if (!value || typeof value !== "object") return "";
+  return [
+    value.type,
+    value.action,
+    value.mode,
+    value.direction,
+    value.kind,
+    value.source,
+    value.status,
+    value.label,
+    value.title,
+    value.memo,
+    value.note,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
 
-        const at = record.at ? new Date(record.at) : null;
-        if (!at || Number.isNaN(at.getTime())) return;
-        if (!latestAt || at > latestAt) latestAt = at;
-        const key = dateKey(at);
-        if (dailyTotals.has(key)) {
-          dailyTotals.set(key, (dailyTotals.get(key) || 0) + signedUnits);
-          recentRawTotal += signedUnits;
-        }
-      });
+function getRecordDateValue(record, parent) {
+  return (
+    record?.at ||
+    record?.date ||
+    record?.createdAt ||
+    record?.created_at ||
+    record?.timestamp ||
+    record?.processedAt ||
+    record?.processed_at ||
+    record?.time ||
+    record?.updatedAt ||
+    record?.updated_at ||
+    parent?.at ||
+    parent?.date ||
+    parent?.createdAt ||
+    parent?.created_at ||
+    parent?.timestamp ||
+    parent?.processedAt ||
+    parent?.processed_at ||
+    parent?.time ||
+    parent?.updatedAt ||
+    parent?.updated_at ||
+    null
+  );
+}
+
+function parseTrendDate(value) {
+  if (!value) return null;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (typeof value === "number") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const normalized = trimmed
+      .replace(/(년|\.)/g, "-")
+      .replace(/월/g, "-")
+      .replace(/일/g, "")
+      .replace(/--+/g, "-")
+      .replace(/\s+/g, " ");
+    const direct = new Date(trimmed);
+    if (!Number.isNaN(direct.getTime())) return direct;
+    const fallback = new Date(normalized);
+    if (!Number.isNaN(fallback.getTime())) return fallback;
+  }
+  return null;
+}
+
+function getRecordSku(record, parent) {
+  const raw =
+    record?.sku ||
+    record?.productSku ||
+    record?.product ||
+    record?.productName ||
+    record?.itemName ||
+    record?.item ||
+    record?.name ||
+    record?.title ||
+    parent?.sku ||
+    parent?.productSku ||
+    parent?.product ||
+    parent?.productName ||
+    parent?.itemName ||
+    parent?.item ||
+    parent?.name ||
+    parent?.title ||
+    "";
+  const direct = canonicalSku(raw);
+  if (direct && State.stock[direct]) return direct;
+  const normalized = normalizeText(raw);
+  if (!normalized) return "";
+  return Object.keys(INVENTORY_DEFS).find((name) => {
+    const normalizedName = normalizeText(name);
+    return normalized.includes(normalizedName) || normalizedName.includes(normalized);
+  }) || direct || "";
+}
+
+function getRecordUnits(record) {
+  const fields = [
+    "units",
+    "unitCount",
+    "totalUnits",
+    "deductedUnits",
+    "outboundUnits",
+    "outboundQty",
+    "quantityUnits",
+    "eaches",
+    "qty",
+    "quantity",
+    "count",
+    "amount",
+  ];
+  for (const field of fields) {
+    if (record && record[field] !== undefined && record[field] !== null && record[field] !== "") {
+      const value = Math.abs(cleanNumber(record[field]));
+      if (value > 0) return value;
+    }
+  }
+  return 0;
+}
+
+function isReturnOrRestoreRecord(record, parent) {
+  const text = `${getObjectText(record)} ${getObjectText(parent)}`;
+  return /returnadjustment|restore|restored|refund|cancel|반품|취소|복구|입고복구|재고복구/.test(text);
+}
+
+function isOutboundRecord(record, parent, sourceHint = "") {
+  const direction = String(record?.direction || record?.movementType || record?.type || parent?.direction || "").toLowerCase();
+  const text = `${sourceHint} ${getObjectText(parent)} ${getObjectText(record)}`.toLowerCase();
+  if (isReturnOrRestoreRecord(record, parent)) return false;
+  if (/inbound|입고/.test(direction) && !/outbound|출고|차감/.test(direction)) return false;
+  if (/outbound|manualoutbound|excelorderdeduction|deduct|deduction|ship|shipping|order\s*out|출고|차감|주문처리/.test(text)) return true;
+  if (record?.direction === "out" || record?.mode === "out" || record?.action === "out") return true;
+  return false;
+}
+
+function getDetailListFromRecord(record) {
+  if (!record || typeof record !== "object") return [];
+  const detailKeys = ["details", "items", "rows", "products", "lines", "deductions", "entries", "records"];
+  for (const key of detailKeys) {
+    if (Array.isArray(record[key]) && record[key].length) return record[key];
+  }
+  return [];
+}
+
+function normalizeOutboundTrendRecord(record, parent, sourceHint = "") {
+  const sku = getRecordSku(record, parent);
+  if (!sku || !State.stock[sku]) return null;
+  if (!isOutboundRecord(record, parent, sourceHint)) return null;
+  const units = getRecordUnits(record);
+  if (!units) return null;
+  const date = parseTrendDate(getRecordDateValue(record, parent));
+  if (!date) return null;
+  return {
+    sku,
+    units,
+    date,
+    id: record?.id || parent?.id || "",
+    source: record?.source || parent?.source || sourceHint || "local",
+  };
+}
+
+function collectRecordsFromCandidate(candidate, sourceHint, depth = 0, output = []) {
+  if (!candidate || depth > 5) return output;
+  if (Array.isArray(candidate)) {
+    candidate.forEach((entry) => collectRecordsFromCandidate(entry, sourceHint, depth + 1, output));
+    return output;
+  }
+  if (typeof candidate !== "object") return output;
+
+  const details = getDetailListFromRecord(candidate);
+  if (details.length) {
+    details.forEach((detail) => {
+      const normalized = normalizeOutboundTrendRecord(detail, candidate, sourceHint);
+      if (normalized) output.push(normalized);
+      collectRecordsFromCandidate(detail, sourceHint, depth + 1, output);
     });
-
-    const points = keys.map((item) => {
-      const rawValue = dailyTotals.get(item.key) || 0;
-      return { ...item, rawValue, value: Math.max(0, Math.round(rawValue)) };
-    });
-    const recentTotal = Math.max(0, Math.round(recentRawTotal));
-    const activeDays = points.filter((point) => point.rawValue > 0);
-    const maxDay = activeDays.length ? activeDays.reduce((best, point) => point.rawValue > best.rawValue ? point : best, activeDays[0]) : null;
-    return {
-      points,
-      activeDays,
-      maxDay,
-      recentTotal,
-      storedTotal: Math.max(0, Math.round(storedNetTotal)),
-      grossStoredTotal: storedGrossTotal,
-      latestAt
-    };
   }
 
-  function formatForecastDate(date) {
-    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "-";
-    return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일`;
+  const direct = normalizeOutboundTrendRecord(candidate, null, sourceHint);
+  if (direct) output.push(direct);
+
+  const relevantNestedKeys = [
+    "history",
+    "stockHistory",
+    "stockMovements",
+    "movements",
+    "movementLogs",
+    "outboundLogs",
+    "outboundHistory",
+    "excelHistory",
+    "excelLogs",
+    "orderHistory",
+    "appliedOrderFiles",
+    "processedOrders",
+    "adminActionLogs",
+    "state",
+    "data",
+    "payload",
+  ];
+  relevantNestedKeys.forEach((key) => {
+    if (candidate[key]) collectRecordsFromCandidate(candidate[key], `${sourceHint}.${key}`, depth + 1, output);
+  });
+  return output;
+}
+
+function collectStoredOutboundTrendRecords() {
+  const records = [];
+  collectRecordsFromCandidate(State.history || [], "State.history", 0, records);
+  collectRecordsFromCandidate(State.adminActionLogs || [], "State.adminActionLogs", 0, records);
+
+  getCandidateStorageKeys().forEach((key) => {
+    let parsed = null;
+    try {
+      parsed = safeParseStorageJson(localStorage.getItem(key));
+    } catch (_) {
+      parsed = null;
+    }
+    if (parsed) collectRecordsFromCandidate(parsed, `localStorage:${key}`, 0, records);
+  });
+
+  const seen = new Set();
+  return records.filter((record) => {
+    const key = [
+      record.id || "",
+      record.sku,
+      dateKey(record.date),
+      Math.round(record.units * 1000) / 1000,
+    ].join("|");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function buildSkuOutboundTrend(sku, days = 30) {
+  const targetSku = canonicalSku(sku);
+  const today = startOfDay(new Date());
+  const from = addDays(today, -(days - 1));
+  const daily = new Map();
+  for (let i = 0; i < days; i += 1) {
+    const date = addDays(from, i);
+    daily.set(dateKey(date), { date, units: 0 });
   }
 
-  function formatDailyOutboundRate(units) {
-    const value = Number(units) || 0;
-    const digits = value > 0 && value < 10 ? 1 : 0;
-    return `${value.toLocaleString("ko-KR", { maximumFractionDigits: digits })}개/일`;
+  collectStoredOutboundTrendRecords()
+    .filter((record) => record.sku === targetSku)
+    .forEach((record) => {
+      const date = startOfDay(record.date);
+      if (Number.isNaN(date.getTime()) || date < from || date > today) return;
+      const key = dateKey(date);
+      if (!daily.has(key)) daily.set(key, { date, units: 0 });
+      daily.get(key).units += record.units;
+    });
+
+  const dailyData = [...daily.values()].sort((a, b) => a.date - b.date);
+  const total = dailyData.reduce((sum, item) => sum + item.units, 0);
+  const activeDays = dailyData.filter((item) => item.units > 0).length;
+  const averagePerDay = total > 0 ? total / days : 0;
+  return { days, total, activeDays, averagePerDay, dailyData };
+}
+
+function getTrendStatusForSku(sku) {
+  const targetSku = canonicalSku(sku);
+  const stock = State.stock[targetSku] || {};
+  const currentUnits = Math.max(0, cleanNumber(stock.units));
+  const trend = buildSkuOutboundTrend(targetSku, 30);
+  if (!currentUnits) {
+    return { trend, currentUnits, status: "noStock", value: "현재 재고 없음", note: "재고 수량이 0이거나 입력되지 않았습니다." };
+  }
+  if (!trend.total || trend.averagePerDay <= 0) {
+    return { trend, currentUnits, status: "noOutbound", value: "출고 기록 부족", note: "최근 30일 기준으로 계산 가능한 출고 기록이 없습니다." };
+  }
+  const daysLeft = Math.max(1, Math.ceil(currentUnits / trend.averagePerDay));
+  const depletionDate = addDays(new Date(), daysLeft);
+  return {
+    trend,
+    currentUnits,
+    status: "ok",
+    daysLeft,
+    depletionDate,
+    value: `${formatTrendDate(depletionDate)} · 약 ${daysLeft.toLocaleString()}일`,
+    note: `최근 30일 평균 ${Math.round(trend.averagePerDay).toLocaleString()}개/일 기준`,
+  };
+}
+
+function formatTrendDate(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "-";
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+function refreshInventoryItemOrderTrendIfOpen() {
+  const overlay = $("inventoryItemOverlay");
+  if (!overlay || overlay.hidden || !activeInventoryDetailSku) return;
+  renderInventoryItemOrderTrend();
+}
+
+function renderInventoryItemOrderTrend() {
+  const sku = canonicalSku(activeInventoryDetailSku);
+  const valueEl = $("inventoryItemStockoutValue");
+  const noteEl = $("inventoryItemStockoutNote");
+  const canvas = $("inventoryItemOrderChart");
+  const meta = $("inventoryItemOrderTrendMeta");
+  const summary = $("inventoryItemOrderTrendSummary");
+  const empty = $("inventoryItemOrderChartEmpty");
+
+  if (!sku) {
+    if (valueEl) valueEl.textContent = "데이터 확인 필요";
+    if (noteEl) noteEl.textContent = "품목 정보가 없어 예상 소진일을 계산할 수 없습니다.";
+    if (meta) meta.textContent = "출고 기록을 불러오지 못했습니다.";
+    if (empty) {
+      empty.hidden = false;
+      empty.textContent = "품목 정보가 없어 날짜별 출고 기록을 표시할 수 없습니다.";
+    }
+    if (summary) summary.innerHTML = "";
+    return;
   }
 
-  function buildSkuStockoutForecast(sku, trendData) {
-    sku = canonicalSku(sku);
-    const currentUnits = cleanNumber(state.stock[sku]?.units);
-    const points = Array.isArray(trendData?.points) ? trendData.points : [];
-    const recentTotal30 = Math.max(0, cleanNumber(trendData?.recentTotal));
-    const recentTotal7 = points.slice(-7).reduce((sum, point) => sum + (cleanNumber(point?.value) || 0), 0);
-    const average30 = recentTotal30 / 30;
-    const average7 = recentTotal7 / 7;
+  try {
+    const status = getTrendStatusForSku(sku);
+    const trend = status.trend;
+    const hasData = trend.total > 0;
+    const recentPoints = trend.dailyData.filter((point) => point.units > 0).slice(-7);
 
-    if (currentUnits <= 0) {
-      return {
-        tone: "danger",
-        label: "예상 소진일",
-        headline: "이미 소진 또는 마이너스 재고",
-        detail: "현재 재고가 0개 이하입니다. 입고 예정 수량 확인이 필요합니다.",
-        metrics: [
-          ["현재 재고", `${number(currentUnits)}개`],
-          ["30일 출고", `${number(recentTotal30)}개`],
-          ["예측 기준", "재고 없음"]
-        ]
-      };
+    if (valueEl) valueEl.textContent = status.value;
+    if (noteEl) noteEl.textContent = status.note;
+    if (meta) {
+      meta.textContent = hasData
+        ? `최근 30일 순출고 ${formatStock(sku, trend.total)} · 출고 발생 ${trend.activeDays.toLocaleString()}일 · 평균 ${Math.round(trend.averagePerDay).toLocaleString()}개/일`
+        : "최근 30일 출고 기록이 없습니다.";
     }
 
-    if (recentTotal30 <= 0 || average30 <= 0) {
-      return {
-        tone: "empty",
-        label: "예상 소진일",
-        headline: "계산할 순출고 데이터 부족",
-        detail: "최근 30일 순출고량이 0 이하라 예상 소진일을 계산하지 않았습니다.",
-        metrics: [
-          ["현재 재고", `${number(currentUnits)}개`],
-          ["최근 7일 순출고", `${number(recentTotal7)}개`],
-          ["최근 30일 순출고", `${number(recentTotal30)}개`]
-        ]
-      };
+    if (summary) {
+      summary.innerHTML = hasData
+        ? recentPoints.map((point) => `
+          <div class="sku-order-trend-pill">
+            <span>${shortDateLabel(point.date)}</span>
+            <strong>${escapeHtml(formatStock(sku, point.units))}</strong>
+          </div>`).join("")
+        : `<div class="detail-empty">최근 30일 안에 이 품목으로 저장된 순출고 기록이 없습니다.</div>`;
     }
 
-    const daysLeft = Math.max(1, Math.ceil(currentUnits / average30));
-    const estimatedDate = addDays(startOfDay(new Date()), daysLeft);
-    const tone = daysLeft <= 7 ? "danger" : daysLeft <= 30 ? "warning" : "safe";
-
-    return {
-      tone,
-      label: "예상 소진일",
-      headline: formatForecastDate(estimatedDate),
-      detail: `최근 30일 순출고 일평균 ${formatDailyOutboundRate(average30)} 기준 · 약 ${number(daysLeft)}일 후 소진 예상`,
-      metrics: [
-        ["현재 재고", `${number(currentUnits)}개`],
-        ["최근 7일 순출고", `${number(recentTotal7)}개`],
-        ["최근 30일 순출고", `${number(recentTotal30)}개`],
-        ["7일 순출고 평균", formatDailyOutboundRate(average7)],
-        ["30일 순출고 평균", formatDailyOutboundRate(average30)]
-      ]
-    };
-  }
-
-  function renderInventoryItemOrderTrend() {
-    if (!activeInventoryDetailSku) return;
-    const overlay = $("inventoryItemOverlay");
-    if (!overlay || overlay.hidden) return;
-    const canvas = $("inventoryItemOrderChart");
-    const empty = $("inventoryItemOrderChartEmpty");
-    const meta = $("inventoryItemOrderTrendMeta");
-    const summary = $("inventoryItemOrderTrendSummary");
-    const list = $("inventoryItemOrderTrendList");
-    const forecastBox = $("inventoryItemStockoutForecast");
-    if (!canvas || !empty || !meta || !summary || !list) return;
-
-    const sku = activeInventoryDetailSku;
-    const data = buildSkuOutboundTrend(sku);
-    const hasData = data.storedTotal > 0;
-    const hasRecentData = data.recentTotal > 0;
-    const recentAverage = data.activeDays.length ? Math.round(data.recentTotal / data.activeDays.length) : 0;
-    const forecast = buildSkuStockoutForecast(sku, data);
-
-    if (forecastBox) {
-      forecastBox.className = `sku-stockout-forecast-card ${forecast.tone}`;
-      forecastBox.innerHTML = `
-        <div class="sku-stockout-forecast-main">
-          <span>${escapeHtml(forecast.label)}</span>
-          <strong>${escapeHtml(forecast.headline)}</strong>
-          <p>${escapeHtml(forecast.detail)}</p>
-        </div>
-        <div class="sku-stockout-forecast-metrics">
-          ${forecast.metrics.map(([label, value]) => `<div><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`).join("")}
-        </div>
-      `;
+    if (empty) {
+      empty.hidden = hasData;
+      empty.textContent = "최근 30일 출고 기록이 없습니다.";
     }
 
-    meta.textContent = hasData
-      ? `최근 30일 순출고 ${formatStock(sku, data.recentTotal)} · 저장 기록 전체 순출고 ${formatStock(sku, data.storedTotal)}`
-      : "엑셀 주문 차감 적용 이후 저장된 품목별 출고 기록이 아직 없습니다.";
-    empty.textContent = hasData
-      ? "저장된 출고 기록은 있지만, 최근 30일 안에 이 품목의 출고 기록은 없습니다."
-      : "엑셀 주문 차감 적용 이후 저장된 품목별 출고 기록이 아직 없습니다.";
+    if (!canvas || !canvas.getContext) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const ratio = window.devicePixelRatio || 1;
+    const width = canvas.clientWidth || canvas.parentElement?.clientWidth || 320;
+    const height = Number(canvas.getAttribute("height")) || 260;
+    canvas.width = width * ratio;
+    canvas.height = height * ratio;
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.clearRect(0, 0, width, height);
 
-    summary.innerHTML = `
-      <div><span>최근 30일 순출고</span><strong>${escapeHtml(formatStock(sku, data.recentTotal))}</strong></div>
-      <div><span>출고 발생일</span><strong>${number(data.activeDays.length)}일</strong></div>
-      <div><span>발생일 평균</span><strong>${escapeHtml(formatStock(sku, recentAverage))}</strong></div>
-      <div><span>최대 출고일</span><strong>${data.maxDay ? `${escapeHtml(data.maxDay.label)} · ${escapeHtml(formatStock(sku, data.maxDay.value))}` : "-"}</strong></div>
-    `;
+    if (!hasData) return;
 
-    const recentLines = data.activeDays.slice(-8).reverse();
-    list.innerHTML = recentLines.length
-      ? recentLines.map((point) => `
-        <div class="sku-order-day-line">
-          <span>${escapeHtml(point.key)}</span>
-          <strong>${escapeHtml(formatStock(sku, point.value))}</strong>
-        </div>`).join("")
-      : `<div class="detail-empty">최근 30일 안에 이 품목으로 저장된 순출고 기록이 없습니다.</div>`;
+    const padding = { top: 18, right: 16, bottom: 42, left: 42 };
+    const chartW = Math.max(1, width - padding.left - padding.right);
+    const chartH = Math.max(1, height - padding.top - padding.bottom);
+    const maxValue = Math.max(...trend.dailyData.map((point) => point.units), 1);
+    const stepX = chartW / Math.max(1, trend.dailyData.length - 1);
 
-    empty.hidden = hasRecentData;
-    canvas.hidden = !hasRecentData;
-    if (hasRecentData) drawLineChart(canvas, data.points);
+    ctx.font = "12px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(148, 163, 184, 0.32)";
+    ctx.fillStyle = "#64748b";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+
+    [0, 0.5, 1].forEach((ratioLine) => {
+      const y = padding.top + chartH * (1 - ratioLine);
+      ctx.beginPath();
+      ctx.moveTo(padding.left, y);
+      ctx.lineTo(width - padding.right, y);
+      ctx.stroke();
+      const label = Math.round(maxValue * ratioLine).toLocaleString();
+      ctx.fillText(label, padding.left - 8, y);
+    });
+
+    ctx.beginPath();
+    trend.dailyData.forEach((point, idx) => {
+      const x = padding.left + idx * stepX;
+      const y = padding.top + chartH - (point.units / maxValue) * chartH;
+      if (idx === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = "#2563eb";
+    ctx.lineWidth = 2.2;
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(37, 99, 235, 0.18)";
+    trend.dailyData.forEach((point, idx) => {
+      if (!point.units) return;
+      const x = padding.left + idx * stepX;
+      const y = padding.top + chartH - (point.units / maxValue) * chartH;
+      const barH = padding.top + chartH - y;
+      ctx.fillRect(x - 3, y, 6, Math.max(2, barH));
+    });
+
+    ctx.fillStyle = "#1d4ed8";
+    trend.dailyData.forEach((point, idx) => {
+      if (!point.units) return;
+      const x = padding.left + idx * stepX;
+      const y = padding.top + chartH - (point.units / maxValue) * chartH;
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    ctx.fillStyle = "#64748b";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    const labelEvery = Math.max(1, Math.ceil(trend.dailyData.length / 6));
+    trend.dailyData.forEach((point, idx) => {
+      if (idx % labelEvery !== 0 && idx !== trend.dailyData.length - 1) return;
+      const x = padding.left + idx * stepX;
+      ctx.fillText(shortDateLabel(point.date), x, padding.top + chartH + 12);
+    });
+  } catch (error) {
+    console.warn("[inventory trend] render failed", error);
+    if (valueEl) valueEl.textContent = "데이터 확인 필요";
+    if (noteEl) noteEl.textContent = "출고 기록 데이터 구조를 확인해야 합니다.";
+    if (meta) meta.textContent = "출고 기록을 불러오지 못했습니다.";
+    if (empty) {
+      empty.hidden = false;
+      empty.textContent = "출고 기록을 불러오지 못했습니다.";
+    }
+    if (summary) summary.innerHTML = "";
   }
+}
 
-  function openInventoryItemDetail(sku) {
+function openInventoryItemDetail(sku) {
     const def = INVENTORY_DEFS[sku];
     const item = state.stock[sku];
     if (!def || !item) return;
@@ -4147,8 +4554,8 @@ function refreshActiveOrderAnalysisSummary() {
       <section class="sku-stockout-forecast-card empty" id="inventoryItemStockoutForecast">
         <div class="sku-stockout-forecast-main">
           <span>예상 소진일</span>
-          <strong>계산 중</strong>
-          <p>엑셀 주문 처리 기록을 기준으로 계산하고 있습니다.</p>
+          <strong id="inventoryItemStockoutValue">계산 중</strong>
+          <p id="inventoryItemStockoutNote">엑셀 주문 처리 기록을 기준으로 계산하고 있습니다.</p>
         </div>
       </section>
       <section class="sku-order-trend-card" id="inventoryItemOrderTrend">
@@ -4172,6 +4579,7 @@ function refreshActiveOrderAnalysisSummary() {
       </section>
     `;
     overlay.hidden = false;
+    renderInventoryItemOrderTrend();
     requestAnimationFrame(() => {
       overlay.classList.add("open");
       renderInventoryItemOrderTrend();
@@ -4773,6 +5181,25 @@ function refreshActiveOrderAnalysisSummary() {
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#039;");
+  }
+
+
+  function escapeAttr(value) {
+    return escapeHtml(value);
+  }
+
+  function parseHistoryTime(record) {
+    const source = record || {};
+    const raw = source.at || source.date || source.createdAt || source.created_at || source.timestamp || source.processedAt || source.processed_at || source.updatedAt || source.updated_at;
+    if (!raw) return null;
+    const parsed = raw instanceof Date ? raw : new Date(raw);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  function formatDateShort(value) {
+    const parsed = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(parsed.getTime())) return String(value ?? "");
+    return `${parsed.getMonth() + 1}/${parsed.getDate()}`;
   }
 
   function cssEscape(value) {

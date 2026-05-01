@@ -1,22 +1,62 @@
 :root {
-  color-scheme: dark;
-  --bg: #0d101c;
-  --panel: rgba(23, 27, 44, 0.92);
-  --panel-2: rgba(29, 35, 57, 0.92);
-  --line: rgba(255, 255, 255, 0.09);
-  --line-strong: rgba(255, 255, 255, 0.16);
-  --text: #f7f8ff;
-  --muted: #9ba5c4;
-  --soft: #cbd2ea;
-  --brand: #ff5e9e;
-  --brand-2: #8b5cf6;
-  --good: #7dd3a8;
-  --warn: #f8cf70;
-  --bad: #ff8d8d;
-  --shadow: 0 20px 60px rgba(0, 0, 0, 0.34);
+  color-scheme: light;
+
+  /* 2026-05-02: RE:BORN light color system */
+  --color-bg: #f6f7fb;
+  --color-bg-warm: #fff7f7;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f1f5f9;
+  --color-surface-tint: #fff5f5;
+  --color-text: #111827;
+  --color-text-strong: #020617;
+  --color-muted: #64748b;
+  --color-soft: #334155;
+  --color-border: rgba(15, 23, 42, 0.10);
+  --color-border-strong: rgba(15, 23, 42, 0.16);
+
+  --color-brand: #941b1d;
+  --color-brand-strong: #7f1d1d;
+  --color-brand-soft: rgba(148, 27, 29, 0.09);
+  --color-primary: #2563eb;
+  --color-primary-strong: #1d4ed8;
+  --color-primary-soft: rgba(37, 99, 235, 0.10);
+  --color-purple: #7c3aed;
+  --color-purple-soft: rgba(124, 58, 237, 0.10);
+  --color-success: #16a34a;
+  --color-success-strong: #15803d;
+  --color-success-soft: rgba(22, 163, 74, 0.10);
+  --color-danger: #dc2626;
+  --color-danger-strong: #b91c1c;
+  --color-danger-soft: rgba(220, 38, 38, 0.10);
+  --color-warning: #f59e0b;
+  --color-warning-strong: #b45309;
+  --color-warning-soft: rgba(245, 158, 11, 0.13);
+  --color-info: #0ea5e9;
+  --color-info-strong: #0369a1;
+  --color-info-soft: rgba(14, 165, 233, 0.10);
+
+  /* legacy aliases used by the existing app */
+  --bg: var(--color-bg);
+  --panel: rgba(255, 255, 255, 0.94);
+  --panel-2: #ffffff;
+  --line: var(--color-border);
+  --line-strong: var(--color-border-strong);
+  --text: var(--color-text);
+  --muted: var(--color-muted);
+  --soft: var(--color-soft);
+  --brand: var(--color-brand);
+  --brand-2: var(--color-purple);
+  --good: var(--color-success);
+  --warn: var(--color-warning);
+  --bad: var(--color-danger);
+  --accent: var(--color-purple);
+  --accent-2: var(--color-primary);
+  --shadow: 0 20px 60px rgba(15, 23, 42, 0.10);
+  --shadow-soft: 0 12px 34px rgba(15, 23, 42, 0.08);
   --radius: 24px;
   font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
+
 
 * { box-sizing: border-box; }
 html { min-height: 100%; background: var(--bg); }
@@ -7392,4 +7432,2257 @@ body.password-recovery-open {
   .password-recovery-actions {
     grid-template-columns: 1fr;
   }
+}
+
+/* 2026-05-02: professional light color refresh - CSS only, layout preserved */
+html {
+  color-scheme: light;
+  background: var(--color-bg);
+}
+
+body {
+  color: var(--color-text);
+  background:
+    radial-gradient(circle at 10% 0%, rgba(148, 27, 29, 0.08), transparent 30%),
+    radial-gradient(circle at 92% 3%, rgba(37, 99, 235, 0.08), transparent 30%),
+    radial-gradient(circle at 72% 32%, rgba(124, 58, 237, 0.06), transparent 26%),
+    linear-gradient(180deg, #fbfcff 0%, var(--color-bg) 48%, #f8fafc 100%);
+}
+
+body,
+.card,
+.summary-card,
+.home-brand-panel,
+.home-entry-card,
+.purchase-card,
+.purchase-date-section,
+.purchase-card-details,
+.purchase-detail-row,
+.sku-rank-panel,
+.sync-info-box,
+.backup-list li,
+.detail-line,
+.product-cost-row,
+.cost-editor-item,
+.return-adjust-list-item,
+.admin-action-log-list li,
+.order-chart-card,
+.sync-card {
+  color: var(--color-text);
+}
+
+.topbar {
+  background: rgba(248, 250, 252, 0.76);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.brand,
+.brand strong,
+h1,
+h2,
+.card h2,
+.summary-card strong,
+.metric-grid strong,
+.purchase-card-name strong,
+.purchase-card-amount strong,
+.sync-info-box strong,
+.detail-drawer h2,
+.home-entry-card strong,
+.sku-rank-panel strong,
+.purchase-batch-head strong,
+.move-header strong {
+  color: var(--color-text-strong);
+}
+
+.brand small,
+.lead,
+.card p,
+.card-title-row p,
+.field span,
+.summary-card span,
+.summary-card small,
+.metric-grid span,
+.purchase-card-name span,
+.purchase-card-amount span,
+.purchase-card-meta span,
+.purchase-detail-head span,
+.purchase-date-head span,
+.mini-summary,
+.backup-list,
+.detail-meta,
+.password-recovery-lead,
+.home-lead,
+.home-entry-card em,
+.sku-rank-panel-head span,
+.admin-auth-copy span,
+.form-help,
+.cost-model-note {
+  color: var(--color-muted);
+}
+
+.eyebrow {
+  color: var(--color-brand);
+}
+
+.card,
+.summary-card,
+.home-brand-panel,
+.home-entry-card,
+.table-wrap,
+.detail-drawer,
+.purchase-status-card,
+.inventory-card,
+.stock-move-card,
+.sync-card,
+.order-chart-card,
+.password-recovery-card {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  box-shadow: var(--shadow);
+}
+
+.card,
+.summary-card,
+.home-entry-card,
+.purchase-card,
+.metric-grid > div,
+.sync-info-box,
+.sku-rank-panel,
+.purchase-date-section,
+.purchase-card-details,
+.purchase-detail-row,
+.backup-list li,
+.move-row,
+.product-cost-card,
+.admin-auth-panel,
+.return-adjust-card {
+  border-color: var(--color-border);
+}
+
+.category-nav,
+.result-tabs,
+.chart-switch,
+.purchase-view-mode-control {
+  border-color: var(--color-border);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+
+.category-btn,
+.subtab,
+.chart-tab,
+.purchase-view-mode-control button {
+  color: var(--color-soft);
+  background: transparent;
+}
+
+.category-btn.active,
+.subtab.active,
+.chart-tab.active,
+.purchase-view-mode-control button.is-active,
+.purchase-view-mode-control button.active {
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-purple));
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.18);
+}
+
+input,
+select,
+textarea,
+.search-input,
+.admin-auth-form input,
+.purchase-draft-row input,
+.purchase-draft-row select,
+.purchase-batch-footer input,
+.purchase-row-admin input,
+.product-cost-search-wrap input,
+.sync-select-label select {
+  color: var(--color-text);
+  background: #ffffff;
+  border-color: var(--color-border-strong);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #94a3b8;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+.admin-auth-form input:focus {
+  border-color: rgba(37, 99, 235, 0.58);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+select option {
+  color: var(--color-text);
+  background: #ffffff;
+}
+
+input[type="date"],
+.purchase-row-admin input[type="date"],
+.purchase-batch-footer input[type="date"] {
+  color-scheme: light;
+}
+
+.quick-boxes button,
+.ghost-btn,
+.import-label,
+.secondary-btn,
+.btn.ghost,
+.btn.secondary,
+.file-trigger,
+.chart-tab,
+.subtab {
+  color: var(--color-text);
+  background: #ffffff;
+  border-color: var(--color-border-strong);
+  box-shadow: var(--shadow-soft);
+}
+
+.quick-boxes button:hover,
+.ghost-btn:hover,
+.import-label:hover,
+.secondary-btn:hover,
+.btn.ghost:hover,
+.file-trigger:hover,
+.subtab:hover,
+.chart-tab:hover {
+  background: var(--color-surface-soft);
+  border-color: rgba(37, 99, 235, 0.26);
+}
+
+.primary-btn,
+.btn.primary,
+.sync-now-btn {
+  color: #ffffff;
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-purple));
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.22);
+}
+
+.danger-btn,
+.btn.danger,
+.purchase-remove-draft {
+  color: var(--color-danger-strong);
+  border-color: rgba(220, 38, 38, 0.22);
+  background: var(--color-danger-soft);
+}
+
+.danger-btn:hover,
+.btn.danger:hover,
+.purchase-remove-draft:hover {
+  background: rgba(220, 38, 38, 0.16);
+}
+
+.status-badge,
+.sync-state-pill,
+.mini-stat,
+.sync-badge,
+.purchase-summary-compact,
+.purchase-card-meta span {
+  color: var(--color-soft);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-soft);
+}
+
+.status-badge.good,
+.status-badge.success,
+.sync-state-pill.is-ok {
+  color: var(--color-success-strong);
+  background: var(--color-success-soft);
+  border-color: rgba(22, 163, 74, 0.22);
+}
+
+.status-badge.warn,
+.sync-state-pill.is-warn,
+.notice.warning,
+.excel-format-warning,
+#excelFormatWarning {
+  color: var(--color-warning-strong);
+  background: var(--color-warning-soft);
+  border-color: rgba(245, 158, 11, 0.24);
+}
+
+.status-badge.bad,
+.status-badge.danger,
+.sync-state-pill.is-error {
+  color: var(--color-danger-strong);
+  background: var(--color-danger-soft);
+  border-color: rgba(220, 38, 38, 0.24);
+}
+
+.result-highlight {
+  border-color: rgba(37, 99, 235, 0.18);
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.10), rgba(124, 58, 237, 0.09)),
+    #ffffff;
+}
+
+.result-highlight span,
+.result-highlight em {
+  color: var(--color-muted);
+}
+
+.result-highlight strong {
+  color: var(--color-text-strong);
+}
+
+.metric-grid > div,
+.summary-card,
+.sync-info-box,
+.sku-rank-panel,
+.purchase-card,
+.purchase-date-section,
+.purchase-card-details,
+.purchase-detail-row,
+.backup-list li,
+.move-row,
+.purchase-admin-panel,
+.purchase-draft-row,
+.purchase-batch-footer,
+.return-adjust-form,
+.move-summary,
+.notice,
+.mini-summary,
+.product-cost-list > *,
+.admin-action-log-list li {
+  background: #ffffff;
+  border-color: var(--color-border);
+}
+
+.summary-card.low-stock-summary,
+.summary-card.water,
+.notice.warning,
+.move-summary.warn,
+#excelFormatWarning {
+  background: var(--color-warning-soft);
+  border-color: rgba(245, 158, 11, 0.22);
+}
+
+.notice:not(.warning),
+.move-summary {
+  background: var(--color-info-soft);
+  border-color: rgba(14, 165, 233, 0.20);
+  color: var(--color-info-strong);
+}
+
+.table-wrap {
+  background: #ffffff;
+}
+
+table {
+  color: var(--color-text);
+}
+
+th {
+  color: var(--color-soft);
+  background: #f8fafc;
+  border-bottom-color: var(--color-border);
+}
+
+td {
+  color: var(--color-text);
+  border-bottom-color: var(--color-border);
+}
+
+tbody tr:hover {
+  background: rgba(37, 99, 235, 0.045);
+}
+
+.positive,
+.admin-auth-copy span[data-tone="ok"],
+.password-recovery-status.is-success {
+  color: var(--color-success-strong);
+}
+
+.negative,
+.admin-auth-copy span[data-tone="bad"],
+.password-recovery-status.is-danger {
+  color: var(--color-danger-strong);
+}
+
+.admin-auth-copy span[data-tone="warn"],
+.password-recovery-status.is-warn {
+  color: var(--color-warning-strong);
+}
+
+#page-margin .margin-profit-mini {
+  color: var(--color-text);
+  border-color: var(--color-border);
+  background: #ffffff;
+  box-shadow: var(--shadow-soft);
+}
+
+#page-margin .margin-profit-mini span {
+  color: var(--color-muted);
+}
+
+#page-margin .margin-profit-mini strong {
+  color: var(--color-text-strong);
+}
+
+#page-margin .margin-profit-mini.profit-positive {
+  border-color: rgba(22, 163, 74, 0.24);
+  background: linear-gradient(135deg, var(--color-success-soft), #ffffff);
+}
+
+#page-margin .margin-profit-mini.profit-positive strong {
+  color: var(--color-success-strong);
+}
+
+#page-margin .margin-profit-mini.profit-negative {
+  border-color: rgba(220, 38, 38, 0.24);
+  background: linear-gradient(135deg, var(--color-danger-soft), #ffffff);
+}
+
+#page-margin .margin-profit-mini.profit-negative strong {
+  color: var(--color-danger-strong);
+}
+
+#page-margin .margin-profit-mini.profit-zero {
+  border-color: var(--color-border);
+  background: #ffffff;
+}
+
+#page-margin .margin-profit-mini.profit-zero strong {
+  color: var(--color-soft);
+}
+
+#page-margin .form-grid .field input,
+#page-margin .form-grid .field select {
+  color: var(--color-text) !important;
+  background: #ffffff !important;
+  border-color: var(--color-border-strong) !important;
+}
+
+#page-margin .quick-boxes button {
+  color: var(--color-soft);
+  background: #ffffff;
+  border-color: var(--color-border);
+}
+
+#page-margin .quick-boxes button:hover {
+  color: var(--color-primary-strong);
+  background: var(--color-primary-soft);
+  border-color: rgba(37, 99, 235, 0.24);
+}
+
+.inbound-badge {
+  color: var(--color-success-strong);
+  background: var(--color-success-soft);
+  border-color: rgba(22, 163, 74, 0.24);
+}
+
+.icon-btn,
+.detail-close,
+.password-recovery-close {
+  color: var(--color-text);
+  background: #ffffff;
+  border-color: var(--color-border);
+}
+
+.icon-btn:hover,
+.detail-close:hover {
+  color: var(--color-brand-strong);
+  background: var(--color-brand-soft);
+  border-color: rgba(148, 27, 29, 0.24);
+}
+
+.detail-overlay,
+.password-recovery-overlay {
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.detail-drawer {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(148, 27, 29, 0.08), transparent 35%),
+    #ffffff;
+}
+
+.detail-line {
+  background: #ffffff;
+}
+
+.history-detail-trigger {
+  color: var(--color-text-strong);
+}
+
+.history-detail-trigger::after {
+  color: var(--color-purple);
+  background: var(--color-purple-soft);
+  border-color: rgba(124, 58, 237, 0.20);
+}
+
+.purchase-total-box {
+  color: var(--color-text);
+  background: linear-gradient(135deg, var(--color-primary-soft), #ffffff);
+  border-color: rgba(37, 99, 235, 0.18);
+}
+
+.purchase-total-box span,
+.purchase-batch-head span,
+.purchase-draft-row label span,
+.purchase-batch-footer label span,
+.purchase-row-admin label span {
+  color: var(--color-muted);
+}
+
+.purchase-total-box strong,
+.purchase-card-amount strong,
+.purchase-summary-compact strong,
+.purchase-detail-head span:nth-child(3) {
+  color: var(--color-primary-strong);
+}
+
+.purchase-card-meta span {
+  background: var(--color-surface-soft);
+}
+
+.purchase-admin-panel,
+.purchase-draft-row,
+.purchase-batch-footer {
+  background: #ffffff;
+  border-color: var(--color-border);
+}
+
+.sync-card .admin-auth-panel,
+.admin-auth-panel {
+  background: var(--color-surface-soft);
+  border-color: var(--color-border);
+}
+
+.sync-dot,
+.sync-dot.muted {
+  background: #94a3b8;
+}
+
+.sync-dot.ok,
+.sync-dot.good {
+  background: var(--color-success);
+}
+
+.sync-dot.warn {
+  background: var(--color-warning);
+}
+
+.sync-dot.bad,
+.sync-dot.error {
+  background: var(--color-danger);
+}
+
+.file-trigger,
+.excel-file-trigger {
+  background: linear-gradient(135deg, var(--color-info-soft), #ffffff);
+  border-color: rgba(14, 165, 233, 0.20);
+}
+
+.excel-icon,
+.backup-import-icon {
+  color: var(--color-info-strong);
+}
+
+.home-hero,
+.home-brand-panel {
+  color: var(--color-text);
+}
+
+.home-entry-card {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.96));
+  border-color: var(--color-border);
+}
+
+.home-entry-kicker {
+  color: var(--color-primary-strong);
+}
+
+.app-launch-splash {
+  background:
+    radial-gradient(circle at 50% 20%, rgba(148, 27, 29, 0.16), transparent 34%),
+    linear-gradient(180deg, #ffffff, #f8fafc);
+}
+
+.app-launch-splash-card {
+  color: var(--color-text-strong);
+  background: rgba(255, 255, 255, 0.90);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow);
+}
+
+.password-recovery-card,
+.password-recovery-status {
+  color: var(--color-text);
+}
+
+.password-recovery-card h2 {
+  color: var(--color-text-strong);
+}
+
+.password-recovery-status {
+  background: var(--color-surface-soft);
+  color: var(--color-soft);
+}
+
+.password-recovery-close {
+  color: var(--color-brand-strong);
+  background: var(--color-brand-soft);
+}
+
+.brand-mark,
+.home-brand-mark,
+.password-recovery-brand {
+  background: var(--color-brand);
+  box-shadow: 0 12px 28px rgba(148, 27, 29, 0.20);
+}
+
+.admin-auth-form button,
+#adminLogin,
+#retrySupabaseSave {
+  color: #ffffff;
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--color-brand), var(--color-purple));
+}
+
+#adminLogout {
+  color: var(--color-soft);
+  background: #ffffff;
+  border-color: var(--color-border-strong);
+}
+
+.low-stock,
+.needs-check,
+.warning-text {
+  color: var(--color-warning-strong);
+}
+
+.error-text,
+.danger-text {
+  color: var(--color-danger-strong);
+}
+
+.success-text,
+.ok-text {
+  color: var(--color-success-strong);
+}
+
+@media (max-width: 720px) {
+  .topbar {
+    background: rgba(248, 250, 252, 0.88);
+  }
+
+  #page-wms .purchase-status-card,
+  #page-wms .purchase-total-box,
+  #page-wms .purchase-date-section,
+  #page-wms .purchase-card {
+    background: #ffffff !important;
+    border-color: var(--color-border) !important;
+  }
+}
+
+/* 2026-05-02: final contrast guards for older dark-mode overrides */
+:where(input, select, textarea):focus,
+.product-picker-search:focus {
+  background: #ffffff !important;
+  color: var(--color-text) !important;
+  border-color: rgba(37, 99, 235, 0.58) !important;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12) !important;
+  outline: none !important;
+}
+
+:where(input, select, textarea)::placeholder {
+  color: #94a3b8 !important;
+}
+
+select option {
+  color: var(--color-text) !important;
+  background: #ffffff !important;
+}
+
+.product-picker-trigger,
+.product-picker-menu,
+.product-picker-option,
+.product-picker-search {
+  color: var(--color-text) !important;
+  background: #ffffff !important;
+  border-color: var(--color-border) !important;
+  box-shadow: var(--shadow-soft) !important;
+}
+
+.product-picker-trigger:hover,
+.product-picker-option:hover,
+.product-picker-option.active {
+  color: var(--color-primary-strong) !important;
+  background: var(--color-primary-soft) !important;
+  border-color: rgba(37, 99, 235, 0.24) !important;
+  box-shadow: inset 3px 0 0 rgba(37, 99, 235, 0.22), var(--shadow-soft) !important;
+}
+
+.product-picker-trigger small,
+.product-picker-option span,
+.picker-empty,
+.excel-file-copy small,
+.muted-small,
+.inventory-detail-line span,
+.sku-stockout-forecast-main span,
+.sku-stockout-forecast-metrics span,
+.sku-stockout-forecast-main p,
+.sku-order-trend-meta,
+.sku-order-trend-summary span,
+.sku-order-trend-recent > span,
+.sku-order-day-line span {
+  color: var(--color-muted) !important;
+}
+
+.quick-boxes button:hover,
+.ghost-btn:hover,
+.import-label:hover,
+.card-mini:hover,
+.nav-btn:hover,
+.tab-btn:hover {
+  background: var(--color-primary-soft) !important;
+  color: var(--color-primary-strong) !important;
+  border-color: rgba(37, 99, 235, 0.26) !important;
+  box-shadow: var(--shadow-soft), inset 3px 0 0 rgba(37, 99, 235, 0.20) !important;
+}
+
+.primary-btn,
+.btn.primary {
+  color: #ffffff !important;
+}
+
+.asset-loss strong,
+.negative,
+.return-adjust-message.is-danger {
+  color: var(--color-danger-strong) !important;
+}
+
+.inventory-detail-line,
+.sku-stockout-forecast-card,
+.sku-stockout-forecast-metrics > div,
+.sku-order-trend-card,
+.sku-order-chart-stage,
+.sku-order-trend-summary > div,
+.sku-order-day-line {
+  background: #ffffff !important;
+  border-color: var(--color-border) !important;
+}
+
+.inventory-detail-line strong,
+.sku-stockout-forecast-main strong,
+.sku-stockout-forecast-metrics b,
+.sku-order-trend-head strong,
+.sku-order-trend-summary strong,
+.sku-order-day-line strong {
+  color: var(--color-text-strong) !important;
+}
+
+.sku-stockout-forecast-card.danger {
+  background: var(--color-danger-soft) !important;
+  border-color: rgba(220, 38, 38, 0.22) !important;
+}
+
+.sku-stockout-forecast-card.empty {
+  background: var(--color-surface-soft) !important;
+  border-color: var(--color-border) !important;
+}
+
+.sku-order-trend-head > span {
+  color: var(--color-purple) !important;
+  background: var(--color-purple-soft) !important;
+  border-color: rgba(124, 58, 237, 0.22) !important;
+}
+
+.return-adjust-title-row {
+  border-bottom-color: var(--color-border) !important;
+}
+
+#returnAdjustmentSummary {
+  color: var(--color-soft) !important;
+  background: var(--color-surface-soft) !important;
+  border-color: var(--color-border) !important;
+}
+
+.return-adjust-form {
+  background: #ffffff !important;
+  border-color: var(--color-border) !important;
+  box-shadow: var(--shadow-soft) !important;
+}
+
+.return-adjust-form::before {
+  color: var(--color-muted) !important;
+  background: #ffffff !important;
+  border-color: var(--color-border) !important;
+}
+
+.return-adjust-form label,
+.return-adjust-form label span {
+  color: var(--color-muted) !important;
+}
+
+/* 2026-05-02: brand harmony refinement - UI only, layout preserved */
+:root {
+  --color-border: rgba(15, 23, 42, 0.14);
+  --color-border-strong: rgba(15, 23, 42, 0.20);
+  --color-brand-ink: #6f1719;
+  --color-brand-line: rgba(148, 27, 29, 0.22);
+  --color-brand-wash: rgba(148, 27, 29, 0.055);
+  --color-card-edge: rgba(15, 23, 42, 0.13);
+  --shadow: 0 18px 50px rgba(15, 23, 42, 0.09);
+  --shadow-soft: 0 10px 26px rgba(15, 23, 42, 0.075);
+}
+
+body {
+  background:
+    radial-gradient(circle at 10% 0%, rgba(148, 27, 29, 0.065), transparent 30%),
+    radial-gradient(circle at 92% 4%, rgba(37, 99, 235, 0.065), transparent 30%),
+    radial-gradient(circle at 70% 34%, rgba(124, 58, 237, 0.042), transparent 28%),
+    linear-gradient(180deg, #fcfdff 0%, #f6f7fb 46%, #f8fafc 100%) !important;
+}
+
+.card,
+.summary-card,
+.metric-grid > div,
+.sync-info-box,
+.notice,
+.mini-summary,
+.product-cost-list > *,
+.purchase-card,
+.purchase-date-section,
+.purchase-card-details,
+.purchase-detail-row,
+.admin-action-log-list li,
+.move-row,
+.backup-list li,
+.return-adjust-form,
+.detail-line,
+.product-picker-trigger,
+.product-picker-menu,
+.product-picker-option,
+.product-picker-search,
+#page-margin .product-picker-input,
+#page-margin .product-picker-cost-hint {
+  border-color: var(--color-card-edge) !important;
+}
+
+.card,
+.summary-card,
+.metric-grid > div,
+.purchase-card,
+.purchase-date-section,
+.purchase-card-details,
+.purchase-detail-row,
+.sku-rank-panel,
+.sku-rank-row,
+.product-cost-list > *,
+.notice,
+.sync-info-box,
+.move-row,
+.backup-list li,
+.return-adjust-form {
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.055) !important;
+}
+
+/* Home: lighter, less purple, more RE:BORN identity */
+.home-hero {
+  border-color: rgba(148, 27, 29, 0.16) !important;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(148, 27, 29, 0.092), transparent 36%),
+    radial-gradient(circle at 92% 74%, rgba(37, 99, 235, 0.075), transparent 34%),
+    radial-gradient(circle at 8% 82%, rgba(124, 58, 237, 0.048), transparent 30%),
+    linear-gradient(160deg, #ffffff 0%, #fbfcff 54%, #f6f7fb 100%) !important;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.105) !important;
+}
+
+.home-hero::before {
+  border-color: rgba(148, 27, 29, 0.11) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.88);
+}
+
+.home-ambient-one {
+  background: rgba(148, 27, 29, 0.105) !important;
+  opacity: 0.32 !important;
+}
+
+.home-ambient-two {
+  background: rgba(37, 99, 235, 0.075) !important;
+  opacity: 0.26 !important;
+}
+
+.home-brand-panel {
+  padding: clamp(22px, 4vw, 38px) clamp(18px, 4vw, 42px);
+  border: 1px solid rgba(148, 27, 29, 0.13);
+  border-radius: 32px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.76)),
+    radial-gradient(circle at 50% 0%, rgba(148, 27, 29, 0.07), transparent 58%);
+  box-shadow: 0 16px 44px rgba(15, 23, 42, 0.07);
+}
+
+.home-brand-panel::before {
+  content: "";
+  width: 54px;
+  height: 3px;
+  margin-bottom: 18px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(148, 27, 29, 0.72), rgba(37, 99, 235, 0.38), transparent);
+}
+
+.home-brand-mark,
+.brand-mark {
+  padding: 6px !important;
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.98), rgba(255,247,247,0.96)) !important;
+  border: 1px solid rgba(148, 27, 29, 0.18) !important;
+  box-shadow: 0 14px 34px rgba(148, 27, 29, 0.16), 0 5px 14px rgba(15, 23, 42, 0.06) !important;
+}
+
+.home-brand-mark img,
+.brand-mark .brand-logo-img {
+  border-radius: 20px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.28);
+}
+
+.home-brand-panel .eyebrow {
+  color: var(--color-brand-ink) !important;
+  background: rgba(148, 27, 29, 0.065);
+  border: 1px solid rgba(148, 27, 29, 0.12);
+  border-radius: 999px;
+  padding: 7px 11px;
+  letter-spacing: 0.14em;
+}
+
+.home-brand-panel h1 {
+  color: var(--color-text-strong) !important;
+  text-shadow: none !important;
+}
+
+.home-lead {
+  color: #475569 !important;
+}
+
+.home-entry-card {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(15, 23, 42, 0.135) !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.97)) !important;
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.075) !important;
+}
+
+.home-entry-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: linear-gradient(180deg, rgba(148, 27, 29, 0.78), rgba(37, 99, 235, 0.42));
+  opacity: 0.86;
+}
+
+.home-entry-card:hover,
+.home-entry-card:focus-visible {
+  border-color: rgba(148, 27, 29, 0.24) !important;
+  background: #ffffff !important;
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.095), 0 0 0 4px rgba(148, 27, 29, 0.045) !important;
+}
+
+.home-entry-kicker {
+  color: var(--color-brand-ink) !important;
+  background: rgba(148, 27, 29, 0.075) !important;
+  border: 1px solid rgba(148, 27, 29, 0.12);
+}
+
+.home-entry-card:nth-child(2) .home-entry-kicker {
+  color: var(--color-primary-strong) !important;
+  background: rgba(37, 99, 235, 0.075) !important;
+  border-color: rgba(37, 99, 235, 0.14);
+}
+
+.home-entry-card strong {
+  color: var(--color-text-strong) !important;
+}
+
+.home-entry-card em {
+  color: #475569 !important;
+}
+
+/* Margin product guide: keep it auxiliary but readable */
+#page-margin .product-picker-input {
+  background: #ffffff !important;
+  color: var(--color-text-strong) !important;
+  border-color: var(--color-border-strong) !important;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.055) !important;
+}
+
+#page-margin .product-picker-input:hover {
+  background: #ffffff !important;
+  border-color: rgba(148, 27, 29, 0.24) !important;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.075), inset 3px 0 0 rgba(148, 27, 29, 0.16) !important;
+}
+
+#page-margin .product-picker-input:focus {
+  background: #ffffff !important;
+  color: var(--color-text-strong) !important;
+  border-color: rgba(148, 27, 29, 0.48) !important;
+  box-shadow: 0 0 0 4px rgba(148, 27, 29, 0.10), 0 12px 28px rgba(15, 23, 42, 0.085) !important;
+}
+
+#page-margin .product-picker-input::placeholder {
+  color: #64748b !important;
+}
+
+#page-margin .product-picker-cost-hint {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 0;
+  margin-top: 1px;
+  padding: 5px 9px;
+  border: 1px solid rgba(37, 99, 235, 0.15);
+  border-radius: 999px;
+  color: #334155 !important;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.065), rgba(255,255,255,0.92));
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+#page-margin .product-search-picker.has-selected-product .product-picker-cost-hint {
+  color: var(--color-success-strong) !important;
+  background: linear-gradient(135deg, var(--color-success-soft), #ffffff);
+  border-color: rgba(22, 163, 74, 0.20) !important;
+}
+
+/* WMS order ranking: remove gray block feeling, clarify structure */
+.sku-rank-panel {
+  background: linear-gradient(180deg, #ffffff, #fbfcff) !important;
+  border-color: rgba(15, 23, 42, 0.14) !important;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.065) !important;
+}
+
+.sku-rank-panel-head {
+  border-bottom-color: rgba(15, 23, 42, 0.10) !important;
+}
+
+.sku-rank-panel-head strong {
+  color: var(--color-text-strong) !important;
+}
+
+.sku-rank-panel-head span {
+  color: #64748b !important;
+}
+
+.sku-rank-row {
+  border: 1px solid rgba(15, 23, 42, 0.12) !important;
+  background: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.045) !important;
+}
+
+.sku-rank-row.top {
+  background: linear-gradient(135deg, rgba(148, 27, 29, 0.035), #ffffff 46%) !important;
+  border-color: rgba(148, 27, 29, 0.14) !important;
+}
+
+.sku-rank-row.low {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.045), #ffffff 46%) !important;
+  border-color: rgba(245, 158, 11, 0.18) !important;
+}
+
+.sku-rank-no {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, var(--color-brand), var(--color-primary)) !important;
+  box-shadow: 0 8px 18px rgba(148, 27, 29, 0.14) !important;
+}
+
+.sku-rank-row.low .sku-rank-no {
+  background: linear-gradient(135deg, var(--color-warning), #fb923c) !important;
+  box-shadow: 0 8px 18px rgba(245, 158, 11, 0.15) !important;
+}
+
+.sku-rank-main > strong {
+  color: var(--color-text-strong) !important;
+}
+
+.sku-rank-counts span {
+  background: #ffffff !important;
+  border: 1px solid rgba(15, 23, 42, 0.105) !important;
+  color: #475569 !important;
+}
+
+.sku-rank-counts b {
+  color: var(--color-text-strong) !important;
+}
+
+.sku-rank-counts small {
+  color: #64748b !important;
+}
+
+.sku-rank-empty {
+  background: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+  color: #64748b !important;
+}
+
+/* Edge contrast: visible, not heavy */
+.field,
+.admin-auth-panel,
+.password-recovery-card,
+.detail-drawer,
+.table-wrap,
+.inventory-card,
+.purchase-admin-panel,
+.purchase-draft-row,
+.purchase-batch-footer,
+.move-summary,
+.return-adjust-form,
+.product-cost-card {
+  border-color: var(--color-card-edge) !important;
+}
+
+input,
+select,
+textarea {
+  border-color: var(--color-border-strong) !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: rgba(148, 27, 29, 0.42) !important;
+  box-shadow: 0 0 0 4px rgba(148, 27, 29, 0.09) !important;
+}
+
+@media (max-width: 720px) {
+  .home-brand-panel {
+    border-radius: 26px;
+    padding: 22px 16px;
+  }
+
+  .home-entry-card {
+    border-radius: 22px;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.065) !important;
+  }
+
+  #page-margin .product-picker-cost-hint {
+    font-size: 11.5px;
+    padding: 5px 8px;
+  }
+
+  .sku-rank-row {
+    box-shadow: 0 7px 16px rgba(15, 23, 42, 0.045) !important;
+  }
+}
+
+/* =========================================================
+   v23 Admin-login safety + RE:BORN visual cleanup
+   목적: 계산/재고/발주 로직은 건드리지 않고, 관리자 로그인 접근성과
+   상단 브랜드/재고 품목명 가독성만 보정합니다.
+   ========================================================= */
+
+/* Top brand: remove the awkward white framed logo box in the sticky header. */
+.topbar .brand {
+  padding: 6px 8px 6px 4px !important;
+  border: 0 !important;
+  border-radius: 18px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.topbar .brand:hover,
+.topbar .brand:focus-visible {
+  background: rgba(255, 255, 255, 0.72) !important;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.055) !important;
+}
+
+.topbar .brand-mark {
+  width: 40px !important;
+  height: 40px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+.topbar .brand-mark .brand-logo-img {
+  width: 40px !important;
+  height: 40px !important;
+  display: block !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 18px rgba(148, 27, 29, 0.16) !important;
+}
+
+.topbar .brand-title strong {
+  color: var(--color-text-strong) !important;
+  font-weight: 900 !important;
+}
+
+.topbar .brand-title small {
+  color: #64748b !important;
+}
+
+/* Home logo panel: keep the brand mood, but reduce the excessive framed-card feel. */
+.home-brand-panel {
+  border-color: rgba(148, 27, 29, 0.10) !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.94), rgba(255,255,255,0.82)),
+    radial-gradient(circle at 50% 0%, rgba(148, 27, 29, 0.045), transparent 64%) !important;
+  box-shadow: 0 14px 38px rgba(15, 23, 42, 0.06) !important;
+}
+
+.home-brand-mark {
+  background: transparent !important;
+  border-color: rgba(148, 27, 29, 0.10) !important;
+  box-shadow: 0 10px 24px rgba(148, 27, 29, 0.10) !important;
+}
+
+/* WMS header admin access: a small explicit login entry, without exposing admin controls. */
+.wms-head-actions {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.admin-reveal-btn {
+  min-height: 36px !important;
+  padding: 0 12px !important;
+  border-radius: 999px !important;
+  color: var(--color-brand-strong) !important;
+  background: rgba(255, 255, 255, 0.84) !important;
+  border: 1px solid rgba(148, 27, 29, 0.18) !important;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.055) !important;
+  font-size: 12px !important;
+  font-weight: 850 !important;
+}
+
+.admin-reveal-btn:hover,
+.admin-reveal-btn:focus-visible {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, var(--color-brand), var(--color-brand-strong)) !important;
+  border-color: rgba(148, 27, 29, 0.30) !important;
+  box-shadow: 0 10px 26px rgba(148, 27, 29, 0.16) !important;
+}
+
+body.admin-active .admin-reveal-btn {
+  color: var(--color-success-strong) !important;
+  background: var(--color-success-soft) !important;
+  border-color: rgba(22, 163, 74, 0.22) !important;
+}
+
+/* Admin login panel: light-theme readable version. */
+.admin-auth-panel {
+  border-color: rgba(15, 23, 42, 0.14) !important;
+  background: linear-gradient(180deg, #ffffff, #f8fafc) !important;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.065) !important;
+}
+
+.admin-auth-copy strong {
+  color: var(--color-text-strong) !important;
+}
+
+.admin-auth-copy span {
+  color: #475569 !important;
+}
+
+.admin-auth-copy span[data-tone="ok"],
+.admin-auth-copy span[data-tone="success"] {
+  color: var(--color-success-strong) !important;
+}
+
+.admin-auth-copy span[data-tone="warn"] {
+  color: var(--color-warning-strong) !important;
+}
+
+.admin-auth-copy span[data-tone="bad"],
+.admin-auth-copy span[data-tone="danger"] {
+  color: var(--color-danger-strong) !important;
+}
+
+.admin-auth-form input {
+  border-color: rgba(15, 23, 42, 0.16) !important;
+  background: #ffffff !important;
+  color: var(--color-text-strong) !important;
+}
+
+.admin-auth-form input::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Inventory readability: item names are primary data, never muted gray. */
+#page-wms .inventory-card,
+#page-wms .inventory-card .table-wrap {
+  border-color: rgba(15, 23, 42, 0.14) !important;
+  background: #ffffff !important;
+}
+
+#page-wms .inventory-card tbody tr,
+#page-wms .inventory-click-row {
+  color: var(--color-text) !important;
+  background: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.13) !important;
+}
+
+#page-wms .inventory-card tbody tr:hover,
+#page-wms .inventory-click-row:hover {
+  background: linear-gradient(135deg, rgba(148, 27, 29, 0.025), #ffffff) !important;
+  border-color: rgba(148, 27, 29, 0.18) !important;
+}
+
+#page-wms .inventory-card td {
+  color: var(--color-text) !important;
+}
+
+#page-wms .inventory-card td[data-label="품목"] strong {
+  color: var(--color-text-strong) !important;
+  font-weight: 850 !important;
+}
+
+#page-wms .inventory-card td[data-label="품목"] .muted,
+#page-wms .inventory-card td[data-label="품목"] span {
+  color: #64748b !important;
+}
+
+#page-wms .stock-status-top strong,
+#page-wms .stock-display,
+#page-wms .safety-cell strong {
+  color: var(--color-text-strong) !important;
+}
+
+#page-wms .stock-status-top span,
+#page-wms .safety-cell span {
+  color: #64748b !important;
+}
+
+@media (max-width: 720px) {
+  .topbar .brand {
+    padding-left: 0 !important;
+  }
+
+  .topbar .brand-mark,
+  .topbar .brand-mark .brand-logo-img {
+    width: 38px !important;
+    height: 38px !important;
+  }
+
+  .wms-head-actions {
+    margin-top: 10px;
+  }
+
+  .admin-reveal-btn {
+    min-height: 34px !important;
+    padding: 0 11px !important;
+    font-size: 11.5px !important;
+  }
+
+  #page-wms .inventory-card tbody tr,
+  #page-wms .inventory-click-row {
+    background: #ffffff !important;
+    border-color: rgba(15, 23, 42, 0.14) !important;
+  }
+
+  #page-wms .inventory-card td[data-label="품목"] strong {
+    color: #020617 !important;
+    font-weight: 850 !important;
+  }
+}
+
+/* =========================================================
+   2026-05-02: logo white-box removal - CSS only
+   목적: 스플래시/상단 브랜드 주변의 흰 배경 박스만 제거하고,
+   계산·재고·발주·관리자/Supabase 로직은 변경하지 않습니다.
+   ========================================================= */
+
+/* Splash: remove the white card container around the logo. */
+.app-launch-splash-card,
+.app-launch-splash-card:hover,
+.app-launch-splash-card:focus,
+.app-launch-splash-card:focus-visible {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+  padding: 0 !important;
+  min-width: 0 !important;
+  width: auto !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.app-launch-splash-card img {
+  background: transparent !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.26) !important;
+}
+
+/* Top header: remove the long white lettering bar / framed brand pill. */
+.topbar,
+body.route-home .topbar {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.topbar .brand,
+body.route-home .topbar .brand,
+.topbar .brand:hover,
+.topbar .brand:active,
+.topbar .brand:focus,
+.topbar .brand:focus-visible,
+body.route-home .topbar .brand:hover,
+body.route-home .topbar .brand:focus,
+body.route-home .topbar .brand:focus-visible {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+  min-width: 0 !important;
+  width: auto !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.topbar .brand-title,
+.topbar .brand-title strong,
+.topbar .brand-title small {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+}
+
+/* Logo image remains visible, but no extra white wrapper is drawn around it. */
+.topbar .brand-mark,
+body.route-home .topbar .brand-mark,
+.topbar .brand-mark:hover,
+.topbar .brand-mark:focus,
+.topbar .brand-mark:focus-visible {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+}
+
+.topbar .brand-mark .brand-logo-img {
+  background: transparent !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: 0 6px 16px rgba(148, 27, 29, 0.12) !important;
+}
+
+/* Ctrl+A / focus states should not reveal an empty decorative white box. */
+.brand::before,
+.brand::after,
+.brand-mark::before,
+.brand-mark::after,
+.brand-title::before,
+.brand-title::after,
+.app-launch-splash-card::before,
+.app-launch-splash-card::after {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+}
+
+@media (max-width: 720px) {
+  .topbar,
+  body.route-home .topbar {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .topbar .brand,
+  body.route-home .topbar .brand {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+}
+
+/* =========================================================
+   2026-05-02: admin login panel visibility recovery - CSS only
+   원인: 일반 모드에서 동기화 카드가 접힌 상태(localStorage collapse)로 남아 있으면
+   관리자 로그인 버튼을 눌러도 sync-login-only 카드 안의 collapsible-body가 max-height:0이 되어
+   흰 빈 박스처럼 보일 수 있습니다. 기능 로직은 변경하지 않고 로그인 UI만 보이게 보정합니다.
+   ========================================================= */
+
+/* When the sync card is used only as the admin-login container, never let a saved collapsed state hide the form. */
+#syncCard.sync-login-only,
+body.admin-login-open #syncCard.sync-login-only {
+  display: block !important;
+  border-color: rgba(15, 23, 42, 0.14) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#syncCard.sync-login-only .collapsible-body,
+#syncCard.sync-login-only.collapsed .collapsible-body,
+body.admin-login-open #syncCard.sync-login-only .collapsible-body,
+body.admin-login-open #syncCard.sync-login-only.collapsed .collapsible-body {
+  display: block !important;
+  max-height: none !important;
+  height: auto !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: none !important;
+  pointer-events: auto !important;
+  margin: 0 !important;
+  overflow: visible !important;
+}
+
+/* In login-only mode, keep the panel focused on the login form instead of showing an empty card shell. */
+#syncCard.sync-login-only .sync-title-row,
+#syncCard.sync-login-only .sync-grid,
+#syncCard.sync-login-only .sync-actions,
+#syncCard.sync-login-only .collapse-toggle {
+  display: none !important;
+}
+
+#syncCard.sync-login-only #adminAuthPanel,
+body.admin-login-open #syncCard #adminAuthPanel {
+  display: grid !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  margin: 0 !important;
+  padding: 14px !important;
+  border: 1px solid rgba(15, 23, 42, 0.16) !important;
+  border-radius: 18px !important;
+  background: linear-gradient(180deg, #ffffff, #f8fafc) !important;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08) !important;
+}
+
+#syncCard.sync-login-only #adminAuthPanel *,
+body.admin-login-open #syncCard #adminAuthPanel * {
+  visibility: visible;
+}
+
+#syncCard.sync-login-only .admin-auth-copy strong,
+body.admin-login-open #syncCard .admin-auth-copy strong {
+  display: block !important;
+  color: var(--color-text-strong, #020617) !important;
+}
+
+#syncCard.sync-login-only .admin-auth-copy span,
+body.admin-login-open #syncCard .admin-auth-copy span {
+  display: block !important;
+  color: #475569 !important;
+}
+
+#syncCard.sync-login-only .admin-auth-form,
+body.admin-login-open #syncCard .admin-auth-form {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr auto auto !important;
+  gap: 8px !important;
+  align-items: center !important;
+}
+
+#syncCard.sync-login-only .admin-auth-form input,
+body.admin-login-open #syncCard .admin-auth-form input {
+  display: block !important;
+  min-height: 42px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  opacity: 1 !important;
+  color: var(--color-text-strong, #020617) !important;
+  -webkit-text-fill-color: var(--color-text-strong, #020617) !important;
+  background: #ffffff !important;
+  border: 1px solid rgba(15, 23, 42, 0.18) !important;
+  border-radius: 13px !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+}
+
+#syncCard.sync-login-only .admin-auth-form input::placeholder,
+body.admin-login-open #syncCard .admin-auth-form input::placeholder {
+  color: #64748b !important;
+  opacity: 1 !important;
+}
+
+#syncCard.sync-login-only .admin-auth-form button,
+body.admin-login-open #syncCard .admin-auth-form button {
+  display: inline-flex !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  min-height: 42px !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+#syncCard.sync-login-only #adminLogin,
+body.admin-login-open #syncCard #adminLogin {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, var(--color-brand, #941b1d), var(--color-primary, #2563eb)) !important;
+  border-color: rgba(148, 27, 29, 0.22) !important;
+}
+
+#syncCard.sync-login-only #adminLogout,
+body.admin-login-open #syncCard #adminLogout {
+  color: var(--color-text-strong, #020617) !important;
+  background: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.16) !important;
+}
+
+@media (max-width: 820px) {
+  #syncCard.sync-login-only #adminAuthPanel,
+  body.admin-login-open #syncCard #adminAuthPanel {
+    display: block !important;
+  }
+
+  #syncCard.sync-login-only .admin-auth-form,
+  body.admin-login-open #syncCard .admin-auth-form {
+    grid-template-columns: 1fr !important;
+  }
+
+  #syncCard.sync-login-only .admin-auth-form input,
+  #syncCard.sync-login-only .admin-auth-form button,
+  body.admin-login-open #syncCard .admin-auth-form input,
+  body.admin-login-open #syncCard .admin-auth-form button {
+    width: 100% !important;
+  }
+}
+
+/* =========================================================
+   2026-05-02: WMS UI readability refinement
+   Scope: visual/UI only. Keeps calculation, stock, order and auth logic unchanged.
+   ========================================================= */
+
+#page-wms .order-chart-card .chart-stage {
+  min-height: 286px;
+  padding: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.13) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96)),
+    radial-gradient(circle at 14% 8%, rgba(148, 27, 29, 0.06), transparent 32%),
+    radial-gradient(circle at 92% 12%, rgba(37, 99, 235, 0.06), transparent 34%) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82), 0 10px 26px rgba(15, 23, 42, 0.055);
+}
+
+#page-wms #orderChart {
+  height: 286px;
+  max-width: 100%;
+}
+
+#page-wms .chart-footer {
+  color: #475569 !important;
+}
+
+#page-wms .chart-footer strong {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  color: var(--color-brand-strong, #7f1d1d) !important;
+  background: rgba(148, 27, 29, 0.07);
+  border: 1px solid rgba(148, 27, 29, 0.14);
+}
+
+#page-wms .pallet-item,
+#page-wms .box-stock-item {
+  background: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.14) !important;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.045) !important;
+}
+
+#page-wms .pallet-item label,
+#page-wms .box-stock-head strong {
+  color: var(--color-text-strong, #020617) !important;
+  font-weight: 850 !important;
+}
+
+#page-wms .box-stock-preview {
+  color: var(--color-brand-strong, #7f1d1d) !important;
+  background: rgba(148, 27, 29, 0.07);
+  border: 1px solid rgba(148, 27, 29, 0.13);
+  border-radius: 999px;
+  padding: 4px 8px;
+}
+
+#page-wms .box-stock-meta,
+#page-wms .box-stock-inputs span {
+  color: #64748b !important;
+}
+
+#page-wms .pallet-grid input,
+#page-wms .box-stock-inputs input,
+body.view-only-mode #palletCard input:disabled,
+body.view-only-mode #boxStockCard input:disabled {
+  opacity: 1 !important;
+  color: var(--color-text-strong, #020617) !important;
+  -webkit-text-fill-color: var(--color-text-strong, #020617) !important;
+  background: #ffffff !important;
+  border: 1px solid rgba(15, 23, 42, 0.18) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92) !important;
+}
+
+#page-wms .pallet-grid input:focus,
+#page-wms .box-stock-inputs input:focus {
+  border-color: rgba(37, 99, 235, 0.52) !important;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.11) !important;
+}
+
+#page-wms .mini-stat,
+#page-wms .sync-badge,
+#returnAdjustmentSummary,
+#adminActionLogSummary {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #475569 !important;
+  white-space: normal;
+}
+
+#page-wms .summary-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 850;
+  letter-spacing: -0.01em;
+  border: 1px solid rgba(15, 23, 42, 0.11);
+  background: #ffffff;
+  color: #334155;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.045);
+}
+
+#page-wms .summary-pill.primary {
+  color: var(--color-primary-strong, #1d4ed8);
+  background: rgba(37, 99, 235, 0.08);
+  border-color: rgba(37, 99, 235, 0.18);
+}
+
+#page-wms .summary-pill.success {
+  color: var(--color-success-strong, #15803d);
+  background: rgba(22, 163, 74, 0.09);
+  border-color: rgba(22, 163, 74, 0.18);
+}
+
+#page-wms .summary-pill.muted {
+  color: #475569;
+  background: #f8fafc;
+  border-color: rgba(15, 23, 42, 0.11);
+}
+
+#syncCard #adminEmail[hidden],
+#syncCard #adminPassword[hidden],
+#syncCard #adminLogin[hidden],
+#syncCard #adminLogout[hidden] {
+  display: none !important;
+}
+
+body.admin-active #syncCard .admin-auth-panel,
+body.admin-login-open #syncCard .admin-auth-panel {
+  background: linear-gradient(180deg, #ffffff, #f8fafc) !important;
+  border-color: rgba(15, 23, 42, 0.14) !important;
+}
+
+body.admin-active #syncCard .admin-auth-form,
+body.admin-login-open #syncCard .admin-auth-form {
+  align-items: center !important;
+}
+
+body.admin-active #syncCard #adminLogout:not([hidden]),
+body.admin-login-open #syncCard #adminLogout:not([hidden]) {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 42px !important;
+  color: var(--color-text-strong, #020617) !important;
+  background: #ffffff !important;
+  border: 1px solid rgba(15, 23, 42, 0.16) !important;
+}
+
+body.admin-active #syncCard .admin-auth-form:has(#adminEmail[hidden]) {
+  grid-template-columns: auto !important;
+  justify-content: start !important;
+}
+
+@media (max-width: 720px) {
+  #page-wms .order-chart-card .chart-stage {
+    min-height: 260px;
+    padding: 8px;
+  }
+
+  #page-wms #orderChart {
+    height: 260px !important;
+  }
+
+  #page-wms .chart-footer {
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  #page-wms .summary-pill {
+    min-height: 27px;
+    padding: 6px 9px;
+    font-size: 11.5px;
+  }
+}
+
+/* 2026-05-02: 취소/반품 처리 영역 전용 UI 보정
+   범위: #returnAdjustmentCard 내부만. 기능/데이터 로직 변경 없음. */
+#returnAdjustmentCard .collapsible-body {
+  overflow: hidden;
+}
+
+#returnAdjustmentCard .return-adjust-form {
+  position: relative;
+  overflow: visible;
+  margin-top: 10px !important;
+  padding: 16px !important;
+  padding-top: 18px !important;
+  border: 1px solid var(--color-card-edge, rgba(15, 23, 42, 0.13)) !important;
+  background: #ffffff !important;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06) !important;
+}
+
+#returnAdjustmentCard .return-adjust-form::before {
+  content: "관리자 처리 입력";
+  position: static !important;
+  grid-column: 1 / -1;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  margin: -2px 0 2px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 27, 29, 0.16) !important;
+  background: rgba(148, 27, 29, 0.045) !important;
+  color: var(--color-brand-ink, #6f1719) !important;
+  box-shadow: none !important;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  transform: none !important;
+}
+
+#returnAdjustmentCard .return-adjust-form label,
+#returnAdjustmentCard .return-adjust-form label span {
+  color: var(--color-text-strong, #111827) !important;
+}
+
+#returnAdjustmentCard .return-adjust-form input,
+#returnAdjustmentCard .return-adjust-form select {
+  background: #ffffff !important;
+  color: var(--color-text, #111827) !important;
+  border-color: var(--color-border-strong, rgba(15, 23, 42, 0.2)) !important;
+}
+
+#returnAdjustmentCard .return-adjust-list {
+  gap: 10px;
+}
+
+#returnAdjustmentCard .return-adjust-record {
+  border: 1px solid var(--color-card-edge, rgba(15, 23, 42, 0.13)) !important;
+  background: #ffffff !important;
+  color: var(--color-text, #111827) !important;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.045) !important;
+}
+
+#returnAdjustmentCard .return-adjust-record.restore {
+  border-color: rgba(16, 185, 129, 0.24) !important;
+  background: linear-gradient(135deg, rgba(236, 253, 245, 0.72), #ffffff 46%, #ffffff 100%) !important;
+}
+
+#returnAdjustmentCard .return-adjust-record.hold {
+  border-color: rgba(245, 158, 11, 0.25) !important;
+  background: linear-gradient(135deg, rgba(255, 247, 237, 0.78), #ffffff 48%, #ffffff 100%) !important;
+}
+
+#returnAdjustmentCard .return-adjust-record::before {
+  top: 14px;
+  bottom: 14px;
+  opacity: 0.95;
+}
+
+#returnAdjustmentCard .return-adjust-record-main strong,
+#returnAdjustmentCard .return-adjust-record-qty b {
+  color: var(--color-text-strong, #0f172a) !important;
+}
+
+#returnAdjustmentCard .return-adjust-record-main span,
+#returnAdjustmentCard .return-adjust-record-qty small {
+  color: var(--color-muted, #64748b) !important;
+}
+
+#returnAdjustmentCard .return-adjust-record p {
+  border-color: rgba(15, 23, 42, 0.08) !important;
+  background: rgba(248, 250, 252, 0.92) !important;
+  color: var(--color-soft, #475569) !important;
+}
+
+#returnAdjustmentCard .return-adjust-badge.restore {
+  border-color: rgba(16, 185, 129, 0.26) !important;
+  background: rgba(16, 185, 129, 0.11) !important;
+  color: #047857 !important;
+}
+
+#returnAdjustmentCard .return-adjust-badge.hold {
+  border-color: rgba(245, 158, 11, 0.28) !important;
+  background: rgba(245, 158, 11, 0.13) !important;
+  color: #92400e !important;
+}
+
+#returnAdjustmentCard #returnAdjustmentList .detail-empty {
+  background: #ffffff !important;
+  border-color: var(--color-card-edge, rgba(15, 23, 42, 0.13)) !important;
+  color: var(--color-muted, #64748b) !important;
+}
+
+/* 2026-05-02: 취소/반품 처리 완료 내역 공간 활용 개선
+   범위: #returnAdjustmentCard 내부 완료 내역 카드만. 기능/데이터 로직 변경 없음. */
+#returnAdjustmentCard #returnAdjustmentList.return-adjust-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  align-items: start;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+#returnAdjustmentCard #returnAdjustmentList .return-adjust-record {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "main badge"
+    "qty qty"
+    "memo memo";
+  align-items: start;
+  gap: 6px 8px;
+  padding: 10px 10px 10px 13px !important;
+  border-radius: 16px !important;
+  line-height: 1.35;
+  overflow: hidden;
+}
+
+#returnAdjustmentCard #returnAdjustmentList .return-adjust-record::before {
+  top: 11px;
+  bottom: 11px;
+  width: 3px;
+}
+
+#returnAdjustmentCard #returnAdjustmentList .return-adjust-record-main {
+  grid-area: main;
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+#returnAdjustmentCard #returnAdjustmentList .return-adjust-record-main strong {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 13.5px;
+  line-height: 1.28;
+  color: var(--color-text-strong, #0f172a) !important;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+#returnAdjustmentCard #returnAdjustmentList .return-adjust-record-main span {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 11.5px;
+  line-height: 1.32;
+  color: var(--color-muted, #64748b) !important;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+#returnAdjustmentCard #returnAdjustmentList .return-adjust-record-qty {
+  grid-area: qty;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding-top: 1px;
+}
+
+#returnAdjustmentCard #returnAdjustmentList .return-adjust-record-qty b {
+  min-width: 0;
+  max-width: 100%;
+  font-size: 13.5px;
+  line-height: 1.25;
+  color: var(--color-text-strong, #0f172a) !important;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+#returnAdjustmentCard #returnAdjustmentList .return-adjust-record-qty small {
+  min-width: 0;
+  max-width: 100%;
+  font-size: 11.5px;
+  line-height: 1.25;
+  color: var(--color-muted, #64748b) !important;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+#returnAdjustmentCard #returnAdjustmentList .return-adjust-badge {
+  grid-area: badge;
+  justify-self: end;
+  align-self: start;
+  max-width: 100%;
+  min-width: 0;
+  padding: 5px 8px;
+  gap: 5px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+#returnAdjustmentCard #returnAdjustmentList .return-adjust-badge::before {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+}
+
+#returnAdjustmentCard #returnAdjustmentList .return-adjust-record p {
+  grid-area: memo;
+  min-width: 0;
+  max-width: 100%;
+  margin: 1px 0 0;
+  padding: 7px 8px;
+  border-radius: 11px;
+  font-size: 11.5px;
+  line-height: 1.38;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+@media (min-width: 720px) {
+  #returnAdjustmentCard #returnAdjustmentList.return-adjust-list {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  #returnAdjustmentCard #returnAdjustmentList .return-adjust-record {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "main"
+      "badge"
+      "qty"
+      "memo";
+    gap: 5px;
+    padding: 9px 9px 9px 12px !important;
+  }
+
+  #returnAdjustmentCard #returnAdjustmentList .return-adjust-badge {
+    justify-self: start;
+  }
+}
+
+/* 2026-05-02: 남은 UI 표시 문제 안전 보정
+   범위: 취소/반품 처리 영역 + 재고 상세 로딩 상태 표시 진단용 스타일만.
+   script.js 및 기능/데이터/계산 로직 변경 없음. */
+#returnAdjustmentCard:not(.collapsed) > .collapsible-body {
+  overflow: visible !important;
+}
+
+#returnAdjustmentCard.collapsed > .collapsible-body {
+  overflow: hidden !important;
+}
+
+#returnAdjustmentCard .return-adjust-form {
+  isolation: isolate;
+  box-sizing: border-box;
+  margin-top: 14px !important;
+  padding-top: 14px !important;
+  overflow: visible !important;
+}
+
+#returnAdjustmentCard .return-adjust-form::before {
+  position: relative !important;
+  z-index: 2;
+  margin: 0 0 7px !important;
+  line-height: 1.3 !important;
+  white-space: nowrap;
+}
+
+#returnAdjustmentCard .return-adjust-form,
+#returnAdjustmentCard .return-adjust-form * {
+  min-width: 0;
+}
+
+#returnAdjustmentCard #returnAdjustmentList.return-adjust-list {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr)) !important;
+  gap: 7px !important;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+#returnAdjustmentCard #returnAdjustmentList .return-adjust-record {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  padding: 9px 10px 9px 13px !important;
+  gap: 5px 7px !important;
+  overflow-x: hidden;
+  overflow-y: visible;
+}
+
+#returnAdjustmentCard #returnAdjustmentList .return-adjust-record-main,
+#returnAdjustmentCard #returnAdjustmentList .return-adjust-record-qty,
+#returnAdjustmentCard #returnAdjustmentList .return-adjust-record p {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+#returnAdjustmentCard #returnAdjustmentList .return-adjust-record-main strong,
+#returnAdjustmentCard #returnAdjustmentList .return-adjust-record-main span,
+#returnAdjustmentCard #returnAdjustmentList .return-adjust-record-qty b,
+#returnAdjustmentCard #returnAdjustmentList .return-adjust-record-qty small,
+#returnAdjustmentCard #returnAdjustmentList .return-adjust-record p {
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+  white-space: normal !important;
+}
+
+#returnAdjustmentCard #returnAdjustmentList .return-adjust-record-qty {
+  gap: 3px 7px !important;
+}
+
+#returnAdjustmentCard #returnAdjustmentList .return-adjust-badge {
+  max-width: 100%;
+  flex: 0 0 auto;
+}
+
+@media (min-width: 560px) and (max-width: 719px) {
+  #returnAdjustmentCard #returnAdjustmentList.return-adjust-list {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)) !important;
+  }
+}
+
+@media (max-width: 420px) {
+  #returnAdjustmentCard #returnAdjustmentList.return-adjust-list {
+    grid-template-columns: 1fr !important;
+  }
+
+  #returnAdjustmentCard #returnAdjustmentList .return-adjust-record {
+    padding: 8px 9px 8px 12px !important;
+  }
+}
+
+#inventoryItemStockoutForecast .sku-stockout-forecast-main strong,
+#inventoryItemOrderTrendMeta,
+#inventoryItemOrderTrendSummary strong,
+#inventoryItemOrderTrendList strong {
+  color: var(--color-text-strong, #0f172a) !important;
+}
+
+/* 2026-05-02: 좁은 범위 UI 보정 - 직접 출고 모드 / 품목 원가 가격 입력 */
+#page-wms #stockMoveControlPanel .inbound-badge.outbound,
+#stockMoveCard[data-move-direction="out"] #moveDirectionBadge.inbound-badge.outbound {
+  color: var(--color-warning-strong, #b45309) !important;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.16), rgba(14, 165, 233, 0.08)) !important;
+  border-color: rgba(245, 158, 11, 0.34) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.58), 0 8px 20px rgba(180, 83, 9, 0.08) !important;
+  text-shadow: none !important;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+#page-wms #stockMoveControlPanel .inbound-badge.outbound::before,
+#stockMoveCard[data-move-direction="out"] #moveDirectionBadge.inbound-badge.outbound::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+
+#page-wms .product-cost-card .product-cost-actions input[data-product-cost-input] {
+  color: var(--color-text-strong, #020617) !important;
+  background: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.18) !important;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+  caret-color: var(--color-primary, #2563eb);
+}
+
+#page-wms .product-cost-card .product-cost-actions input[data-product-cost-input]::placeholder {
+  color: rgba(100, 116, 139, 0.82) !important;
+}
+
+#page-wms .product-cost-card .product-cost-actions input[data-product-cost-input]:focus {
+  color: var(--color-text-strong, #020617) !important;
+  background: #ffffff !important;
+  border-color: rgba(37, 99, 235, 0.55) !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12), inset 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+
+
+/* Direct outbound unit price and badge polish */
+#stockMoveCard #moveDirectionBadge,
+#stockMoveCard .moveDirectionBadge {
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  line-height: 1.15;
+}
+#stockMoveCard #moveDirectionBadge::before,
+#stockMoveCard #moveDirectionBadge::after,
+#stockMoveCard .moveDirectionBadge::before,
+#stockMoveCard .moveDirectionBadge::after {
+  content: none !important;
+  display: none !important;
+}
+#stockMoveCard[data-move-direction="out"] .move-row .move-price {
+  display: flex;
+}
+#stockMoveCard .move-price {
+  min-width: 0;
+}
+#stockMoveCard .move-price .moveUnitPriceLabel {
+  display: inline-block;
+  margin-bottom: 4px;
+  color: var(--text-main, #111827);
+  font-weight: 700;
+}
+#stockMoveCard .moveUnitPrice {
+  background: #fff;
+  color: var(--text-main, #111827);
+  border-color: rgba(37, 99, 235, 0.22);
+}
+#stockMoveCard .moveUnitPrice:focus {
+  border-color: var(--accent-blue, #2563eb);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
