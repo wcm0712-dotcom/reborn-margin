@@ -3,16 +3,24 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0f1220" />
+  <meta name="theme-color" content="#941b1d" />
+  <meta name="application-name" content="리본컴퍼니" />
+  <meta name="apple-mobile-web-app-title" content="리본WMS" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>리본컴퍼니 관리 시스템</title>
-  <link rel="stylesheet" href="./style.css?v=reborn-return-adjust-auth-fix-20260430-01" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="64x64" href="./favicon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
+  <link rel="stylesheet" href="./style.css?v=reborn-home-screen-20260501-01" />
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <button class="brand" type="button" data-route="margin" aria-label="리본컴퍼니 홈">
+      <button class="brand" type="button" data-route="home" aria-label="리본컴퍼니 홈">
         <span class="brand-mark">R</span>
-        <span>
+        <span class="brand-title">
           <strong>리본컴퍼니</strong>
           <small>Margin · WMS</small>
         </span>
@@ -25,7 +33,34 @@
     </header>
 
     <main>
-      <section id="page-margin" class="page active" aria-label="마진계산기">
+      <section id="page-home" class="page active home-page" aria-label="홈">
+        <div class="home-hero" aria-labelledby="homeTitle">
+          <div class="home-ambient home-ambient-one" aria-hidden="true"></div>
+          <div class="home-ambient home-ambient-two" aria-hidden="true"></div>
+
+          <div class="home-brand-panel">
+            <div class="home-brand-mark" aria-hidden="true">R</div>
+            <p class="eyebrow">RE:BORN COMPANY</p>
+            <h1 id="homeTitle">업무를 차분하게 시작하세요.</h1>
+            <p class="home-lead">마진 계산과 WMS 재고 관리를 한 곳에서 확인하는 리본컴퍼니 운영 홈입니다.</p>
+          </div>
+
+          <div class="home-entry-grid" aria-label="주요 화면 바로가기">
+            <button type="button" class="home-entry-card" data-route="margin">
+              <span class="home-entry-kicker">Margin</span>
+              <strong>마진 계산기</strong>
+              <em>원가 · 수수료 · 순이익 확인</em>
+            </button>
+            <button type="button" class="home-entry-card" data-route="wms">
+              <span class="home-entry-kicker">WMS</span>
+              <strong>WMS 재고 시스템</strong>
+              <em>재고 · 발주 · 입출고 관리</em>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-margin" class="page" aria-label="마진계산기">
         <div class="page-head">
           <p class="eyebrow">RE:BORN SELLER TOOL</p>
           <h1>마진계산기</h1>
@@ -131,13 +166,20 @@
 
         <section class="card purchase-status-card" id="purchaseStatusCard">
           <div class="card-title-row purchase-title-row">
-            <div>
+            <div class="purchase-title-copy">
               <h2>발주 현황</h2>
               <p>일반 이용자는 조회만 가능하고, 관리자 로그인 시에만 추가·수정·삭제할 수 있습니다.</p>
             </div>
-            <div class="purchase-total-box">
-              <span>발주 총액</span>
-              <strong id="purchaseGrandTotal">0원</strong>
+            <div class="purchase-title-actions">
+              <div class="purchase-total-box">
+                <span>발주 총액</span>
+                <strong id="purchaseGrandTotal">0원</strong>
+              </div>
+              <div class="purchase-view-mode-control" role="group" aria-label="발주 현황 표시 방식">
+                <button type="button" data-purchase-view-mode="expanded">전체 펼침</button>
+                <button type="button" data-purchase-view-mode="compact">간소화</button>
+                <button type="button" data-purchase-view-mode="collapsed">접기</button>
+              </div>
             </div>
           </div>
 
@@ -177,7 +219,7 @@
           <p class="empty-state" id="purchaseEmptyState">등록된 발주 항목이 없습니다.</p>
         </section>
 
-        <section class="card return-adjust-card" id="returnAdjustmentCard" data-admin-only="true" hidden>
+        <section class="card return-adjust-card" id="returnAdjustmentCard" data-admin-only="true" hidden data-collapsible data-collapse-default="closed">
           <div class="card-title-row return-adjust-title-row">
             <div>
               <h2>취소/반품 처리</h2>
@@ -257,19 +299,30 @@
         </section>
 
             <div class="two-column wms-columns">
-              <section class="card stock-move-card">
+              <section class="card stock-move-card" id="stockMoveCard" data-admin-only="true" hidden data-collapsible data-collapse-default="closed">
             <div class="card-title-row">
               <div>
-                <h2>입고 직접 입력</h2>
-                <p>여러 품목을 한 번에 추가한 뒤 재고현황에 일괄 반영합니다. 예: 에낙 치킨 3파렛, 브이콘 50g 6파렛, 명가 참깨 2파렛, 라멘뽀식이 3파렛.</p>
+                <h2>입고/직접 출고 입력</h2>
+                <p>입고는 재고를 더하고, 배송 누락·오배송 재처리·고객 재발송 같은 직접 출고는 재고를 차감합니다. 여러 품목을 한 번에 일괄 반영할 수 있습니다.</p>
               </div>
             </div>
 
-            <div class="move-control-panel inbound-only">
-              <div class="inbound-badge">입고 전용</div>
+            <div class="move-control-panel" id="stockMoveControlPanel">
+              <div class="inbound-badge" id="moveDirectionBadge">입고 모드</div>
+              <label class="field move-direction-field">
+                <span>처리 구분</span>
+                <select id="stockMoveDirection">
+                  <option value="in">입고</option>
+                  <option value="out">직접 출고</option>
+                </select>
+              </label>
+              <label class="field move-date-field">
+                <span>처리 날짜</span>
+                <input id="moveDate" type="date" />
+              </label>
               <label class="field move-memo-field">
                 <span>메모</span>
-                <input id="moveMemo" type="text" placeholder="예: 4/28 14파렛 입고" />
+                <input id="moveMemo" type="text" placeholder="예: 4/28 14파렛 입고 / 배송 누락 재출고 / 오배송 재처리" />
               </label>
             </div>
 
@@ -288,7 +341,7 @@
             <button id="applyStockMove" type="button" class="primary-btn full-btn">입력 적용</button>
           </section>
 
-              <section class="card">
+              <section class="card" id="excelOrderCard" data-admin-only="true" hidden data-collapsible data-collapse-default="closed">
             <div class="card-title-row">
               <div>
                 <h2>엑셀 주문 처리</h2>
@@ -300,7 +353,7 @@
                 <span class="excel-icon" aria-hidden="true">▦</span>
                 <span class="excel-file-copy">
                   <strong id="orderFileName">엑셀 파일 선택</strong>
-                  <small>.xlsx / .xls / .csv 지원</small>
+                  <small>.xlsx 권장 / .xls 업로드 시 경고</small>
                 </span>
               </label>
               <input id="orderFile" class="visually-hidden-file" type="file" accept=".xlsx,.xls,.csv" />
@@ -308,11 +361,12 @@
               <button id="applyOrderDeductions" type="button" class="ghost-btn" disabled>분석 결과 차감 적용</button>
             </div>
             <div class="notice" id="excelNotice">A열 주소 / B열 상품명 / C열 판매금액 / D열 추가배송비 기준으로 분석합니다. 분석 후 버튼을 눌러 재고현황에서 실제 차감합니다.</div>
+            <div class="notice warning hidden" id="excelFormatWarning">.xls는 오래된 엑셀 형식이라 일부 인식 오류가 발생할 수 있습니다. 가능하면 .xlsx로 변환 후 업로드해 주세요. 분석은 계속 시도할 수 있습니다.</div>
             <div class="mini-summary" id="excelSummary"></div>
           </section>
             </div>
 
-            <section class="card" id="orderResultCard" hidden>
+            <section class="card" id="orderResultCard" data-admin-only="true" hidden>
           <div class="card-title-row">
             <div>
               <h2>주문 분석 결과</h2>
@@ -336,7 +390,7 @@
         </section>
 
             <div class="two-column wms-columns bottom-wms-columns">
-              <section class="card" id="backupCard">
+              <section class="card" id="backupCard" data-admin-only="true" hidden data-collapsible data-collapse-default="closed">
             <div class="card-title-row">
               <div>
                 <h2>저장/백업/복구</h2>
@@ -354,6 +408,17 @@
               <button id="restorePreviousWms" type="button" class="ghost-btn">이전값 복구</button>
             </div>
             <ul id="backupList" class="backup-list"></ul>
+          </section>
+
+              <section class="card admin-action-log-card" id="adminActionLogCard" data-admin-only="true" hidden data-collapsible data-collapse-default="closed">
+            <div class="card-title-row">
+              <div>
+                <h2>관리자 작업 로그</h2>
+                <p>재고에 영향을 주는 주요 관리자 작업을 추적합니다. 일반 이용자에게는 표시되지 않습니다.</p>
+              </div>
+              <span class="mini-stat" id="adminActionLogSummary">기록 없음</span>
+            </div>
+            <ul id="adminActionLogList" class="admin-action-log-list"></ul>
           </section>
 
               <section class="card">
@@ -400,11 +465,12 @@
             </section>
 
 
-            <section class="card product-cost-card" id="productCostEditorCard" data-admin-only="true" data-collapsible data-collapse-key="product-cost-editor" data-collapse-default="closed">
+            <section class="card product-cost-card" id="productCostEditorCard" data-admin-only="true" hidden data-collapsible data-collapse-key="product-cost-editor" data-collapse-default="closed">
               <div class="card-title-row compact-title-row">
                 <div>
                   <h2>품목 원가 수정</h2>
                   <p>입고 시점의 실제 단가를 반영하면 재고자산과 마진 계산기 추천 원가가 함께 갱신됩니다.</p>
+                  <p class="cost-model-note">현재 구조는 품목별 기준단가 방식입니다. 입고 시 단가를 입력하면 해당 품목의 기준단가가 갱신되고, 재고자산은 현재 재고 전체 × 현재 기준단가로 계산됩니다.</p>
                 </div>
               </div>
               <div class="product-cost-search-wrap">
@@ -451,6 +517,7 @@
                 </div>
                 <div class="sync-actions">
                   <button id="syncNow" type="button" class="primary-btn sync-now-btn">지금 동기화</button>
+                  <button id="retrySupabaseSave" type="button" class="secondary-btn sync-retry-btn" hidden>DB 저장 재시도</button>
                   <label class="sync-select-label">
                     자동 동기화
                     <select id="syncIntervalSelect">
@@ -550,6 +617,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./script.js?v=reborn-return-adjust-auth-fix-20260430-01"></script>
+  <script src="./script.js?v=reborn-home-screen-20260501-01"></script>
 </body>
 </html>

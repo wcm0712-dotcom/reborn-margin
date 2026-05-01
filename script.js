@@ -5,6 +5,12 @@
   const BACKUP_KEY = "reborn.wms.backups.v3";
   const UNDO_KEY = "reborn.wms.undo.v1";
   const ORDER_CACHE_KEY = "reborn.wms.lastOrderAnalysis.v3";
+  const PURCHASE_VIEW_MODE_KEY = "reborn.wms.ui.purchaseViewMode.v1";
+  const PURCHASE_VIEW_MODES = ["expanded", "compact", "collapsed"];
+  const APPLIED_ORDER_HISTORY_LIMIT = 200;
+  const ADMIN_ACTION_LOG_DISPLAY_LIMIT = 80;
+  const ADMIN_ACTION_LOG_STORAGE_LIMIT = 2000;
+  let purchaseViewMode = "expanded";
 
   const SUPABASE_CONFIG = {
     enabled: true,
@@ -38,11 +44,33 @@
     inspectionPendingReturn: { label: "검수 대기 반품", restores: false },
     overDeductRestore: { label: "오차감 복구", restores: true }
   };
+  const STOCK_MOVE_SOURCES = {
+    manualInbound: "manualInbound",
+    manualOutbound: "manualOutbound"
+  };
+  const CANONICAL_UNSWEETENED_NURUNGJI_SKU = "찹쌀 누룽지 무가당";
+  const LEGACY_BLACK_BEAN_NURUNGJI_SKU = "찹쌀 누룽지 검정콩";
+  const SKU_ALIASES = {
+    [LEGACY_BLACK_BEAN_NURUNGJI_SKU]: CANONICAL_UNSWEETENED_NURUNGJI_SKU,
+    "찹쌀 누룽지 무가당 검정콩": CANONICAL_UNSWEETENED_NURUNGJI_SKU
+  };
+
+  function canonicalSku(sku) {
+    const key = String(sku || "").trim();
+    return SKU_ALIASES[key] || key;
+  }
+
+  function replaceLegacySkuText(value) {
+    return String(value || "")
+      .replaceAll("찹쌀 누룽지 무가당 검정콩", CANONICAL_UNSWEETENED_NURUNGJI_SKU)
+      .replaceAll(LEGACY_BLACK_BEAN_NURUNGJI_SKU, CANONICAL_UNSWEETENED_NURUNGJI_SKU)
+      .replaceAll("검정콩", "무가당")
+      .replaceAll("검은콩", "무가당");
+  }
 
   const MARGIN_PRODUCTS = [
     { name: "직접 입력", cost: 0 },
     { name: "찹쌀 누룽지 무가당", cost: 2200 },
-    { name: "찹쌀 누룽지 검정콩", cost: 2200 },
     { name: "찹쌀 누룽지 츄러스", cost: 2300 },
     { name: "찹쌀 누룽지 스위트", cost: 2200 },
     { name: "브이콘 50g", cost: 412.5 },
@@ -84,8 +112,7 @@
     "네모스낵 불고기맛": { group: "네모스낵", boxesPerPallet: 72, unitsPerBox: 360, structure: "1파렛=72완박스 / 1완박스=12내부박스 / 1내부박스=30개", cost: 172.2, safetyStock: { boxes: 30 } },
     "네모스낵 매콤한맛": { group: "네모스낵", boxesPerPallet: 72, unitsPerBox: 360, structure: "1파렛=72완박스 / 1완박스=12내부박스 / 1내부박스=30개", cost: 172.2, safetyStock: { boxes: 30 } },
     "허니눈꽃 쌀과자 920g": { group: "쌀과자", boxesPerPallet: 42, unitsPerBox: 4, structure: "1파렛=42완박스 / 1완박스=4개", cost: 6800, safetyStock: { pallets: 3 } },
-    "찹쌀 누룽지 무가당": { group: "찹쌀 누룽지", boxesPerPallet: 26, unitsPerBox: 20, structure: "1파렛=26완박스 / 1완박스=20개", cost: 2200 },
-    "찹쌀 누룽지 검정콩": { group: "찹쌀 누룽지", boxesPerPallet: 42, unitsPerBox: 14, structure: "1파렛=42완박스 / 1완박스=14개", cost: 2200, safetyStock: { pallets: 4 } },
+    "찹쌀 누룽지 무가당": { group: "찹쌀 누룽지", boxesPerPallet: 26, unitsPerBox: 20, structure: "1파렛=26완박스 / 1완박스=20개", cost: 2200, safetyStock: { pallets: 4 } },
     "찹쌀 누룽지 츄러스": { group: "찹쌀 누룽지", boxesPerPallet: 42, unitsPerBox: 14, structure: "1파렛=42완박스 / 1완박스=14개", cost: 2300, safetyStock: { pallets: 1 } },
     "찹쌀 누룽지 스위트": { group: "찹쌀 누룽지", boxesPerPallet: 42, unitsPerBox: 14, structure: "1파렛=42완박스 / 1완박스=14개", cost: 2200, safetyStock: { pallets: 4 } },
     "에낙 치킨": { group: "에낙", boxesPerPallet: 70, unitsPerBox: 180, structure: "1파렛=70완박스 / 1완박스=6내부박스 / 1내부박스=30개", cost: 163.8, safetyStock: { pallets: 2 } },
@@ -112,8 +139,7 @@
 
   const INITIAL_STOCK_INPUT = {
     "찹쌀 누룽지 스위트": { pallets: 11, boxes: 29, eaches: 0, original: "11파렛 29박스" },
-    "찹쌀 누룽지 무가당": { pallets: 3, boxes: 47, eaches: 0, original: "3파렛 47박스" },
-    "찹쌀 누룽지 검정콩": { pallets: 9, boxes: 0, eaches: 0, original: "9파렛" },
+    "찹쌀 누룽지 무가당": { units: 7792, original: "무가당 통합 재고" },
     "찹쌀 누룽지 츄러스": { pallets: 0, boxes: 40, eaches: 0, original: "40박스" },
     "꾀돌이": { pallets: 0, boxes: 58, eaches: 0, original: "58박스" },
     "차카니": { pallets: 1, boxes: 11, eaches: 0, original: "1파렛 11박스" },
@@ -183,8 +209,12 @@
   const todayKey = () => dateKey(new Date());
 
   function unitsFromInput(sku, input) {
+    sku = canonicalSku(sku);
     const def = INVENTORY_DEFS[sku];
     if (!def) return 0;
+    if (input && Object.prototype.hasOwnProperty.call(input, "units")) {
+      return cleanNumber(input.units);
+    }
     const pallets = cleanNumber(input?.pallets);
     const boxes = cleanNumber(input?.boxes);
     const eaches = cleanNumber(input?.eaches);
@@ -192,6 +222,7 @@
   }
 
   function normalizeUnits(sku, totalUnits) {
+    sku = canonicalSku(sku);
     const def = INVENTORY_DEFS[sku];
     if (!def) return { pallets: 0, boxes: 0, eaches: 0 };
     const sign = totalUnits < 0 ? -1 : 1;
@@ -205,6 +236,7 @@
   }
 
   function formatStock(sku, units) {
+    sku = canonicalSku(sku);
     const def = INVENTORY_DEFS[sku];
     const n = normalizeUnits(sku, units);
     const boxWord = def?.isBox ? "묶음" : sku === "코디 3겹" ? "개" : "완박스";
@@ -216,12 +248,14 @@
     return parts.length ? parts.join(" ") : "0";
   }
   function safetyUnits(sku) {
+    sku = canonicalSku(sku);
     const def = INVENTORY_DEFS[sku];
     if (!def?.safetyStock) return 0;
     return unitsFromInput(sku, def.safetyStock);
   }
 
   function safetyStatus(sku, units) {
+    sku = canonicalSku(sku);
     const threshold = safetyUnits(sku);
     if (!threshold) return null;
     const shortage = Math.max(0, threshold - (units || 0));
@@ -236,6 +270,7 @@
 
 
   function defaultSkuCost(sku) {
+    sku = canonicalSku(sku);
     const def = INVENTORY_DEFS[sku];
     const value = Number(def?.cost);
     return Number.isFinite(value) ? value : 0;
@@ -243,16 +278,24 @@
 
   function normalizeProductCosts(input = {}) {
     const source = input && typeof input === "object" ? input : {};
+    const canonicalSource = { ...source };
+    Object.entries(source).forEach(([key, value]) => {
+      const canonical = canonicalSku(key);
+      if (canonical !== key && !Object.prototype.hasOwnProperty.call(canonicalSource, canonical)) {
+        canonicalSource[canonical] = value;
+      }
+    });
     const costs = {};
     Object.keys(INVENTORY_DEFS).forEach((sku) => {
-      const hasSaved = Object.prototype.hasOwnProperty.call(source, sku);
-      const saved = cleanNumber(source[sku]);
+      const hasSaved = Object.prototype.hasOwnProperty.call(canonicalSource, sku);
+      const saved = cleanNumber(canonicalSource[sku]);
       costs[sku] = hasSaved && saved >= 0 ? saved : defaultSkuCost(sku);
     });
     return costs;
   }
 
   function getSkuCost(sku) {
+    sku = canonicalSku(sku);
     const costs = state?.productCosts;
     if (costs && Object.prototype.hasOwnProperty.call(costs, sku)) {
       const value = cleanNumber(costs[sku]);
@@ -263,7 +306,8 @@
 
   function getMarginProductCost(product) {
     if (!product) return 0;
-    if (INVENTORY_DEFS[product.name]) return getSkuCost(product.name);
+    const sku = canonicalSku(product.name);
+    if (INVENTORY_DEFS[sku]) return getSkuCost(sku);
     return cleanNumber(product.cost);
   }
 
@@ -285,6 +329,8 @@
       history: [],
       orderStatus: [],
       returnAdjustments: [],
+      appliedOrderFiles: [],
+      adminActionLogs: [],
       orderStats: [],
       orderYearArchives: {},
       updatedAt: new Date().toISOString()
@@ -298,18 +344,123 @@
   let chartResizeTimer = null;
   let activeInventoryDetailSku = null;
 
+  function normalizeMovementDetails(details) {
+    if (!Array.isArray(details)) return [];
+    return details.map((detail) => {
+      if (!detail || typeof detail !== "object") return detail;
+      const sku = canonicalSku(detail.sku);
+      return {
+        ...detail,
+        sku,
+        text: replaceLegacySkuText(detail.text)
+      };
+    });
+  }
+
+  function normalizeHistoryRecord(record) {
+    if (!record || typeof record !== "object") return record;
+    return {
+      ...record,
+      memo: replaceLegacySkuText(record.memo),
+      qtyText: replaceLegacySkuText(record.qtyText),
+      details: normalizeMovementDetails(record.details)
+    };
+  }
+
+  function normalizeOrderAnalysis(analysis) {
+    if (!analysis || typeof analysis !== "object") return analysis;
+    const mergeRows = (rows = []) => {
+      const totals = new Map();
+      const orderCounts = new Map();
+      (Array.isArray(rows) ? rows : []).forEach((row) => {
+        const sku = canonicalSku(row?.sku);
+        if (!sku) return;
+        totals.set(sku, (totals.get(sku) || 0) + cleanNumber(row.units));
+        orderCounts.set(sku, (orderCounts.get(sku) || 0) + cleanNumber(row.orderCount));
+      });
+      return [...totals.entries()].map(([sku, units]) => ({
+        sku,
+        units,
+        orderCount: orderCounts.get(sku) || 0
+      }));
+    };
+    const deductions = mergeRows(analysis.deductions);
+    return {
+      ...analysis,
+      deductions,
+      assetDeductionValue: calcMovementAssetValue(deductions),
+      needs: Array.isArray(analysis.needs) ? analysis.needs.map((item) => ({ ...item, productName: replaceLegacySkuText(item.productName), reason: replaceLegacySkuText(item.reason) })) : [],
+      excluded: Array.isArray(analysis.excluded) ? analysis.excluded.map((item) => ({ ...item, productName: replaceLegacySkuText(item.productName), reason: replaceLegacySkuText(item.reason) })) : []
+    };
+  }
+
+
+  function normalizeAppliedOrderFile(record) {
+    if (!record || typeof record !== "object") return null;
+    const fileMeta = record.fileMeta && typeof record.fileMeta === "object" ? record.fileMeta : {};
+    const signature = record.signature && typeof record.signature === "object" ? record.signature : {};
+    return {
+      id: String(record.id || createHistoryId()),
+      at: record.at || record.appliedAt || new Date().toISOString(),
+      fileName: String(record.fileName || fileMeta.name || ""),
+      fileSize: cleanNumber(record.fileSize ?? fileMeta.size),
+      orderRows: cleanNumber(record.orderRows),
+      paymentGroupCount: cleanNumber(record.paymentGroupCount),
+      paymentUniqueSum: cleanNumber(record.paymentUniqueSum),
+      paymentUniqueWithExtraShipping: cleanNumber(record.paymentUniqueWithExtraShipping),
+      majorSummary: Array.isArray(record.majorSummary) ? record.majorSummary.map(function(item) { return String(item || ""); }).filter(Boolean) : [],
+      summaryHash: String(record.summaryHash || signature.summaryHash || ""),
+      fingerprint: String(record.fingerprint || signature.fingerprint || ""),
+      adminUid: String(record.adminUid || ""),
+      adminEmail: String(record.adminEmail || ""),
+      source: "excelOrderDeduction"
+    };
+  }
+
+  function normalizeAdminActionLog(record) {
+    if (!record || typeof record !== "object") return null;
+    return {
+      id: String(record.id || createHistoryId()),
+      at: record.at || new Date().toISOString(),
+      actionType: String(record.actionType || record.type || "작업"),
+      itemName: replaceLegacySkuText(record.itemName || record.sku || ""),
+      qty: cleanNumber(record.qty),
+      unit: String(record.unit || ""),
+      memo: replaceLegacySkuText(record.memo || ""),
+      adminUid: String(record.adminUid || ""),
+      adminEmail: String(record.adminEmail || ""),
+      source: String(record.source || ""),
+      details: Array.isArray(record.details) ? normalizeMovementDetails(record.details) : []
+    };
+  }
+
   function normalizeState(parsed) {
     const fresh = createInitialState();
     if (!parsed || typeof parsed !== "object") return fresh;
 
     const normalizedStock = { ...fresh.stock };
+    const incomingStock = parsed.stock && typeof parsed.stock === "object" ? parsed.stock : {};
     Object.keys(INVENTORY_DEFS).forEach((sku) => {
-      const incoming = parsed.stock?.[sku];
+      const incoming = incomingStock[sku];
       if (!incoming || typeof incoming !== "object") return;
       normalizedStock[sku] = {
         ...normalizedStock[sku],
         ...incoming,
         units: Number(incoming.units) || 0
+      };
+    });
+    const aliasTargetsReset = new Set();
+    Object.entries(incomingStock).forEach(([rawSku, incoming]) => {
+      const sku = canonicalSku(rawSku);
+      if (sku === rawSku || !INVENTORY_DEFS[sku] || !incoming || typeof incoming !== "object") return;
+      if (!Object.prototype.hasOwnProperty.call(incomingStock, sku) && !aliasTargetsReset.has(sku)) {
+        normalizedStock[sku] = { ...normalizedStock[sku], units: 0, original: "통합" };
+        aliasTargetsReset.add(sku);
+      }
+      normalizedStock[sku] = {
+        ...normalizedStock[sku],
+        units: cleanNumber(normalizedStock[sku]?.units) + cleanNumber(incoming.units),
+        original: replaceLegacySkuText(normalizedStock[sku]?.original || incoming.original || "통합")
       };
     });
 
@@ -324,9 +475,11 @@
       stock: normalizedStock,
       productCosts: normalizeProductCosts(parsed.productCosts),
       pallets: normalizedPallets,
-      history: Array.isArray(parsed.history) ? parsed.history : [],
+      history: Array.isArray(parsed.history) ? parsed.history.map(normalizeHistoryRecord) : [],
       orderStatus: Array.isArray(parsed.orderStatus) ? parsed.orderStatus.map(normalizePurchaseItem).filter(Boolean) : [],
       returnAdjustments: Array.isArray(parsed.returnAdjustments) ? parsed.returnAdjustments.map(normalizeReturnAdjustment).filter(Boolean) : [],
+      appliedOrderFiles: Array.isArray(parsed.appliedOrderFiles) ? parsed.appliedOrderFiles.map(normalizeAppliedOrderFile).filter(Boolean).slice(0, APPLIED_ORDER_HISTORY_LIMIT) : [],
+      adminActionLogs: Array.isArray(parsed.adminActionLogs) ? parsed.adminActionLogs.map(normalizeAdminActionLog).filter(Boolean).slice(0, ADMIN_ACTION_LOG_STORAGE_LIMIT) : [],
       orderStats: Array.isArray(parsed.orderStats) ? parsed.orderStats : [],
       orderYearArchives: parsed.orderYearArchives && typeof parsed.orderYearArchives === "object" ? parsed.orderYearArchives : {}
     };
@@ -411,6 +564,7 @@
     saveUndoSnapshots(snapshots);
     addBackup("이전값 복구 전 백업");
     state = normalizeState(snapshot.state);
+    addAdminActionLog("데이터 복구/import", { itemName: "이전값 복구", memo: snapshot.reason || "저장 전 상태", source: "restorePreviousState" });
     state.updatedAt = new Date().toISOString();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     addBackup("이전값 복구");
@@ -432,6 +586,7 @@
   let supabaseSaveReason = "저장";
   let supabaseSyncTimer = null;
   let supabaseBusy = false;
+  let lastFailedSupabaseReason = "";
   let lastSupabaseSavePromise = Promise.resolve();
 
 
@@ -545,6 +700,54 @@
     else console.warn(message);
   }
 
+
+  function getAdminActorMeta() {
+    const user = getAdminUser();
+    return {
+      adminUid: user && user.id ? user.id : "",
+      adminEmail: user && (user.email || (user.user_metadata && user.user_metadata.email)) ? (user.email || user.user_metadata.email) : ""
+    };
+  }
+
+  function addAdminActionLog(actionType, payload) {
+    if (!isEditorSession()) return null;
+    const actor = getAdminActorMeta();
+    const log = normalizeAdminActionLog(Object.assign({
+      id: createHistoryId(),
+      at: new Date().toISOString(),
+      actionType: actionType
+    }, payload || {}, actor));
+    if (!log) return null;
+    state.adminActionLogs = Array.isArray(state.adminActionLogs) ? state.adminActionLogs : [];
+    state.adminActionLogs.unshift(log);
+    state.adminActionLogs = state.adminActionLogs.slice(0, ADMIN_ACTION_LOG_STORAGE_LIMIT);
+    return log;
+  }
+
+  function renderAdminActionLogs() {
+    const list = $("adminActionLogList");
+    const summary = $("adminActionLogSummary");
+    if (!list && !summary) return;
+    const logs = Array.isArray(state.adminActionLogs) ? state.adminActionLogs.map(normalizeAdminActionLog).filter(Boolean) : [];
+    state.adminActionLogs = logs.slice(0, ADMIN_ACTION_LOG_STORAGE_LIMIT);
+    if (summary) {
+      summary.textContent = logs.length ? "최근 " + number(Math.min(logs.length, ADMIN_ACTION_LOG_DISPLAY_LIMIT)) + "건 표시 / 전체 " + number(logs.length) + "건" : "기록 없음";
+    }
+    if (!list) return;
+    const visible = logs.slice(0, ADMIN_ACTION_LOG_DISPLAY_LIMIT);
+    list.innerHTML = visible.length ? visible.map(function(log) {
+      const detailText = log.details && log.details.length ? " · 상세 " + number(log.details.length) + "건" : "";
+      const itemText = log.itemName ? " · " + escapeHtml(log.itemName) : "";
+      const qtyText = log.qty ? " · " + number(log.qty) + escapeHtml(log.unit || "") : "";
+      const actor = log.adminEmail || log.adminUid || "관리자";
+      const memoText = log.memo ? " · " + escapeHtml(log.memo) : "";
+      return '<li class="admin-action-log-item">'
+        + '<div class="admin-action-log-main"><strong>' + escapeHtml(log.actionType) + '</strong><span>' + formatDateTime(log.at) + ' · ' + escapeHtml(actor) + '</span></div>'
+        + '<p>' + itemText + qtyText + detailText + memoText + '</p>'
+        + '</li>';
+    }).join("") : '<li class="admin-action-log-empty">아직 기록된 관리자 작업이 없습니다.</li>';
+  }
+
   function updateEditorLock() {
     markAdminOnlySections();
 
@@ -587,7 +790,7 @@
     }
 
     const lockSelectors = [
-      "#syncNow", "#syncIntervalSelect",
+      "#syncNow", "#retrySupabaseSave", "#syncIntervalSelect",
       "#savePallets", "#saveBoxStock",
       "#exportBackup", "#restorePreviousWms", "#resetWms",
       "#orderFile", "#parseOrderFile", "#applyOrderDeductions",
@@ -630,6 +833,8 @@
     } else {
       setAdminAuthStatus("보기 전용 모드입니다.", "muted");
     }
+
+    applyPurchaseViewMode();
   }
 
 
@@ -758,9 +963,11 @@
     const dot = $("syncStatusDot");
     const label = $("syncStatusText");
     const desc = $("syncStatusDetail");
-    if (dot) dot.className = `sync-dot ${kind || "muted"}`;
+    const retryButton = $("retrySupabaseSave");
+    if (dot) dot.className = "sync-dot " + (kind || "muted");
     if (label) label.textContent = text || "동기화 대기";
     if (desc) desc.textContent = detail || "";
+    if (retryButton) retryButton.hidden = !(kind === "bad" && isEditorSession());
   }
 
   function setSyncBusy(isBusy) {
@@ -770,6 +977,8 @@
       button.disabled = isBusy;
       button.textContent = isBusy ? "동기화 중..." : "지금 동기화";
     }
+    const retryButton = $("retrySupabaseSave");
+    if (retryButton) retryButton.disabled = isBusy;
   }
 
   function setSyncTimes({ lastAt, remoteAt } = {}) {
@@ -834,11 +1043,13 @@
 
       if (error) throw error;
       setSyncTimes({ lastAt: now, remoteAt: now });
+      lastFailedSupabaseReason = "";
       setSyncStatus("ok", "최신 상태", "Supabase와 브라우저 저장값이 동기화되었습니다.");
       return true;
     } catch (error) {
       console.warn("Supabase app_state 저장 실패", error);
-      setSyncStatus("bad", "DB 저장 실패", "인터넷 또는 Supabase 설정 문제로 브라우저 저장값만 유지 중입니다.");
+      lastFailedSupabaseReason = reason || "저장 재시도";
+      setSyncStatus("bad", "DB 저장 실패", "Supabase 저장에 실패했습니다. localStorage에는 현재 화면 상태가 보존되어 있으며, 관리자 화면에서 다시 저장을 시도할 수 있습니다.");
       return false;
     } finally {
       setSyncBusy(false);
@@ -1013,6 +1224,7 @@
     }
 
     $("syncNow")?.addEventListener("click", () => syncFromSupabase({ forcePull: false }));
+    $("retrySupabaseSave")?.addEventListener("click", () => saveSupabaseAppState(lastFailedSupabaseReason || "저장 재시도"));
 
     if (!getSupabaseClient()) {
       setSyncStatus("warn", "브라우저 저장", "Supabase 라이브러리를 아직 불러오지 못해 localStorage로 작동 중입니다.");
@@ -1031,19 +1243,51 @@
     if (el) el.textContent = text;
   }
 
+  function getFileExtension(fileName = "") {
+    const cleanName = String(fileName || "").trim().toLowerCase();
+    const match = cleanName.match(/\.([a-z0-9]+)$/);
+    return match ? match[1] : "";
+  }
+
+  function setExcelFormatWarning(file) {
+    const warning = $("excelFormatWarning");
+    if (!warning) return;
+
+    const ext = getFileExtension(file?.name);
+    const isLegacyXls = ext === "xls";
+    const isUnsupported = Boolean(ext) && !["xlsx", "xls", "csv"].includes(ext);
+
+    const shouldShow = isLegacyXls || isUnsupported;
+    warning.hidden = !shouldShow;
+    warning.classList.toggle("hidden", !shouldShow);
+    warning.classList.toggle("is-danger", isUnsupported);
+
+    if (isUnsupported) {
+      warning.textContent = "지원하지 않는 파일 형식입니다. .xlsx, .xls, .csv 파일만 업로드해 주세요.";
+      return;
+    }
+
+    warning.textContent = ".xls는 오래된 엑셀 형식이라 일부 인식 오류가 발생할 수 있습니다. 가능하면 .xlsx로 변환 후 업로드해 주세요. 분석은 계속 시도할 수 있습니다.";
+  }
+
   function initRouting() {
+    const routes = ["home", "margin", "wms"];
     const buttons = [...document.querySelectorAll("[data-route]")];
     const routeTo = (route) => {
-      const safeRoute = route === "wms" ? "wms" : "margin";
+      const safeRoute = routes.includes(route) ? route : "home";
       document.querySelectorAll(".page").forEach((page) => page.classList.remove("active"));
       $(`page-${safeRoute}`)?.classList.add("active");
       document.querySelectorAll(".category-btn").forEach((button) => button.classList.toggle("active", button.dataset.route === safeRoute));
+      document.body.classList.toggle("route-home", safeRoute === "home");
+      document.body.classList.toggle("route-margin", safeRoute === "margin");
+      document.body.classList.toggle("route-wms", safeRoute === "wms");
       if (location.hash !== `#${safeRoute}`) history.replaceState(null, "", `#${safeRoute}`);
       if (safeRoute === "wms") requestAnimationFrame(renderOrderChart);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     };
     buttons.forEach((button) => button.addEventListener("click", () => routeTo(button.dataset.route)));
     window.addEventListener("hashchange", () => routeTo(location.hash.replace("#", "")));
-    routeTo(location.hash.replace("#", "") || "margin");
+    routeTo("home");
   }
 
   function enhanceNativeSelects(root = document) {
@@ -1169,6 +1413,71 @@
       card.dataset.collapseReady = "1";
     });
   }
+
+  function readPurchaseViewMode() {
+    try {
+      const saved = localStorage.getItem(PURCHASE_VIEW_MODE_KEY);
+      if (PURCHASE_VIEW_MODES.includes(saved)) return saved;
+    } catch {
+      // UI 설정 저장소를 읽지 못해도 기본 펼침 상태로 작동해야 합니다.
+    }
+    return "expanded";
+  }
+
+  function savePurchaseViewMode(mode) {
+    try {
+      localStorage.setItem(PURCHASE_VIEW_MODE_KEY, mode);
+    } catch {
+      // UI 설정 저장 실패는 발주 데이터 저장과 분리되어야 합니다.
+    }
+  }
+
+  function applyPurchaseViewMode() {
+    const card = $("purchaseStatusCard");
+    if (!card) return;
+
+    const mode = PURCHASE_VIEW_MODES.includes(purchaseViewMode) ? purchaseViewMode : "expanded";
+    const isCompact = mode === "compact";
+    const isCollapsed = mode === "collapsed";
+    const editable = isEditorSession();
+
+    card.dataset.purchaseViewMode = mode;
+    card.classList.toggle("purchase-view-compact", isCompact);
+    card.classList.toggle("purchase-view-collapsed", isCollapsed);
+
+    const adminPanel = $("purchaseAdminPanel");
+    if (adminPanel) {
+      const showAdminPanel = editable && mode === "expanded";
+      adminPanel.hidden = !showAdminPanel;
+      adminPanel.setAttribute("aria-hidden", String(!showAdminPanel));
+    }
+
+    ["purchaseSummaryList", "purchaseList", "purchaseEmptyState"].forEach((id) => {
+      const node = $(id);
+      if (!node) return;
+      node.hidden = isCollapsed;
+      node.setAttribute("aria-hidden", String(isCollapsed));
+    });
+
+    document.querySelectorAll("[data-purchase-view-mode]").forEach((button) => {
+      const active = button.dataset.purchaseViewMode === mode;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+  }
+
+  function setPurchaseViewMode(mode, save = true) {
+    if (!PURCHASE_VIEW_MODES.includes(mode)) return;
+    purchaseViewMode = mode;
+    if (save) savePurchaseViewMode(mode);
+    applyPurchaseViewMode();
+  }
+
+  function initPurchaseViewMode() {
+    purchaseViewMode = readPurchaseViewMode();
+    applyPurchaseViewMode();
+  }
+
 
 
   function buildMarginProductPicker(select) {
@@ -1466,6 +1775,7 @@
     setReturnAdjustmentDefaults();
     ensurePurchaseDateInputDefault();
     bindWmsEvents();
+    initPurchaseViewMode();
     renderAll();
     enhanceNativeSelects($("page-wms") || document);
     initCollapsibleSections();
@@ -1504,7 +1814,7 @@ function refreshActiveOrderAnalysisSummary() {
 
 
   function getDefByKey(key) {
-    return INVENTORY_DEFS[key] || null;
+    return INVENTORY_DEFS[canonicalSku(key)] || null;
   }
 
   function generatePurchaseId() {
@@ -1533,16 +1843,18 @@ function refreshActiveOrderAnalysisSummary() {
 
   function normalizePurchaseItem(item) {
     if (!item || typeof item !== "object") return null;
-    const productKey = typeof item.productKey === "string" ? item.productKey : "";
+    const rawProductKey = typeof item.productKey === "string" ? item.productKey : "";
+    const productKey = rawProductKey ? canonicalSku(rawProductKey) : "";
     const def = productKey ? getDefByKey(productKey) : null;
-    const name = String(item.name || productKey || "").trim();
+    const rawName = String(item.name || productKey || "").trim();
+    const name = INVENTORY_DEFS[canonicalSku(rawName)] ? canonicalSku(rawName) : replaceLegacySkuText(rawName);
     if (!name) return null;
     const createdAt = String(item.createdAt || new Date().toISOString());
     const orderDate = normalizePurchaseDate(item.orderDate || item.purchaseDate || item.expectedDate, createdAt);
     return {
       id: String(item.id || generatePurchaseId()),
       batchId: String(item.batchId || ""),
-      batchName: String(item.batchName || ""),
+      batchName: replaceLegacySkuText(item.batchName || ""),
       productKey,
       name,
       qty: cleanNumber(item.qty),
@@ -1557,7 +1869,7 @@ function refreshActiveOrderAnalysisSummary() {
 
   function normalizeReturnAdjustment(item) {
     if (!item || typeof item !== "object") return null;
-    const sku = String(item.sku || "").trim();
+    const sku = canonicalSku(item.sku);
     if (!INVENTORY_DEFS[sku]) return null;
     const typeKey = RETURN_ADJUSTMENT_TYPES[item.type] ? item.type : "postShipCancel";
     const date = String(item.date || todayKey()).slice(0, 10);
@@ -1777,7 +2089,16 @@ function refreshActiveOrderAnalysisSummary() {
       createdAt,
     })).filter(Boolean);
 
+    addBackup("발주 현황 추가 전 자동 백업");
     state.orderStatus = [...additions, ...(Array.isArray(state.orderStatus) ? state.orderStatus : [])];
+    addAdminActionLog("발주 추가", {
+      itemName: batchName || makeAutoPurchaseBatchName(rows),
+      qty: additions.length,
+      unit: "품목",
+      memo: memo || status,
+      source: "purchaseStatus",
+      details: additions.map((item) => ({ sku: item.productKey || item.name, units: purchaseUnitsPerSelectedUnit(item) * cleanNumber(item.qty), text: purchaseQtyLabel(item) }))
+    });
     resetPurchaseForm();
     renderAll();
     saveState(additions.length > 1 ? `발주 품목 ${number(additions.length)}개가 추가되었습니다.` : "발주 현황이 추가되었습니다.");
@@ -1785,7 +2106,16 @@ function refreshActiveOrderAnalysisSummary() {
 
   function removePurchaseItem(id) {
     if (!requireEditor("발주 현황 삭제")) return;
+    const target = state.orderStatus.find((item) => item.id === id);
+    addBackup("발주 현황 삭제 전 자동 백업");
     state.orderStatus = state.orderStatus.filter((item) => item.id !== id);
+    addAdminActionLog("발주 삭제", {
+      itemName: target?.name || target?.productKey || "발주 항목",
+      qty: cleanNumber(target?.qty),
+      unit: purchaseUnitLabel(target || {}),
+      memo: target?.memo || "",
+      source: "purchaseStatus"
+    });
     renderAll();
     saveState("발주 현황에서 삭제되었습니다.");
   }
@@ -1794,6 +2124,8 @@ function refreshActiveOrderAnalysisSummary() {
     if (!requireEditor("발주 현황 수정")) return;
     const item = state.orderStatus.find((entry) => entry.id === id);
     if (!item) return;
+    const beforeValue = item[field];
+    addBackup("발주 현황 수정 전 자동 백업");
     if (field === "qty" || field === "unitPrice") {
       item[field] = cleanNumber(value);
     } else if (field === "orderDate") {
@@ -1801,6 +2133,13 @@ function refreshActiveOrderAnalysisSummary() {
     } else {
       item[field] = String(value || "");
     }
+    addAdminActionLog("발주 수정", {
+      itemName: item.name || item.productKey || "발주 항목",
+      qty: field === "qty" ? cleanNumber(item.qty) : 0,
+      unit: purchaseUnitLabel(item),
+      memo: field + ": " + (beforeValue ?? "") + " → " + (item[field] ?? ""),
+      source: "purchaseStatus"
+    });
     renderPurchaseStatus();
     saveState("발주 현황이 수정되었습니다.", { silent: true });
   }
@@ -1818,6 +2157,8 @@ function refreshActiveOrderAnalysisSummary() {
       }
     });
     if (!changed) return;
+    addBackup("발주 묶음 대표 이름 수정 전 자동 백업");
+    addAdminActionLog("발주 묶음명 수정", { itemName: nextName || "발주 묶음", memo: "batchId " + id, source: "purchaseStatus" });
     renderPurchaseStatus();
     saveState("발주 묶음 대표 이름이 수정되었습니다.", { silent: true });
   }
@@ -1992,6 +2333,7 @@ function refreshActiveOrderAnalysisSummary() {
     if (!items.length) {
       list.innerHTML = "";
       if (empty) empty.hidden = false;
+      applyPurchaseViewMode();
       return;
     }
     if (empty) empty.hidden = true;
@@ -2165,7 +2507,7 @@ function refreshActiveOrderAnalysisSummary() {
     }
     const typeKey = $("returnAdjustmentType")?.value || "postShipCancel";
     const info = RETURN_ADJUSTMENT_TYPES[typeKey] || RETURN_ADJUSTMENT_TYPES.postShipCancel;
-    const sku = ($("returnAdjustmentSku")?.value || "").trim();
+    const sku = canonicalSku($("returnAdjustmentSku")?.value || "");
     const qty = cleanNumber($("returnAdjustmentQty")?.value);
     const unit = $("returnAdjustmentUnit")?.value || "unit";
     const date = ($("returnAdjustmentDate")?.value || todayKey()).slice(0, 10);
@@ -2212,11 +2554,19 @@ function refreshActiveOrderAnalysisSummary() {
         adjustmentType: typeKey,
         affectsNetOutbound: true,
         text: `${sku} ${formatStock(sku, units)} 복구`
-      }], { at });
+      }], { at, source: "returnAdjustment" });
     } else {
-      pushHistory("취소/반품", `${typeLabel} · ${sku}${memo ? ` · ${memo}` : ""}`, `재고 미복구 ${formatStock(sku, units)}`, [], { at });
+      pushHistory("취소/반품", `${typeLabel} · ${sku}${memo ? ` · ${memo}` : ""}`, `재고 미복구 ${formatStock(sku, units)}`, [], { at, source: "returnAdjustment" });
     }
 
+    addAdminActionLog("취소/반품 처리", {
+      itemName: sku,
+      qty,
+      unit: returnAdjustmentUnitLabel(sku, unit),
+      memo: typeLabel + (memo ? " · " + memo : ""),
+      source: "returnAdjustment",
+      details: [{ sku, units, direction: info.restores ? "in" : "hold", source: "returnAdjustment", adjustmentType: typeKey }]
+    });
     saveState("취소/반품 처리가 적용되었습니다.");
     const qtyInput = $("returnAdjustmentQty");
     const memoInput = $("returnAdjustmentMemo");
@@ -2234,13 +2584,15 @@ function refreshActiveOrderAnalysisSummary() {
     state.returnAdjustments = records;
 
     if (!isEditorSession()) {
-      if (summary) summary.textContent = "관리자 전용";
+      if (summary) summary.textContent = "";
       list.innerHTML = "";
+      list.classList.remove("is-scrollable");
       return;
     }
 
     const restoreCount = records.filter((record) => record.restores).length;
     if (summary) summary.textContent = records.length ? `총 ${number(records.length)}건 · 재고 복구 ${number(restoreCount)}건` : "처리 기록 없음";
+    list.classList.toggle("is-scrollable", records.length > 3);
 
     list.innerHTML = records.length ? records.slice(0, 40).map((record) => {
       const info = RETURN_ADJUSTMENT_TYPES[record.type] || RETURN_ADJUSTMENT_TYPES.postShipCancel;
@@ -2299,9 +2651,11 @@ function refreshActiveOrderAnalysisSummary() {
     }
     const before = getSkuCost(sku);
     state.productCosts = normalizeProductCosts(state.productCosts);
-    state.productCosts[sku] = next;
     if (before === next) return;
-    pushHistory("원가수정", `${sku} 원가 ${money(before)} → ${money(next)}`, `${money(next)}`);
+    addBackup("가격 수정 전 자동 백업");
+    state.productCosts[sku] = next;
+    pushHistory("원가수정", sku + " 원가 " + money(before) + " → " + money(next), money(next));
+    addAdminActionLog("가격 수정", { itemName: sku, qty: next, unit: "원", memo: money(before) + " → " + money(next), source: "productCost" });
     saveState("품목 원가 수정");
     renderProductOptions();
   }
@@ -2312,12 +2666,14 @@ function refreshActiveOrderAnalysisSummary() {
     const before = getSkuCost(sku);
     const base = defaultSkuCost(sku);
     state.productCosts = normalizeProductCosts(state.productCosts);
-    state.productCosts[sku] = base;
     if (before === base) {
       renderProductCostEditor();
       return;
     }
-    pushHistory("원가복구", `${sku} 원가 ${money(before)} → 기본 ${money(base)}`, `${money(base)}`);
+    addBackup("가격 수정 전 자동 백업");
+    state.productCosts[sku] = base;
+    pushHistory("원가복구", sku + " 원가 " + money(before) + " → 기본 " + money(base), money(base));
+    addAdminActionLog("가격 기본값 복구", { itemName: sku, qty: base, unit: "원", memo: money(before) + " → " + money(base), source: "productCost" });
     saveState("품목 원가 기본값 복구");
     renderProductOptions();
   }
@@ -2335,6 +2691,8 @@ function refreshActiveOrderAnalysisSummary() {
     renderPurchaseStatus();
     renderReturnAdjustmentPanel();
     renderProductCostEditor();
+    renderAdminActionLogs();
+    ensureStockMoveDefaults();
     renderInventoryItemOrderTrend();
     refreshActiveOrderAnalysisSummary();
     updateEditorLock();
@@ -2407,6 +2765,48 @@ function refreshActiveOrderAnalysisSummary() {
       .join("");
   }
 
+  function getStockMoveDirection() {
+    return $("stockMoveDirection")?.value === "out" ? "out" : "in";
+  }
+
+  function stockMoveDirectionLabel(direction = getStockMoveDirection()) {
+    return direction === "out" ? "직접 출고" : "입고";
+  }
+
+  function ensureStockMoveDefaults() {
+    const dateInput = $("moveDate");
+    if (dateInput && !dateInput.value) dateInput.value = todayKey();
+    updateStockMoveDirectionUi();
+    if (!$("stockMoveRows")?.children.length) renderStockMoveRows();
+  }
+
+  function updateStockMoveDirectionUi() {
+    const direction = getStockMoveDirection();
+    const card = $("stockMoveCard");
+    if (card) card.dataset.moveDirection = direction;
+    const badge = $("moveDirectionBadge");
+    if (badge) {
+      badge.textContent = direction === "out" ? "직접 출고 모드" : "입고 모드";
+      badge.classList.toggle("outbound", direction === "out");
+    }
+    const memo = $("moveMemo");
+    if (memo) {
+      memo.placeholder = direction === "out"
+        ? "예: 배송 누락 재출고 / 오배송 재처리 / 고객 재발송"
+        : "예: 4/28 14파렛 입고";
+    }
+    const applyBtn = $("applyStockMove");
+    if (applyBtn) applyBtn.textContent = direction === "out" ? "직접 출고 적용" : "입고 적용";
+    const quickBtn = $("quickInboundExample");
+    if (quickBtn) quickBtn.hidden = direction === "out";
+    updateMoveBatchSummary();
+  }
+
+  function buildStockMoveAt(dateValue) {
+    const date = normalizePurchaseDate(dateValue || todayKey(), new Date());
+    return new Date(`${date}T12:00:00`).toISOString();
+  }
+
   function renderStockMoveRows() {
     const wrap = $("stockMoveRows");
     if (!wrap) return;
@@ -2469,14 +2869,21 @@ function refreshActiveOrderAnalysisSummary() {
     updateMoveBatchSummary();
   }
 
-  function clearStockMoveRows() {
+  function clearStockMoveRows(options = {}) {
+    const { keepDirection = false, keepDate = false } = options;
     const wrap = $("stockMoveRows");
     if (!wrap) return;
     wrap.innerHTML = "";
     addStockMoveRow();
     const memo = $("moveMemo");
     if (memo) memo.value = "";
-    updateMoveBatchSummary();
+    const dateInput = $("moveDate");
+    if (dateInput && !keepDate) dateInput.value = todayKey();
+    if (!keepDirection) {
+      const directionInput = $("stockMoveDirection");
+      if (directionInput) directionInput.value = "in";
+    }
+    updateStockMoveDirectionUi();
   }
 
   function getStockMoveRows() {
@@ -2503,7 +2910,10 @@ function refreshActiveOrderAnalysisSummary() {
       acc.units += row.units || 0;
       return acc;
     }, { pallets: 0, boxes: 0, eaches: 0, units: 0 });
-    summary.innerHTML = `입력 예정 <strong>${number(rows.length)}개 품목</strong> · 파렛 <strong>${number(inputTotals.pallets)}</strong> · 박스/묶음 <strong>${number(inputTotals.boxes)}</strong> · 낱개 <strong>${number(inputTotals.eaches)}</strong> · 총 환산 <strong>${number(inputTotals.units)}개</strong>`;
+    const direction = getStockMoveDirection();
+    const actionLabel = direction === "out" ? "직접 출고 예정" : "입고 예정";
+    const assetValue = calcMovementAssetValue(rows.map((row) => ({ sku: row.sku, units: row.units })), { includeBoxes: true });
+    summary.innerHTML = `${actionLabel} <strong>${number(rows.length)}개 품목</strong> · 파렛 <strong>${number(inputTotals.pallets)}</strong> · 박스/묶음 <strong>${number(inputTotals.boxes)}</strong> · 낱개 <strong>${number(inputTotals.eaches)}</strong> · 총 환산 <strong>${number(inputTotals.units)}개</strong> · 재고자산 ${direction === "out" ? "차감" : "증가"} 예상 <strong>${money(assetValue)}</strong>`;
   }
 
   function renderInventory() {
@@ -2589,6 +2999,7 @@ function refreshActiveOrderAnalysisSummary() {
   function calcMovementAssetValue(list = [], options = {}) {
     const { includeBoxes = false } = options;
     return list.reduce((sum, { sku, units }) => {
+      sku = canonicalSku(sku);
       const def = INVENTORY_DEFS[sku];
       if (!def) return sum;
       if (def.isBox && !includeBoxes) return sum;
@@ -2640,6 +3051,7 @@ function refreshActiveOrderAnalysisSummary() {
         const def = INVENTORY_DEFS[sku];
         if (!sku || !def || def.isBox) return;
         if (detail.direction && detail.direction !== "out") return;
+        if (record.source === STOCK_MOVE_SOURCES.manualOutbound || detail.source === STOCK_MOVE_SOURCES.manualOutbound) return;
         const rawCount = cleanNumber(detail.orderCount ?? detail.orders ?? detail.orderRows ?? 0);
         const orderCount = rawCount > 0 ? rawCount : 1;
         const item = itemsBySku.get(sku) || { sku, today: 0, week: 0, month: 0 };
@@ -2962,12 +3374,23 @@ function refreshActiveOrderAnalysisSummary() {
     return `${next.getMonth() + 1}월 1일 예정`;
   }
 
+  function isReturnAdjustmentHistory(item) {
+    return item?.type === "취소/반품" || item?.source === "returnAdjustment";
+  }
+
+  function isInternalAdminHistory(item) {
+    return isReturnAdjustmentHistory(item) || item?.type === "직접출고" || item?.source === STOCK_MOVE_SOURCES.manualOutbound;
+  }
+
+  function getVisibleHistoryItems() {
+    const items = state.history || [];
+    return isEditorSession() ? items : items.filter((item) => !isInternalAdminHistory(item));
+  }
+
   function renderHistory() {
     const tbody = $("historyTable");
     if (!tbody) return;
-    const historyItems = isEditorSession()
-      ? (state.history || [])
-      : (state.history || []).filter((item) => item?.type !== "취소/반품");
+    const historyItems = getVisibleHistoryItems();
     const rows = historyItems.slice(0, 80).map((item, index) => {
       const key = item.id || `idx-${index}`;
       return `
@@ -2989,6 +3412,10 @@ function refreshActiveOrderAnalysisSummary() {
   }
 
   function bindWmsEvents() {
+
+    document.querySelectorAll("[data-purchase-view-mode]").forEach((button) => {
+      button.addEventListener("click", () => setPurchaseViewMode(button.dataset.purchaseViewMode));
+    });
 
     $("purchaseAddRowBtn")?.addEventListener("click", addPurchaseDraftRow);
     $("purchaseDraftRows")?.addEventListener("change", (event) => {
@@ -3039,8 +3466,10 @@ function refreshActiveOrderAnalysisSummary() {
     });
     $("inventorySearch")?.addEventListener("input", renderInventory);
     $("orderFile")?.addEventListener("change", (event) => {
-      const fileName = event.target.files?.[0]?.name || "엑셀 파일 선택";
+      const file = event.target.files?.[0] || null;
+      const fileName = file?.name || "엑셀 파일 선택";
       setText("orderFileName", fileName);
+      setExcelFormatWarning(file);
     });
     $("inventoryTable")?.addEventListener("click", (event) => {
       const row = event.target.closest("[data-inventory-sku]");
@@ -3088,6 +3517,8 @@ function refreshActiveOrderAnalysisSummary() {
       pushHistory("박스수정", `${changed.length}개 박스 재고 직접 수정`, changed.join(" / "));
       saveState("박스 재고 직접 수정 저장");
     });
+    $("stockMoveDirection")?.addEventListener("change", updateStockMoveDirectionUi);
+    $("moveDate")?.addEventListener("change", updateMoveBatchSummary);
     $("quickInboundExample")?.addEventListener("click", () => {
       if (!requireEditor("입고 예시 입력")) return;
       fillInboundExample();
@@ -3177,43 +3608,65 @@ function refreshActiveOrderAnalysisSummary() {
   }
 
   function applyStockMove() {
+    if (!requireEditor("입고/직접 출고 처리")) return;
+
+    const direction = getStockMoveDirection();
+    const isOutbound = direction === "out";
     const memo = ($("moveMemo")?.value || "").trim();
+    const at = buildStockMoveAt($("moveDate")?.value || todayKey());
     const rows = getStockMoveRows().filter((row) => row.sku && INVENTORY_DEFS[row.sku] && row.units > 0);
 
     if (!rows.length) {
-      alert("입고할 수량을 한 줄 이상 넣어주세요.");
+      alert(stockMoveDirectionLabel(direction) + "할 수량을 한 줄 이상 넣어주세요.");
       return;
     }
 
+    addBackup(isOutbound ? "직접 출고 적용 전 자동 백업" : "입고 입력 적용 전 자동 백업");
     const bySku = new Map();
     const changedPrices = [];
     rows.forEach((row) => {
-      bySku.set(row.sku, (bySku.get(row.sku) || 0) + row.units);
-      if (row.unitPrice !== null && Number.isFinite(row.unitPrice) && row.unitPrice >= 0) {
-        const beforePrice = getSkuCost(row.sku);
+      const sku = canonicalSku(row.sku);
+      bySku.set(sku, (bySku.get(sku) || 0) + row.units);
+      if (!isOutbound && row.unitPrice !== null && Number.isFinite(row.unitPrice) && row.unitPrice >= 0) {
+        const beforePrice = getSkuCost(sku);
         state.productCosts = normalizeProductCosts(state.productCosts);
-        state.productCosts[row.sku] = row.unitPrice;
-        if (beforePrice !== row.unitPrice) changedPrices.push(`${row.sku} ${money(beforePrice)} → ${money(row.unitPrice)}`);
+        state.productCosts[sku] = row.unitPrice;
+        if (beforePrice !== row.unitPrice) changedPrices.push(`${sku} ${money(beforePrice)} → ${money(row.unitPrice)}`);
       }
     });
 
     [...bySku.entries()].forEach(([sku, units]) => {
       if (!state.stock[sku]) state.stock[sku] = { units: 0 };
-      state.stock[sku].units = (Number(state.stock[sku].units) || 0) + units;
+      const current = Number(state.stock[sku].units) || 0;
+      state.stock[sku].units = isOutbound ? current - units : current + units;
     });
 
     const detailItems = [...bySku.entries()].map(([sku, units]) => ({
       sku,
       units,
-      direction: "in",
-      text: formatMovementDetail(sku, units, "in")
+      direction,
+      source: isOutbound ? STOCK_MOVE_SOURCES.manualOutbound : STOCK_MOVE_SOURCES.manualInbound,
+      orderCount: 0,
+      text: formatMovementDetail(sku, units, direction)
     }));
 
     const totalUnits = detailItems.reduce((sum, item) => sum + item.units, 0);
-    const priceMemo = changedPrices.length ? ` · 단가 변경 ${number(changedPrices.length)}건` : "";
-    pushHistory("입고묶음", `${number(detailItems.length)}개 품목 일괄 입고${priceMemo}${memo ? ` · ${memo}` : ""}`, `+${number(totalUnits)}개`, detailItems);
-    clearStockMoveRows();
-    saveState(`${number(detailItems.length)}개 품목 일괄 입고`);
+    const priceMemo = !isOutbound && changedPrices.length ? ` · 단가 변경 ${number(changedPrices.length)}건` : "";
+    const type = isOutbound ? "직접출고" : "입고묶음";
+    const actionText = isOutbound ? "직접 출고" : "일괄 입고";
+    const qtyPrefix = isOutbound ? "-" : "+";
+    const source = isOutbound ? STOCK_MOVE_SOURCES.manualOutbound : STOCK_MOVE_SOURCES.manualInbound;
+    pushHistory(type, number(detailItems.length) + "개 품목 " + actionText + priceMemo + (memo ? " · " + memo : ""), qtyPrefix + number(totalUnits) + "개", detailItems, { at, source });
+    addAdminActionLog(isOutbound ? "직접 출고 입력" : "입고 입력", {
+      itemName: detailItems.length === 1 ? detailItems[0].sku : number(detailItems.length) + "개 품목",
+      qty: totalUnits,
+      unit: "개",
+      memo: memo || actionText,
+      source,
+      details: detailItems
+    });
+    clearStockMoveRows({ keepDirection: true, keepDate: true });
+    saveState(`${number(detailItems.length)}개 품목 ${actionText}`);
   }
 
   function pushHistory(type, memo, qtyText, details = [], options = {}) {
@@ -3225,6 +3678,7 @@ function refreshActiveOrderAnalysisSummary() {
       type,
       memo,
       qtyText,
+      source: options?.source || "",
       details
     };
     state.history.unshift(record);
@@ -3243,7 +3697,11 @@ function refreshActiveOrderAnalysisSummary() {
   }
 
   function fillInboundExample() {
-    clearStockMoveRows();
+    const directionInput = $("stockMoveDirection");
+    if (directionInput) directionInput.value = "in";
+    const dateInput = $("moveDate");
+    if (dateInput && !dateInput.value) dateInput.value = todayKey();
+    clearStockMoveRows({ keepDirection: true, keepDate: true });
     [
       ["에낙 치킨", 3],
       ["브이콘 50g", 6],
@@ -3251,19 +3709,18 @@ function refreshActiveOrderAnalysisSummary() {
       ["라멘뽀식이", 3]
     ].forEach(([sku, pallets]) => addStockMoveRow({ sku, pallets, boxes: 0, eaches: 0 }));
     $("moveMemo").value = "14파렛 입고";
-    updateMoveBatchSummary();
+    updateStockMoveDirectionUi();
   }
 
   function findHistoryByKey(key) {
-    const list = isEditorSession()
-      ? (state.history || [])
-      : (state.history || []).filter((item) => item?.type !== "취소/반품");
+    const list = getVisibleHistoryItems();
     if (!key) return null;
     if (key.startsWith("idx-")) return list[Number(key.replace("idx-", ""))] || null;
     return list.find((item) => item.id === key) || null;
   }
 
   function stockPercentText(sku) {
+    sku = canonicalSku(sku);
     const units = state.stock[sku]?.units || 0;
     const safety = safetyStatus(sku, units);
     if (!safety?.threshold) return "안전재고 미설정";
@@ -3273,6 +3730,7 @@ function refreshActiveOrderAnalysisSummary() {
 
 
   function buildSkuOutboundTrend(sku) {
+    sku = canonicalSku(sku);
     const days = 30;
     const today = startOfDay(new Date());
     const keys = Array.from({ length: days }, (_, index) => {
@@ -3288,7 +3746,7 @@ function refreshActiveOrderAnalysisSummary() {
     (state.history || []).forEach((record) => {
       const details = Array.isArray(record.details) ? record.details : [];
       details.forEach((detail) => {
-        if (detail?.sku !== sku) return;
+        if (canonicalSku(detail?.sku) !== sku) return;
         const units = cleanNumber(detail.units);
         if (units <= 0) return;
         const direction = detail.direction === "in" ? "in" : "out";
@@ -3341,6 +3799,7 @@ function refreshActiveOrderAnalysisSummary() {
   }
 
   function buildSkuStockoutForecast(sku, trendData) {
+    sku = canonicalSku(sku);
     const currentUnits = cleanNumber(state.stock[sku]?.units);
     const points = Array.isArray(trendData?.points) ? trendData.points : [];
     const recentTotal30 = Math.max(0, cleanNumber(trendData?.recentTotal));
@@ -3484,7 +3943,7 @@ function refreshActiveOrderAnalysisSummary() {
       <div class="inventory-detail-list">
         ${rows.map(([label, value]) => `<div class="inventory-detail-line"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}
       </div>
-      ${def.isBox ? `<p class="detail-note">박스 재고는 파렛/묶음/장 기준으로 직접 수정할 수 있습니다.</p>` : `<p class="detail-note">이 품목의 입고는 입고 직접 입력에서 여러 줄로 한 번에 적용할 수 있습니다.</p>`}
+      ${def.isBox ? `<p class="detail-note">박스 재고는 파렛/묶음/장 기준으로 직접 수정할 수 있습니다.</p>` : `<p class="detail-note">이 품목의 입고와 직접 출고는 입고/직접 출고 입력에서 여러 줄로 한 번에 적용할 수 있습니다.</p>`}
       <section class="sku-stockout-forecast-card empty" id="inventoryItemStockoutForecast">
         <div class="sku-stockout-forecast-main">
           <span>예상 소진일</span>
@@ -3558,12 +4017,23 @@ function refreshActiveOrderAnalysisSummary() {
   }
 
   async function parseOrderFile() {
+    if (!requireEditor("엑셀 주문 분석")) return;
+
     const input = $("orderFile");
     const file = input?.files?.[0];
     if (!file) {
       alert("엑셀 파일을 먼저 선택해주세요.");
       return;
     }
+
+    setExcelFormatWarning(file);
+
+    const ext = getFileExtension(file.name);
+    if (ext && !["xlsx", "xls", "csv"].includes(ext)) {
+      setText("excelNotice", "지원하지 않는 파일 형식입니다. .xlsx, .xls, .csv 파일만 업로드해 주세요.");
+      return;
+    }
+
     if (!window.XLSX) {
       setText("excelNotice", "엑셀 분석 라이브러리를 불러오지 못했습니다. 인터넷 연결 또는 CDN 차단 여부를 확인해주세요.");
       return;
@@ -3573,7 +4043,15 @@ function refreshActiveOrderAnalysisSummary() {
       const workbook = XLSX.read(buffer, { type: "array" });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
-      const analysis = analyzeOrderRows(rows);
+      const analysis = normalizeOrderAnalysis(analyzeOrderRows(rows));
+      analysis.fileMeta = {
+        name: file.name || "",
+        size: file.size || 0,
+        lastModified: file.lastModified || 0,
+        extension: ext || "",
+        parsedAt: new Date().toISOString()
+      };
+      analysis.orderApplicationSignature = buildOrderApplicationSignature(analysis);
       lastOrderAnalysis = analysis;
       localStorage.setItem(ORDER_CACHE_KEY, JSON.stringify(analysis));
       renderOrderAnalysis(analysis);
@@ -3771,9 +4249,9 @@ function refreshActiveOrderAnalysisSummary() {
       [/foot|풋젤리/, "풋젤리"],
       [/sweetpotato\(50g\)|sweetpotato50g|스위트포테이토|촉촉한고구마/, "촉촉한 고구마"],
       [/촉촉한밤|^밤$|밤/, "촉촉한 밤"],
-      [/무가당.*300g/, "찹쌀 누룽지 검정콩"],
+      [/무가당.*300g/, "찹쌀 누룽지 무가당"],
       [/무가당\(288g\)|무가당288g/, "찹쌀 누룽지 무가당"],
-      [/검정콩|검은콩/, "찹쌀 누룽지 검정콩"],
+      [/검정콩|검은콩/, "찹쌀 누룽지 무가당"],
       [/찹쌀.*츄러스|누룽지.*츄러스|츄러스/, "찹쌀 누룽지 츄러스"],
       [/찹쌀.*무가당|누룽지.*무가당/, "찹쌀 누룽지 무가당"],
       [/찹쌀.*스위트|누룽지.*스위트|^찹쌀누룽지$|찹쌀누룽지/, "찹쌀 누룽지 스위트"],
@@ -3803,10 +4281,11 @@ function refreshActiveOrderAnalysisSummary() {
 
     const found = rules.find(([pattern]) => pattern.test(text));
     if (!found) return { needs: ["등록되지 않은 상품명"] };
-    return { items: [{ sku: found[1], units }] };
+    return { items: [{ sku: canonicalSku(found[1]), units }] };
   }
 
   function getBoxUsage(sku, units) {
+    sku = canonicalSku(sku);
     const def = INVENTORY_DEFS[sku];
     if (!def || def.isBox || sku === "코디 3겹") return { size: "none" };
     const remainder = units % def.unitsPerBox;
@@ -3854,6 +4333,103 @@ function refreshActiveOrderAnalysisSummary() {
     return { size: "none", needCheck: "박스 사용 기준 미등록" };
   }
 
+
+  function stableHash(text) {
+    const input = String(text || "");
+    let hash = 2166136261;
+    for (let i = 0; i < input.length; i += 1) {
+      hash ^= input.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(36);
+  }
+
+  function buildOrderMajorSummary(analysis) {
+    const rows = [].concat(analysis && analysis.deductions ? analysis.deductions : [], analysis && analysis.boxUsages ? analysis.boxUsages : [])
+      .map(function(item) { return { sku: canonicalSku(item.sku), units: cleanNumber(item.units) }; })
+      .filter(function(item) { return item.sku && item.units > 0; })
+      .sort(function(a, b) { return b.units - a.units || a.sku.localeCompare(b.sku, "ko-KR"); })
+      .slice(0, 12);
+    return rows.map(function(item) { return item.sku + ":" + Math.round(item.units); });
+  }
+
+  function buildOrderApplicationSignature(analysis) {
+    const fileMeta = analysis && analysis.fileMeta ? analysis.fileMeta : {};
+    const majorSummary = buildOrderMajorSummary(analysis || {});
+    const summaryHash = stableHash(majorSummary.join("|"));
+    const normalizedFileName = String(fileMeta.name || (analysis && analysis.fileName) || "").trim().toLowerCase();
+    const fileSize = cleanNumber(fileMeta.size || (analysis && analysis.fileSize) || 0);
+    const orderRows = cleanNumber(analysis && analysis.orderRows);
+    const paymentGroupCount = cleanNumber(analysis && analysis.paymentGroupCount);
+    const paymentUniqueSum = Math.round(cleanNumber(analysis && analysis.paymentUniqueSum));
+    const paymentUniqueWithExtraShipping = Math.round(cleanNumber((analysis && analysis.paymentUniqueWithExtraShipping) || (analysis && analysis.paymentUniqueSum)));
+    const fingerprint = stableHash([
+      normalizedFileName,
+      fileSize,
+      orderRows,
+      paymentGroupCount,
+      paymentUniqueSum,
+      paymentUniqueWithExtraShipping,
+      summaryHash
+    ].join("|"));
+    return {
+      fileName: normalizedFileName,
+      fileSize,
+      orderRows,
+      paymentGroupCount,
+      paymentUniqueSum,
+      paymentUniqueWithExtraShipping,
+      majorSummary,
+      summaryHash,
+      fingerprint
+    };
+  }
+
+  function findPotentialDuplicateOrderApplication(analysis) {
+    const signature = buildOrderApplicationSignature(analysis);
+    const records = Array.isArray(state.appliedOrderFiles) ? state.appliedOrderFiles.map(normalizeAppliedOrderFile).filter(Boolean) : [];
+    let best = null;
+    records.forEach(function(record) {
+      let score = 0;
+      if (signature.fingerprint && record.fingerprint === signature.fingerprint) score += 6;
+      if (signature.fileName && record.fileName && signature.fileName === String(record.fileName).toLowerCase()) score += 1;
+      if (signature.fileSize && record.fileSize && signature.fileSize === record.fileSize) score += 1;
+      if (signature.orderRows && record.orderRows && signature.orderRows === record.orderRows) score += 1;
+      if (signature.paymentGroupCount && record.paymentGroupCount && signature.paymentGroupCount === record.paymentGroupCount) score += 1;
+      if (signature.paymentUniqueSum && record.paymentUniqueSum && signature.paymentUniqueSum === Math.round(record.paymentUniqueSum)) score += 1;
+      if (signature.summaryHash && record.summaryHash && signature.summaryHash === record.summaryHash) score += 2;
+      if (score > (best ? best.score : 0)) best = { record, score, signature };
+    });
+    if (!best) return null;
+    const filenameOnly = best.score === 1 && signature.fileName && best.record.fileName && signature.fileName === String(best.record.fileName).toLowerCase();
+    if (filenameOnly) return null;
+    return best.score >= 4 ? best : null;
+  }
+
+  function addAppliedOrderFileRecord(analysis) {
+    const signature = buildOrderApplicationSignature(analysis);
+    const actor = getAdminActorMeta();
+    const record = normalizeAppliedOrderFile({
+      id: createHistoryId(),
+      at: new Date().toISOString(),
+      fileName: signature.fileName,
+      fileSize: signature.fileSize,
+      orderRows: signature.orderRows,
+      paymentGroupCount: signature.paymentGroupCount,
+      paymentUniqueSum: signature.paymentUniqueSum,
+      paymentUniqueWithExtraShipping: signature.paymentUniqueWithExtraShipping,
+      majorSummary: signature.majorSummary,
+      summaryHash: signature.summaryHash,
+      fingerprint: signature.fingerprint,
+      adminUid: actor.adminUid,
+      adminEmail: actor.adminEmail
+    });
+    state.appliedOrderFiles = Array.isArray(state.appliedOrderFiles) ? state.appliedOrderFiles : [];
+    state.appliedOrderFiles.unshift(record);
+    state.appliedOrderFiles = state.appliedOrderFiles.slice(0, APPLIED_ORDER_HISTORY_LIMIT);
+    return record;
+  }
+
   function renderOrderAnalysis(analysis) {
     $("orderResultCard").hidden = false;
     const duplicatePaymentText = analysis.duplicatePaymentRowCount ? `, 주문금액 중복 ${analysis.duplicatePaymentRowCount.toLocaleString("ko-KR")}행 제외` : "";
@@ -3894,13 +4470,23 @@ function refreshActiveOrderAnalysisSummary() {
   }
 
   function applyLastOrderDeductions() {
-    const analysis = lastOrderAnalysis || (() => {
+    if (!requireEditor("엑셀 주문 차감")) return;
+
+    const analysis = normalizeOrderAnalysis(lastOrderAnalysis || (() => {
       try { return JSON.parse(localStorage.getItem(ORDER_CACHE_KEY) || "null"); } catch { return null; }
-    })();
+    })());
     if (!analysis) return;
+    lastOrderAnalysis = analysis;
+    localStorage.setItem(ORDER_CACHE_KEY, JSON.stringify(analysis));
     if (analysis.needs?.length && !confirm(`확인 필요 ${analysis.needs.length}건이 있습니다. 확인 필요 항목은 제외하고 차감할까요?`)) return;
 
+    const duplicate = findPotentialDuplicateOrderApplication(analysis);
+    if (duplicate && !confirm("이미 적용된 파일일 수 있습니다. 다시 적용하면 재고가 중복 차감될 수 있습니다.\n\n이전 적용: " + formatDateTime(duplicate.record.at) + " / " + (duplicate.record.fileName || "파일명 없음") + " / " + number(duplicate.record.orderRows) + "행\n계속 진행하시겠습니까?")) return;
+
+    addBackup("엑셀 주문 적용 전 자동 백업");
+
     analysis.deductions.forEach(({ sku, units }) => {
+      sku = canonicalSku(sku);
       if (state.stock[sku]) state.stock[sku].units -= units;
     });
     analysis.boxUsages.forEach(({ sku, units }) => {
@@ -3921,9 +4507,19 @@ function refreshActiveOrderAnalysisSummary() {
       units,
       orderCount: Math.max(1, cleanNumber(orderCount)),
       direction: "out",
+      source: "excelOrderDeduction",
       text: formatMovementDetail(sku, units, "out")
     }));
-    pushHistory("주문처리", `엑셀 주문 ${analysis.orderRows}행 차감`, `결제그룹 ${analysis.paymentGroupCount}건 / ${money(analysis.paymentUniqueSum)}`, detailItems);
+    pushHistory("주문처리", "엑셀 주문 " + analysis.orderRows + "행 차감", "결제그룹 " + analysis.paymentGroupCount + "건 / " + money(analysis.paymentUniqueSum), detailItems, { source: "excelOrderDeduction" });
+    const appliedRecord = addAppliedOrderFileRecord(analysis);
+    addAdminActionLog("엑셀 주문 적용", {
+      itemName: appliedRecord?.fileName || "엑셀 주문 파일",
+      qty: analysis.orderRows,
+      unit: "행",
+      memo: "결제그룹 " + number(analysis.paymentGroupCount) + "건 / " + money(analysis.paymentUniqueSum),
+      source: "excelOrderDeduction",
+      details: detailItems
+    });
     saveState("엑셀 주문 차감 적용");
     $("applyOrderDeductions").disabled = true;
   }
@@ -3956,6 +4552,7 @@ function refreshActiveOrderAnalysisSummary() {
       if (!imported.stock || !imported.pallets) throw new Error("invalid backup");
       addBackup("백업 불러오기 전 자동 백업");
       state = normalizeState({ ...createInitialState(), ...imported });
+      addAdminActionLog("데이터 복구/import", { itemName: file.name || "백업 파일", memo: "백업 파일 불러오기", source: "importBackup" });
       saveState("백업 파일 불러오기");
       event.target.value = "";
     } catch {
