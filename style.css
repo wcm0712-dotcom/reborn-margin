@@ -68,6 +68,25 @@ button:disabled { cursor: not-allowed; opacity: 0.48; }
 }
 .brand strong { display: block; font-size: 18px; letter-spacing: -0.03em; }
 .brand small { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; letter-spacing: 0.04em; }
+
+/* 2026-05-01: 앱 아이콘과 웹앱 내부 브랜드 로고 통일 */
+.brand-mark,
+.home-brand-mark {
+  overflow: hidden;
+  padding: 0;
+  color: transparent;
+  background: #941b1d;
+}
+
+.brand-mark .brand-logo-img,
+.home-brand-mark img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
 .category-nav {
   display: inline-flex;
   gap: 6px;
@@ -6817,5 +6836,407 @@ body.route-home .category-nav {
     min-height: auto;
     padding: 18px;
     border-radius: 22px;
+  }
+}
+
+
+/* 2026-05-01: 앱 실행 시 1.5초 브랜드 로고 스플래시 */
+.app-launch-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(148, 27, 29, .28), transparent 34%),
+    linear-gradient(135deg, #140607, #23090a 48%, #120507);
+  pointer-events: none;
+  animation: rebornSplashHide 1.5s cubic-bezier(.22,.61,.36,1) forwards;
+}
+
+.app-launch-splash-card {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  transform: translateY(8px) scale(.96);
+  opacity: 0;
+  animation: rebornSplashLogo 1.5s cubic-bezier(.22,.61,.36,1) forwards;
+}
+
+.app-launch-splash-card img {
+  width: clamp(112px, 28vw, 154px);
+  height: clamp(112px, 28vw, 154px);
+  display: block;
+  border-radius: 34px;
+  box-shadow: 0 24px 68px rgba(0,0,0,.36), 0 0 0 1px rgba(255,255,255,.08);
+}
+
+.app-launch-splash-card span {
+  color: rgba(255,255,255,.9);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .18em;
+}
+
+@keyframes rebornSplashLogo {
+  0% { opacity: 0; transform: translateY(10px) scale(.94); filter: blur(6px); }
+  22% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  72% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  100% { opacity: 0; transform: translateY(-8px) scale(1.035); filter: blur(4px); }
+}
+
+@keyframes rebornSplashHide {
+  0% { opacity: 1; visibility: visible; }
+  78% { opacity: 1; visibility: visible; }
+  100% { opacity: 0; visibility: hidden; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-launch-splash,
+  .app-launch-splash-card {
+    animation-duration: .01ms;
+  }
+}
+
+
+/* 2026-05-01: 일반 이용자 발주 현황은 간소화/접기만 노출 */
+body.view-only-mode #page-wms [data-purchase-view-mode="expanded"] {
+  display: none !important;
+}
+
+/* 2026-05-01: mobile-first margin calculator compact layout
+   - 상품 선택과 기본값 버튼을 같은 줄로 정렬
+   - 모바일 입력칸을 2열 카드형으로 압축
+   - 입력 영역 → 결과 영역 순서로 표시해 스크롤 흐름 개선 */
+#page-margin .margin-input-title-row {
+  margin-bottom: 12px;
+}
+
+#page-margin .margin-control-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+#page-margin .margin-product-select-field {
+  min-width: 0;
+  margin: 0;
+}
+
+#page-margin .margin-reset-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 92px;
+  min-height: 48px;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  #page-margin .page-head {
+    margin: 10px auto 8px;
+  }
+
+  #page-margin .page-head h1 {
+    font-size: 26px;
+    line-height: 1.05;
+  }
+
+  #page-margin .margin-layout {
+    max-width: 520px;
+    gap: 10px;
+  }
+
+  #page-margin .margin-layout .input-card {
+    order: 1 !important;
+  }
+
+  #page-margin .margin-layout .result-card {
+    order: 2 !important;
+    max-width: 100%;
+    justify-self: stretch;
+  }
+
+  #page-margin .input-card,
+  #page-margin .result-card {
+    padding: 12px;
+    border-radius: 18px;
+  }
+
+  #page-margin .margin-input-title-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  #page-margin .margin-input-title-row h2,
+  #page-margin .result-card .card-title-row h2 {
+    font-size: 16px;
+  }
+
+  #page-margin .margin-control-row {
+    grid-template-columns: minmax(0, 1fr) 82px;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  #page-margin .margin-product-select-field {
+    gap: 4px;
+  }
+
+  #page-margin .margin-product-select-field > span {
+    font-size: 11px;
+    line-height: 1.2;
+  }
+
+  #page-margin .product-picker-input {
+    min-height: 42px !important;
+    border-radius: 13px !important;
+    padding: 9px 10px !important;
+    font-size: 14px !important;
+  }
+
+  #page-margin .product-picker-cost-hint {
+    display: none !important;
+  }
+
+  #page-margin .margin-reset-btn {
+    width: 82px;
+    min-width: 82px;
+    min-height: 42px !important;
+    height: 42px;
+    padding: 0 8px !important;
+    border-radius: 13px !important;
+    font-size: 12px !important;
+    font-weight: 800;
+  }
+
+  #page-margin .form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 7px 8px !important;
+  }
+
+  #page-margin .form-grid .field {
+    min-width: 0;
+    gap: 4px;
+    padding: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.075);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.032);
+  }
+
+  #page-margin .form-grid .field span {
+    min-height: 28px;
+    color: rgba(241, 226, 236, 0.76);
+    font-size: 10.8px;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+  }
+
+  #page-margin .form-grid .field input,
+  #page-margin .form-grid .field select {
+    min-height: 38px !important;
+    padding: 8px 9px !important;
+    border-radius: 12px !important;
+    font-size: 14px !important;
+    font-weight: 850;
+    text-align: right;
+    background: rgba(12, 16, 28, 0.58);
+  }
+
+  #page-margin .form-grid .field input::placeholder {
+    text-align: left;
+    font-weight: 650;
+  }
+
+  #page-margin .quick-boxes {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+    margin-top: 8px !important;
+  }
+
+  #page-margin .quick-boxes button {
+    min-height: 38px !important;
+    padding: 7px 4px !important;
+    border-radius: 12px !important;
+    font-size: 11px !important;
+    font-weight: 850;
+    line-height: 1.15;
+    white-space: normal;
+  }
+
+  #page-margin .result-card .card-title-row {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  #page-margin .result-highlight {
+    padding: 12px;
+    gap: 3px;
+    border-radius: 16px;
+  }
+
+  #page-margin .result-highlight strong {
+    font-size: clamp(26px, 8vw, 32px);
+    line-height: 1.05;
+  }
+
+  #page-margin .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 7px !important;
+    margin-top: 8px !important;
+  }
+
+  #page-margin .metric-grid > div {
+    min-width: 0;
+    padding: 9px !important;
+    border-radius: 13px !important;
+  }
+
+  #page-margin .metric-grid span {
+    margin-bottom: 5px;
+    font-size: 10.8px;
+    line-height: 1.2;
+  }
+
+  #page-margin .metric-grid strong {
+    font-size: 14px !important;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 430px) {
+  #page-margin .form-grid,
+  #page-margin .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  #page-margin .quick-boxes {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 360px) {
+  #page-margin .margin-control-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #page-margin .margin-reset-btn {
+    width: 100%;
+    min-width: 0;
+  }
+
+  #page-margin .form-grid,
+  #page-margin .metric-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  #page-margin .quick-boxes {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* Fix: 상품 선택 label의 기존 .field.full 전체폭 규칙이 상단 2열 배치를 깨지 않도록 제한 */
+#page-margin .margin-control-row > .margin-product-select-field {
+  grid-column: auto !important;
+}
+
+
+/* 2026-05-01: 상품 선택 위 최종 순이익 미니 표시 */
+#page-margin .margin-profit-mini {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 44px;
+  margin: 0 0 10px;
+  padding: 9px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.105);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.065), rgba(255, 255, 255, 0.028));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
+#page-margin .margin-profit-mini span {
+  min-width: max-content;
+  color: rgba(203, 210, 234, 0.84);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: -0.02em;
+}
+
+#page-margin .margin-profit-mini strong {
+  min-width: 0;
+  color: var(--soft);
+  font-size: clamp(18px, 4.7vw, 24px);
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: -0.055em;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+#page-margin .margin-profit-mini.profit-positive {
+  border-color: rgba(125, 211, 168, 0.32);
+  background: linear-gradient(135deg, rgba(125, 211, 168, 0.15), rgba(125, 211, 168, 0.045));
+}
+
+#page-margin .margin-profit-mini.profit-positive strong {
+  color: #86efac;
+}
+
+#page-margin .margin-profit-mini.profit-negative {
+  border-color: rgba(255, 141, 141, 0.32);
+  background: linear-gradient(135deg, rgba(255, 141, 141, 0.15), rgba(255, 141, 141, 0.045));
+}
+
+#page-margin .margin-profit-mini.profit-negative strong {
+  color: #fca5a5;
+}
+
+#page-margin .margin-profit-mini.profit-zero {
+  border-color: rgba(255, 255, 255, 0.105);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.065), rgba(255, 255, 255, 0.028));
+}
+
+#page-margin .margin-profit-mini.profit-zero strong {
+  color: var(--soft);
+}
+
+@media (max-width: 720px) {
+  #page-margin .margin-profit-mini {
+    min-height: 38px;
+    margin-bottom: 7px;
+    padding: 8px 10px;
+    border-radius: 14px;
+  }
+
+  #page-margin .margin-profit-mini span {
+    font-size: 11px;
+  }
+
+  #page-margin .margin-profit-mini strong {
+    font-size: clamp(17px, 5.2vw, 21px);
+  }
+}
+
+@media (max-width: 360px) {
+  #page-margin .margin-profit-mini {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  #page-margin .margin-profit-mini strong {
+    width: 100%;
+    text-align: left;
   }
 }

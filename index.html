@@ -13,13 +13,20 @@
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="64x64" href="./favicon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
-  <link rel="stylesheet" href="./style.css?v=reborn-home-screen-20260501-01" />
+  <link rel="stylesheet" href="./style.css?v=reborn-logo-splash-user-purchase-20260501-01" />
 </head>
 <body>
+  <div id="appLaunchSplash" class="app-launch-splash" aria-hidden="true">
+    <div class="app-launch-splash-card">
+      <img src="./icon-512.png" alt="" />
+      <span>RE:BORN COMPANY</span>
+    </div>
+  </div>
+
   <div class="app-shell">
     <header class="topbar">
       <button class="brand" type="button" data-route="home" aria-label="리본컴퍼니 홈">
-        <span class="brand-mark">R</span>
+        <span class="brand-mark" aria-hidden="true"><img class="brand-logo-img" src="./icon-192.png" alt="" /></span>
         <span class="brand-title">
           <strong>리본컴퍼니</strong>
           <small>Margin · WMS</small>
@@ -39,7 +46,7 @@
           <div class="home-ambient home-ambient-two" aria-hidden="true"></div>
 
           <div class="home-brand-panel">
-            <div class="home-brand-mark" aria-hidden="true">R</div>
+            <div class="home-brand-mark" aria-hidden="true"><img src="./icon-192.png" alt="" /></div>
             <p class="eyebrow">RE:BORN COMPANY</p>
             <h1 id="homeTitle">업무를 차분하게 시작하세요.</h1>
             <p class="home-lead">마진 계산과 WMS 재고 관리를 한 곳에서 확인하는 리본컴퍼니 운영 홈입니다.</p>
@@ -69,18 +76,25 @@
 
         <div class="two-column margin-layout">
           <section class="card input-card">
-            <div class="card-title-row">
+            <div class="card-title-row margin-input-title-row">
               <div>
                 <h2>입력</h2>
                 <p>기본값은 바로 수정할 수 있습니다.</p>
               </div>
-              <button id="resetMarginDefaults" class="ghost-btn" type="button">기본값</button>
             </div>
 
-            <label class="field full fancy-select-field">
-              <span>상품 선택</span>
-              <select id="productSelect"></select>
-            </label>
+            <div id="miniNetProfitBadge" class="margin-profit-mini profit-zero" aria-live="polite">
+              <span>최종 순이익</span>
+              <strong id="miniNetProfit">0원</strong>
+            </div>
+
+            <div class="margin-control-row">
+              <label class="field full fancy-select-field margin-product-select-field">
+                <span>상품 선택</span>
+                <select id="productSelect"></select>
+              </label>
+              <button id="resetMarginDefaults" class="ghost-btn margin-reset-btn" type="button">기본값</button>
+            </div>
 
             <div class="form-grid">
               <label class="field">
@@ -176,7 +190,7 @@
                 <strong id="purchaseGrandTotal">0원</strong>
               </div>
               <div class="purchase-view-mode-control" role="group" aria-label="발주 현황 표시 방식">
-                <button type="button" data-purchase-view-mode="expanded">전체 펼침</button>
+                <button type="button" data-purchase-view-mode="expanded" data-admin-only="true" hidden>전체 펼침</button>
                 <button type="button" data-purchase-view-mode="compact">간소화</button>
                 <button type="button" data-purchase-view-mode="collapsed">접기</button>
               </div>

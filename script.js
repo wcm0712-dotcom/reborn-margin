@@ -1436,10 +1436,13 @@
     const card = $("purchaseStatusCard");
     if (!card) return;
 
-    const mode = PURCHASE_VIEW_MODES.includes(purchaseViewMode) ? purchaseViewMode : "expanded";
+    const editable = isEditorSession();
+    let mode = PURCHASE_VIEW_MODES.includes(purchaseViewMode) ? purchaseViewMode : (editable ? "expanded" : "compact");
+    if (!editable && mode === "expanded") mode = "compact";
+    purchaseViewMode = mode;
+
     const isCompact = mode === "compact";
     const isCollapsed = mode === "collapsed";
-    const editable = isEditorSession();
 
     card.dataset.purchaseViewMode = mode;
     card.classList.toggle("purchase-view-compact", isCompact);
@@ -1460,7 +1463,11 @@
     });
 
     document.querySelectorAll("[data-purchase-view-mode]").forEach((button) => {
-      const active = button.dataset.purchaseViewMode === mode;
+      const isExpandedButton = button.dataset.purchaseViewMode === "expanded";
+      const hideForViewer = isExpandedButton && !editable;
+      button.hidden = hideForViewer;
+      button.setAttribute("aria-hidden", String(hideForViewer));
+      const active = !hideForViewer && button.dataset.purchaseViewMode === mode;
       button.classList.toggle("is-active", active);
       button.setAttribute("aria-pressed", String(active));
     });
@@ -1743,7 +1750,13 @@
     setText("breakEvenPrice", money(roundToTen(breakEven)));
     setText("targetSalePrice", money(roundToTen(targetSale)));
     setText("netProfit", money(net));
+    setText("miniNetProfit", money(net));
     setText("marginRateText", `마진율 ${marginRate.toFixed(2)}%`);
+
+    const miniProfitBadge = $("miniNetProfitBadge");
+    if (miniProfitBadge) {
+      miniProfitBadge.className = `margin-profit-mini ${net > 0 ? "profit-positive" : net < 0 ? "profit-negative" : "profit-zero"}`;
+    }
 
     const badge = $("marginBadge");
     if (badge) {
