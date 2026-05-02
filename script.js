@@ -3889,7 +3889,7 @@ function refreshActiveOrderAnalysisSummary() {
       clearTimeout(chartResizeTimer);
       chartResizeTimer = setTimeout(() => {
         renderOrderChart();
-        renderInventoryItemOrderTrend();
+        refreshInventoryItemOrderTrendIfOpen();
       }, 140);
     });
     document.querySelectorAll(".subtab").forEach((tab) => tab.addEventListener("click", () => switchResultTab(tab.dataset.resultTab)));
@@ -4099,7 +4099,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "outtrend-normalize-at-fix-02",
+    cacheVersion: "outtrend-active-source-fix-09",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -4123,8 +4123,87 @@ function createEmptyOutboundTrendDiagnostics() {
     atParseFailedCount: 0,
     normalizeHelperAvailable: true,
     stockReadFailureReason: "확인 필요",
-    localStorageFailureReason: "",
+    localStorageFailureReason: "아직 localStorage 접근 진단을 실행하지 않음",
     dataSourcesRead: [],
+    renderSkipReason: "",
+    collectionStatus: "not-started",
+    selectedSku: "",
+    currentSku: "",
+    selectedItemName: "",
+    currentItemName: "",
+    selectedStockUnits: 0,
+    totalStockUnitsAll: 0,
+    detailOverlayOpen: false,
+    selectedSkuCandidateCount: 0,
+    selectedSkuMatchedCount: 0,
+    selectedSkuRecentCount: 0,
+    selectedSkuExcludedNoDate: 0,
+    selectedSkuExcludedNoQuantity: 0,
+    selectedSkuExcludedNameMismatch: 0,
+    selectedSkuExcludedType: 0,
+    selectedSkuExcludedDuplicate: 0,
+    selectedSkuExcludedOldRecord: 0,
+    selectedSkuPossibleNameMatches: [],
+    selectedSkuRecordSamples: [],
+    selectedSkuExcludedSamples: [],
+    selectedSkuBoxUsageCount: 0,
+    selectedSkuBoxUsageRecordCount: 0,
+    selectedSkuDeductionCount: 0,
+    selectedSkuDeductionRecordCount: 0,
+    selectedSkuHasBoxUsageOnly: false,
+    selectedSkuNameMatchedBeforeFilter: 0,
+    selectedSkuTypeAcceptedCount: 0,
+    selectedSkuDateAcceptedCount: 0,
+    selectedSkuQuantityAcceptedCount: 0,
+    selectedSkuAcceptedBeforeDedupe: 0,
+    selectedSkuDuplicateExcludedCount: 0,
+    selectedSkuAcceptedAfterDedupe: 0,
+    selectedSkuDedupeRepresentativeSamples: [],
+    selectedSkuDuplicateSamples: [],
+    selectedSkuRejectedByTypeSamples: [],
+    selectedSkuRejectedByDateSamples: [],
+    selectedSkuRejectedByQuantitySamples: [],
+    selectedSkuFinalAcceptedSamples: [],
+    selectedSkuDisplayReason: "",
+    selectedSkuDedupeStrategy: "source-priority + sku/date/units/detail fingerprint",
+    selectedSkuPrimarySourceCount: 0,
+    selectedSkuBackupSourceCount: 0,
+    selectedSkuUndoSourceCount: 0,
+    selectedSkuDiagnosticNote: "",
+    trendDateSource: "",
+    trendDateFieldUsed: "",
+    trendDateBasis: "not-evaluated",
+    outboundTrendCalculationSources: [],
+    outboundTrendDiagnosticOnlySources: [],
+    excludedDiagnosticSources: [],
+    todayOutboundBySource: {},
+    dailyOutboundBySource: {},
+    todayExcludedBackupUnits: 0,
+    todayExcludedUndoUnits: 0,
+    todayExcludedLastAnalysisUnits: 0,
+    todayIncludedActiveHistoryUnits: 0,
+    backupUndoExcludedCount: 0,
+    lastAnalysisExcludedCount: 0,
+    activeHistoryRecordCount: 0,
+    calculationRecordCount: 0,
+    diagnosticOnlyRecordCount: 0,
+    sourceContributionSamples: [],
+    todaySourceContributionSamples: [],
+    selectedSkuCalculationSourceBreakdown: {},
+    selectedSkuDiagnosticSourceBreakdown: {},
+    restoredOrBackupRecordDetectedCount: 0,
+    dailyOutboundSamples: [],
+    todayOutboundTotal: 0,
+    todayOutboundRecordCount: 0,
+    todayOutboundSamples: [],
+    recordsGroupedByProcessingDateCount: 0,
+    recordsGroupedByActualOutboundDateCount: 0,
+    dateAmbiguousRecordCount: 0,
+    dateAmbiguousSamples: [],
+    selectedSkuDailyBreakdown: [],
+    selectedSkuTodayBreakdown: [],
+    selectedSkuDateFieldCounts: {},
+    selectedSkuDateBasisCounts: {},
     excludedReasons: {
       noDate: 0,
       noQuantity: 0,
@@ -4139,10 +4218,11 @@ function createEmptyOutboundTrendDiagnostics() {
     },
     possibleKeys: [],
     candidateFields: [],
+    recordErrors: [],
     lastError: "",
     renderStatus: "not-rendered",
     supabaseStatus: "확인 필요",
-    note: "ZIP 파일에는 실제 브라우저 localStorage 데이터가 포함되지 않을 수 있습니다. 실제 앱 데이터 확인은 진단 결과 복사 내용으로 확인해야 합니다.",
+    note: "날짜별 순출고 계산은 현재 유효 history 기준입니다. backup/undo/lastOrderAnalysis는 중복 위험이 있어 기본 계산에서 제외하고 진단용으로만 표시합니다. ZIP 파일에는 실제 브라우저 localStorage 데이터가 포함되지 않을 수 있습니다.",
   };
 }
 
@@ -4150,9 +4230,459 @@ function resetOutboundTrendDiagnostics() {
   outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 }
 
+function addDiagnosticDataSource(source) {
+  const name = String(source || "").trim();
+  if (!name) return;
+  if (!outboundTrendDiagnostics.dataSourcesRead.includes(name)) {
+    outboundTrendDiagnostics.dataSourcesRead.push(name);
+  }
+}
+
+function summarizeCurrentStockForDiagnostics(selectedSku = "") {
+  const stock = state && state.stock && typeof state.stock === "object" ? state.stock : null;
+  const stockKeys = stock ? Object.keys(stock) : [];
+  const totalUnits = stockKeys.reduce((sum, key) => sum + Math.max(0, cleanNumber(stock[key]?.units)), 0);
+  const sku = canonicalSku(selectedSku);
+  const selectedStock = sku && stock ? stock[sku] : null;
+  outboundTrendDiagnostics.currentSku = sku || "";
+  outboundTrendDiagnostics.selectedSku = sku || "";
+  outboundTrendDiagnostics.currentItemName = sku || "";
+  outboundTrendDiagnostics.selectedItemName = sku || "";
+  outboundTrendDiagnostics.totalStockUnitsAll = totalUnits;
+  outboundTrendDiagnostics.selectedStockUnits = selectedStock ? Math.max(0, cleanNumber(selectedStock.units)) : 0;
+
+  if (sku) {
+    outboundTrendDiagnostics.stockRead = !!selectedStock;
+    outboundTrendDiagnostics.stockUnitsTotal = selectedStock ? Math.max(0, cleanNumber(selectedStock.units)) : 0;
+    outboundTrendDiagnostics.stockReadFailureReason = selectedStock
+      ? (outboundTrendDiagnostics.stockUnitsTotal > 0 ? "" : "선택 품목 현재 재고 수량 0")
+      : "선택 품목 재고 데이터를 찾지 못함";
+    return;
+  }
+
+  outboundTrendDiagnostics.stockRead = !!stock && stockKeys.length > 0;
+  outboundTrendDiagnostics.stockUnitsTotal = totalUnits;
+  outboundTrendDiagnostics.stockReadFailureReason = outboundTrendDiagnostics.stockRead
+    ? "선택 품목 없음 · 전체 재고 합계만 확인됨"
+    : "state.stock 데이터 없음 또는 읽기 실패";
+}
+
+function markOutboundTrendRenderSkip(reason, selectedSku = "") {
+  outboundTrendDiagnostics.renderStatus = "render-skipped";
+  outboundTrendDiagnostics.renderSkipReason = reason || "확인 필요";
+  summarizeCurrentStockForDiagnostics(selectedSku);
+}
+
 function incrementDiagnosticReason(reason) {
   if (!outboundTrendDiagnostics.excludedReasons[reason]) outboundTrendDiagnostics.excludedReasons[reason] = 0;
   outboundTrendDiagnostics.excludedReasons[reason] += 1;
+}
+
+
+function normalizeSkuComparisonText(value) {
+  return replaceLegacySkuText(value)
+    .toLowerCase()
+    .replace(/\u00a0/g, " ")
+    .replace(/[\[\](){}<>]/g, " ")
+    .replace(/[·ㆍ,._/\\|:+-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function compactSkuComparisonText(value) {
+  return normalizeSkuComparisonText(value).replace(/\s+/g, "");
+}
+
+function isSafeSameSkuName(a, b) {
+  const left = canonicalSku(String(a || "").trim());
+  const right = canonicalSku(String(b || "").trim());
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const compactLeft = compactSkuComparisonText(left);
+  const compactRight = compactSkuComparisonText(right);
+  return !!compactLeft && compactLeft === compactRight;
+}
+
+function getRecordNameCandidates(record, parent) {
+  const fields = ["sku", "productSku", "product", "productName", "itemName", "item", "name", "title", "label", "text", "memo"];
+  const names = [];
+  [record, parent].forEach((source) => {
+    if (!source || typeof source !== "object") return;
+    fields.forEach((field) => {
+      const value = source[field];
+      if (value == null || value === "") return;
+      const text = String(value).trim();
+      if (text && !names.includes(text)) names.push(text);
+    });
+  });
+  return names.slice(0, 12);
+}
+
+function addSelectedSkuPossibleNameMatch(rawName, sourceHint = "") {
+  const name = String(rawName || "").trim();
+  if (!name || outboundTrendDiagnostics.selectedSkuPossibleNameMatches.length >= 12) return;
+  const exists = outboundTrendDiagnostics.selectedSkuPossibleNameMatches.some((item) => item.name === name && item.source === sourceHint);
+  if (!exists) outboundTrendDiagnostics.selectedSkuPossibleNameMatches.push({ name, source: sourceHint || "record" });
+}
+
+function addSelectedSkuSample(listName, sample) {
+  const list = outboundTrendDiagnostics[listName];
+  if (!Array.isArray(list) || list.length >= 10) return;
+  list.push(sample);
+}
+
+
+function getOutboundSourcePriority(source = "") {
+  const text = String(source || "").toLowerCase();
+  if (text.startsWith("state.history")) return 10;
+  if (text.startsWith("state.adminactionlogs")) return 20;
+  if (text.includes("localstorage:reborn.wms.state.v4.safe")) return 30;
+  if (text.includes("lastorderanalysis") || text.includes("deductions")) return 40;
+  if (text.includes("localstorage:reborn.wms.state.v3")) return 50;
+  if (text.includes("backup")) return 80;
+  if (text.includes("undo")) return 90;
+  return 60;
+}
+
+function getOutboundSourceBucket(source = "") {
+  const text = String(source || "").toLowerCase();
+  if (text.startsWith("state.history") || text.startsWith("state.adminactionlogs") || text.includes("localstorage:reborn.wms.state.v4.safe")) return "primary";
+  if (text.includes("backup")) return "backup";
+  if (text.includes("undo")) return "undo";
+  return "other";
+}
+
+function getOutboundSourceFamily(source = "") {
+  const text = String(source || "").toLowerCase();
+  if (text.startsWith("state.history")) return "state.history";
+  if (text.startsWith("state.adminactionlogs")) return "state.adminActionLogs";
+  if (text.includes("localstorage:reborn.wms.state.v4.safe.history")) return "localStorage:state.v4.history";
+  if (text.includes("localstorage:reborn.wms.state.v4.safe.adminactionlogs")) return "localStorage:state.v4.adminActionLogs";
+  if (text.includes("lastorderanalysis") || text.includes("reborn.wms.lastorderanalysis") || text.includes("deductions")) return "lastOrderAnalysis.diagnostic";
+  if (text.includes("undo")) return "undo.diagnostic";
+  if (text.includes("backup")) return "backup.diagnostic";
+  if (text.includes("localstorage:reborn.wms.state.v3")) return "legacyState.v3.diagnostic";
+  return source ? "other.diagnostic" : "unknown";
+}
+
+function isOutboundTrendCalculationSource(source = "") {
+  const text = String(source || "").toLowerCase();
+  if (text.startsWith("state.history")) return true;
+  if (text.includes("localstorage:reborn.wms.state.v4.safe.history")) return true;
+  return false;
+}
+
+function getOutboundTrendSourceRole(source = "") {
+  return isOutboundTrendCalculationSource(source) ? "calculation" : "diagnostic-only";
+}
+
+function addUniqueDiagnosticListValue(listName, value) {
+  const text = String(value || "").trim();
+  if (!text) return;
+  if (!Array.isArray(outboundTrendDiagnostics[listName])) outboundTrendDiagnostics[listName] = [];
+  if (!outboundTrendDiagnostics[listName].includes(text)) outboundTrendDiagnostics[listName].push(text);
+}
+
+function addSourceBreakdownValue(mapName, sourceFamily, units = 0, count = 1) {
+  const key = String(sourceFamily || "unknown");
+  if (!outboundTrendDiagnostics[mapName] || typeof outboundTrendDiagnostics[mapName] !== "object") outboundTrendDiagnostics[mapName] = {};
+  const current = outboundTrendDiagnostics[mapName][key] || { count: 0, units: 0 };
+  current.count += count;
+  current.units += cleanNumber(units);
+  outboundTrendDiagnostics[mapName][key] = current;
+}
+
+function addDailyOutboundBySource(dateValue, sourceFamily, units = 0) {
+  const day = String(dateValue || "").slice(0, 10) || "unknown";
+  if (!outboundTrendDiagnostics.dailyOutboundBySource[day]) outboundTrendDiagnostics.dailyOutboundBySource[day] = {};
+  const key = String(sourceFamily || "unknown");
+  outboundTrendDiagnostics.dailyOutboundBySource[day][key] = (outboundTrendDiagnostics.dailyOutboundBySource[day][key] || 0) + cleanNumber(units);
+}
+
+function addSourceContributionSample(listName, record, role = "diagnostic") {
+  const list = outboundTrendDiagnostics[listName];
+  if (!Array.isArray(list) || list.length >= 12 || !record) return;
+  list.push({
+    role,
+    sku: record.sku || "",
+    units: cleanNumber(record.units),
+    date: record.date instanceof Date && !Number.isNaN(record.date.getTime()) ? dateKey(record.date) : "",
+    source: record.sourceFamily || getOutboundSourceFamily(record.source || ""),
+    rawSource: record.source || "",
+    dateFieldUsed: record.dateFieldUsed || "",
+    dateBasis: record.dateBasis || "",
+  });
+}
+
+function summarizeOutboundSourceScopeDiagnostics(records, calculationRecords, targetSku = "") {
+  const sku = canonicalSku(targetSku);
+  const today = todayKey();
+  records.forEach((record) => {
+    const family = record.sourceFamily || getOutboundSourceFamily(record.source || "");
+    const role = record.calculationEligible ? "calculation" : "diagnostic-only";
+    if (record.calculationEligible) addUniqueDiagnosticListValue("outboundTrendCalculationSources", family);
+    else {
+      addUniqueDiagnosticListValue("outboundTrendDiagnosticOnlySources", family);
+      addUniqueDiagnosticListValue("excludedDiagnosticSources", family);
+    }
+    if (family.includes("backup") || family.includes("undo")) {
+      outboundTrendDiagnostics.restoredOrBackupRecordDetectedCount += 1;
+      if (!record.calculationEligible) outboundTrendDiagnostics.backupUndoExcludedCount += 1;
+    }
+    if (family.includes("lastOrderAnalysis") && !record.calculationEligible) outboundTrendDiagnostics.lastAnalysisExcludedCount += 1;
+    if (record.calculationEligible) outboundTrendDiagnostics.activeHistoryRecordCount += 1;
+    else outboundTrendDiagnostics.diagnosticOnlyRecordCount += 1;
+
+    const isSelected = sku && canonicalSku(record.sku) === sku;
+    if (isSelected) {
+      addSourceBreakdownValue(record.calculationEligible ? "selectedSkuCalculationSourceBreakdown" : "selectedSkuDiagnosticSourceBreakdown", family, record.units, 1);
+    }
+
+    if (record.date instanceof Date && !Number.isNaN(record.date.getTime())) {
+      const day = dateKey(record.date);
+      const units = cleanNumber(record.units);
+      addDailyOutboundBySource(day, family, units);
+      if (day === today) {
+        outboundTrendDiagnostics.todayOutboundBySource[family] = (outboundTrendDiagnostics.todayOutboundBySource[family] || 0) + units;
+        if (record.calculationEligible) outboundTrendDiagnostics.todayIncludedActiveHistoryUnits += units;
+        else if (family.includes("backup")) outboundTrendDiagnostics.todayExcludedBackupUnits += units;
+        else if (family.includes("undo")) outboundTrendDiagnostics.todayExcludedUndoUnits += units;
+        else if (family.includes("lastOrderAnalysis")) outboundTrendDiagnostics.todayExcludedLastAnalysisUnits += units;
+        addSourceContributionSample("todaySourceContributionSamples", record, role);
+      }
+    }
+    if (isSelected) addSourceContributionSample("sourceContributionSamples", record, role);
+  });
+  outboundTrendDiagnostics.calculationRecordCount = calculationRecords.length;
+}
+
+function finalizeOutboundFinalCalculationSourceDiagnostics(uniqueRecords, targetSku = "") {
+  const sku = canonicalSku(targetSku);
+  const today = todayKey();
+  outboundTrendDiagnostics.todayIncludedActiveHistoryUnits = 0;
+  outboundTrendDiagnostics.selectedSkuCalculationSourceBreakdown = {};
+  outboundTrendDiagnostics.calculationRecordCount = uniqueRecords.length;
+  uniqueRecords.forEach((record) => {
+    const family = record.sourceFamily || getOutboundSourceFamily(record.source || "");
+    if (sku && canonicalSku(record.sku) === sku) {
+      addSourceBreakdownValue("selectedSkuCalculationSourceBreakdown", family, record.units, 1);
+    }
+    if (record.date instanceof Date && !Number.isNaN(record.date.getTime()) && dateKey(record.date) === today) {
+      outboundTrendDiagnostics.todayIncludedActiveHistoryUnits += cleanNumber(record.units);
+    }
+  });
+}
+
+function getSelectedTargetSku() {
+  return canonicalSku(outboundTrendDiagnostics.currentSku || outboundTrendDiagnostics.selectedSku || "");
+}
+
+function isRecordForSelectedSku(record) {
+  const targetSku = getSelectedTargetSku();
+  return !!targetSku && record && canonicalSku(record.sku) === targetSku;
+}
+
+function buildSelectedRecordSample(record, reason = "sample") {
+  return {
+    source: record?.source || "record",
+    reason,
+    sku: record?.sku || "",
+    units: Number.isFinite(Number(record?.units)) ? Number(record.units) : 0,
+    date: record?.date instanceof Date && !Number.isNaN(record.date.getTime()) ? record.date.toISOString() : String(record?.date || ""),
+    dedupeKey: record?.dedupeKey || "",
+  };
+}
+
+function countSelectedSkuAcceptedSource(record) {
+  if (!isRecordForSelectedSku(record)) return;
+  const bucket = getOutboundSourceBucket(record.source);
+  if (bucket === "primary") outboundTrendDiagnostics.selectedSkuPrimarySourceCount += 1;
+  else if (bucket === "backup") outboundTrendDiagnostics.selectedSkuBackupSourceCount += 1;
+  else if (bucket === "undo") outboundTrendDiagnostics.selectedSkuUndoSourceCount += 1;
+}
+
+function markSelectedSkuPipelineStage(record, parent, sourceHint, stage, data = {}) {
+  const targetSku = getSelectedTargetSku();
+  if (!targetSku) return false;
+  const sku = canonicalSku(data.sku || getRecordSku(record, parent) || "");
+  if (sku !== targetSku) return false;
+  if (stage === "typeAccepted") outboundTrendDiagnostics.selectedSkuTypeAcceptedCount += 1;
+  if (stage === "quantityAccepted") outboundTrendDiagnostics.selectedSkuQuantityAcceptedCount += 1;
+  if (stage === "dateAccepted") outboundTrendDiagnostics.selectedSkuDateAcceptedCount += 1;
+  return true;
+}
+
+function normalizeDedupeText(value) {
+  return safeNormalizeText(value)
+    .replace(/localstorage:reborn\.wms\.state\.v\d+\.safe/g, "state")
+    .replace(/localstorage:reborn\.wms\.backups\.v\d+/g, "backup")
+    .replace(/localstorage:reborn\.wms\.undo\.v\d+/g, "undo")
+    .replace(/\[\d+\]/g, "[]")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildRecordDedupeFingerprint(record, parent, sourceHint = "") {
+  const names = getRecordNameCandidates(record, parent).join("|");
+  const parts = [
+    record?.orderCount,
+    record?.rowIndex,
+    record?.row,
+    record?.line,
+    record?.text,
+    record?.memo,
+    record?.note,
+    parent?.memo,
+    parent?.title,
+    names,
+  ].filter((value) => value !== undefined && value !== null && value !== "");
+  const fingerprint = normalizeDedupeText(parts.join("|"));
+  if (fingerprint) return fingerprint;
+  return normalizeDedupeText(String(sourceHint || "").replace(/^localStorage:[^\.]+\./, ""));
+}
+
+function buildOutboundDedupeKey(record) {
+  const day = dateKey(record.date);
+  const roundedUnits = Math.round(Math.abs(cleanNumber(record.units)) * 1000) / 1000;
+  const stableId = record.id ? `id:${record.id}` : "no-id";
+  if (record.id) {
+    return [stableId, `sku:${record.sku}`, `date:${day}`, `units:${roundedUnits}`].join("|");
+  }
+  const fingerprint = record.fingerprint || "no-fingerprint";
+  return [stableId, `sku:${record.sku}`, `date:${day}`, `units:${roundedUnits}`, `fp:${fingerprint}`].join("|");
+}
+
+function sortOutboundRecordsBySourcePriority(records) {
+  return [...records].sort((a, b) => {
+    const rankDiff = (a.sourcePriority || 60) - (b.sourcePriority || 60);
+    if (rankDiff) return rankDiff;
+    const timeDiff = (a.date?.getTime?.() || 0) - (b.date?.getTime?.() || 0);
+    if (timeDiff) return timeDiff;
+    return String(a.source || "").localeCompare(String(b.source || ""));
+  });
+}
+
+function isPotentialSimilarSkuName(targetSku, rawName) {
+  const target = normalizeSkuComparisonText(targetSku);
+  const raw = normalizeSkuComparisonText(rawName);
+  if (!target || !raw) return false;
+  if (compactSkuComparisonText(target) === compactSkuComparisonText(raw)) return true;
+  const targetTokens = target.split(" ").filter((token) => token.length >= 2);
+  const rawCompact = compactSkuComparisonText(raw);
+  const matched = targetTokens.filter((token) => rawCompact.includes(compactSkuComparisonText(token)));
+  return matched.length >= Math.min(2, targetTokens.length) && targetTokens.length > 0;
+}
+
+function noteSelectedSkuCandidate(record, parent, sourceHint, reason, data = {}) {
+  const targetSku = canonicalSku(outboundTrendDiagnostics.currentSku || outboundTrendDiagnostics.selectedSku || "");
+  if (!targetSku) return false;
+  const recordSku = canonicalSku(data.sku || getRecordSku(record, parent) || "");
+  const names = getRecordNameCandidates(record, parent);
+  const directMatch = recordSku && recordSku === targetSku;
+  const rawMatch = names.some((name) => isSafeSameSkuName(name, targetSku));
+  const possibleMatch = names.some((name) => isPotentialSimilarSkuName(targetSku, name));
+
+  if (possibleMatch && !directMatch && !rawMatch) {
+    names.filter((name) => isPotentialSimilarSkuName(targetSku, name)).slice(0, 3).forEach((name) => addSelectedSkuPossibleNameMatch(name, sourceHint));
+  }
+
+  if (!directMatch && !rawMatch) return false;
+
+  outboundTrendDiagnostics.selectedSkuNameMatchedBeforeFilter += 1;
+  outboundTrendDiagnostics.selectedSkuCandidateCount += 1;
+  const units = data.units != null ? data.units : getRecordUnits(record);
+  const dateRaw = data.dateRaw != null ? data.dateRaw : getRecordDateValue(record, parent);
+  const sample = {
+    source: sourceHint || "record",
+    reason: reason || "matched",
+    sku: recordSku || targetSku,
+    names: names.slice(0, 4),
+    units: Number.isFinite(Number(units)) ? Number(units) : units || 0,
+    date: dateRaw || "",
+  };
+
+  if (reason === "matched") {
+    addSelectedSkuSample("selectedSkuRecordSamples", sample);
+  } else {
+    addSelectedSkuSample("selectedSkuExcludedSamples", sample);
+    if (reason === "noDate" || reason === "dateParseFailed") {
+      outboundTrendDiagnostics.selectedSkuExcludedNoDate += 1;
+      addSelectedSkuSample("selectedSkuRejectedByDateSamples", sample);
+    } else if (reason === "noQuantity") {
+      outboundTrendDiagnostics.selectedSkuExcludedNoQuantity += 1;
+      addSelectedSkuSample("selectedSkuRejectedByQuantitySamples", sample);
+    } else if (reason === "uncertain" || reason === "inbound" || reason === "restoreOrReturn") {
+      outboundTrendDiagnostics.selectedSkuExcludedType += 1;
+      addSelectedSkuSample("selectedSkuRejectedByTypeSamples", sample);
+    }
+  }
+  return true;
+}
+
+function scanSelectedSkuSupplementalRecords(value, sourceHint, targetSku, depth = 0, seen = new Set()) {
+  if (!targetSku || !value || depth > 5) return;
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => scanSelectedSkuSupplementalRecords(entry, `${sourceHint}[${index}]`, targetSku, depth + 1, seen));
+    return;
+  }
+  if (typeof value !== "object") return;
+
+  ["deductions", "boxUsages"].forEach((key) => {
+    const rows = Array.isArray(value[key]) ? value[key] : [];
+    rows.forEach((row, index) => {
+      const rowSku = canonicalSku(row?.sku || row?.product || row?.productName || row?.itemName || row?.name || "");
+      if (!isSafeSameSkuName(rowSku, targetSku)) return;
+      const units = Math.max(0, cleanNumber(row?.units ?? row?.qty ?? row?.quantity ?? row?.count));
+      const dedupeKey = `${key}|${rowSku}|${units}|${sourceHint}|${index}`;
+      if (seen.has(dedupeKey)) return;
+      seen.add(dedupeKey);
+      if (key === "boxUsages") {
+        outboundTrendDiagnostics.selectedSkuBoxUsageRecordCount += 1;
+        outboundTrendDiagnostics.selectedSkuBoxUsageCount += units;
+        addSelectedSkuSample("selectedSkuRecordSamples", { source: `${sourceHint}.${key}`, reason: "boxUsageOnly", sku: rowSku, units, date: value.at || row?.at || "" });
+      } else {
+        outboundTrendDiagnostics.selectedSkuDeductionRecordCount += 1;
+        outboundTrendDiagnostics.selectedSkuDeductionCount += units;
+      }
+    });
+  });
+
+  ["analysis", "lastOrderAnalysis", "state", "data", "payload", "appliedOrderFiles", "records", "items", "orders", "entries", "list"].forEach((key) => {
+    if (value[key]) scanSelectedSkuSupplementalRecords(value[key], `${sourceHint}.${key}`, targetSku, depth + 1, seen);
+  });
+}
+
+function analyzeSelectedSkuSupplementalSources(targetSku) {
+  targetSku = canonicalSku(targetSku);
+  if (!targetSku) return;
+  const seen = new Set();
+  try {
+    if (lastOrderAnalysis) scanSelectedSkuSupplementalRecords(lastOrderAnalysis, "lastOrderAnalysis", targetSku, 0, seen);
+  } catch (error) {
+    addDiagnosticRecordError(error, "selectedSkuSupplemental:lastOrderAnalysis");
+  }
+  try {
+    if (state) scanSelectedSkuSupplementalRecords(state, "state", targetSku, 0, seen);
+  } catch (error) {
+    addDiagnosticRecordError(error, "selectedSkuSupplemental:state");
+  }
+  try {
+    if (typeof localStorage !== "undefined" && localStorage) {
+      [ORDER_CACHE_KEY, "reborn.wms.lastOrderAnalysis.v2", STORAGE_KEY].forEach((key) => {
+        const raw = localStorage.getItem(key);
+        if (!raw) return;
+        const parsed = safeParseStorageJson(raw, `selectedSkuSupplemental:${key}`);
+        if (parsed) scanSelectedSkuSupplementalRecords(parsed, `localStorage:${key}`, targetSku, 0, seen);
+      });
+    }
+  } catch (error) {
+    addDiagnosticRecordError(error, "selectedSkuSupplemental:localStorage");
+  }
+  const def = INVENTORY_DEFS[targetSku];
+  if (def?.isBox && outboundTrendDiagnostics.selectedSkuBoxUsageCount > 0 && outboundTrendDiagnostics.selectedSkuRecentCount === 0) {
+    outboundTrendDiagnostics.selectedSkuHasBoxUsageOnly = true;
+    outboundTrendDiagnostics.selectedSkuDiagnosticNote = "선택 품목은 포장 부자재이며, 박스 사용량 데이터가 일반 상품 출고 기록과 별도 구조로 저장되어 있습니다.";
+  }
 }
 
 function describeDiagnosticValue(value) {
@@ -4170,16 +4700,57 @@ function describeDiagnosticValue(value) {
 
 function addDiagnosticKeySummary(summary) {
   outboundTrendDiagnostics.keySummaries.push(summary);
-  if (summary?.key) outboundTrendDiagnostics.scannedKeys.push(summary.key);
+  if (summary?.key && !outboundTrendDiagnostics.scannedKeys.includes(summary.key)) {
+    outboundTrendDiagnostics.scannedKeys.push(summary.key);
+  }
+}
+
+function addCandidateFieldName(fieldName) {
+  const name = String(fieldName || "").trim();
+  if (!name) return;
+  if (outboundTrendDiagnostics.candidateFields.length >= 80) return;
+  if (!outboundTrendDiagnostics.candidateFields.includes(name)) {
+    outboundTrendDiagnostics.candidateFields.push(name);
+  }
+}
+
+function collectCandidateFields(value, depth = 0, prefix = "") {
+  if (value == null || depth > 2) return;
+  try {
+    if (Array.isArray(value)) {
+      value.slice(0, 8).forEach((entry) => collectCandidateFields(entry, depth + 1, prefix));
+      return;
+    }
+    if (typeof value !== "object") return;
+    Object.keys(value).slice(0, 40).forEach((key) => {
+      const path = prefix ? `${prefix}.${key}` : key;
+      addCandidateFieldName(path);
+      const child = value[key];
+      if (child && typeof child === "object") {
+        if (Array.isArray(child)) {
+          addCandidateFieldName(`${path}[]`);
+          child.slice(0, 5).forEach((entry) => collectCandidateFields(entry, depth + 1, `${path}[]`));
+        } else {
+          collectCandidateFields(child, depth + 1, path);
+        }
+      }
+    });
+  } catch (error) {
+    incrementDiagnosticReason("recordError");
+    addDiagnosticRecordError(error, `collectCandidateFields:${prefix || "root"}`);
+  }
 }
 
 function collectDiagnosticFieldNames(record) {
-  if (!record || typeof record !== "object") return;
-  Object.keys(record).slice(0, 24).forEach((key) => {
-    if (!outboundTrendDiagnostics.candidateFields.includes(key)) {
-      outboundTrendDiagnostics.candidateFields.push(key);
-    }
-  });
+  collectCandidateFields(record);
+}
+
+function addDiagnosticRecordError(error, sourceHint = "") {
+  const message = error?.message || String(error || "알 수 없는 오류");
+  if (outboundTrendDiagnostics.recordErrors.length < 8) {
+    outboundTrendDiagnostics.recordErrors.push({ source: sourceHint || "record", error: message });
+  }
+  outboundTrendDiagnostics.lastError = message;
 }
 
 function getCandidateStorageKeys() {
@@ -4188,9 +4759,12 @@ function getCandidateStorageKeys() {
     if (typeof localStorage === "undefined" || !localStorage) {
       outboundTrendDiagnostics.localStorageAvailable = false;
       outboundTrendDiagnostics.localStorageFailureReason = "localStorage 객체 없음 또는 접근 불가";
+      outboundTrendDiagnostics.possibleKeys = [...keys];
+      outboundTrendDiagnostics.scannedKeys = [...new Set([...(outboundTrendDiagnostics.scannedKeys || []), ...keys])];
       return [...keys];
     }
     outboundTrendDiagnostics.localStorageAvailable = true;
+    outboundTrendDiagnostics.localStorageFailureReason = "";
     for (let index = 0; index < localStorage.length; index += 1) {
       const key = localStorage.key(index);
       if (isOutboundStorageKey(key)) keys.add(key);
@@ -4200,8 +4774,13 @@ function getCandidateStorageKeys() {
     });
   } catch (error) {
     outboundTrendDiagnostics.localStorageAvailable = false;
-    outboundTrendDiagnostics.localStorageFailureReason = error?.message || String(error);
+    outboundTrendDiagnostics.localStorageFailureReason = error?.message || String(error) || "localStorage 키 스캔 실패";
     outboundTrendDiagnostics.lastError = `localStorage 키 스캔 실패: ${error?.message || error}`;
+  }
+  outboundTrendDiagnostics.possibleKeys = [...keys];
+  outboundTrendDiagnostics.scannedKeys = [...new Set([...(outboundTrendDiagnostics.scannedKeys || []), ...keys])];
+  if (!outboundTrendDiagnostics.localStorageAvailable && !outboundTrendDiagnostics.localStorageFailureReason) {
+    outboundTrendDiagnostics.localStorageFailureReason = "localStorage 접근 진단 실패 사유 확인 필요";
   }
   return [...keys];
 }
@@ -4244,14 +4823,24 @@ function safeNormalizeText(value) {
     .toLowerCase();
 }
 
-function getRecordDateInfo(record, parent) {
-  const fields = ["at", "date", "createdAt", "created_at", "timestamp", "processedAt", "processed_at", "time", "updatedAt", "updated_at"];
+function normalizeText(value) {
+  return safeNormalizeText(value);
+}
+
+function getRecordDateInfo(record, parent, sourceHint = "") {
+  const actualDateFields = ["outboundDate", "outboundAt", "shippedAt", "shippedDate", "shipmentDate", "orderDate", "orderedAt", "excelDate", "fileDate"];
+  const neutralDateFields = ["date"];
+  const processingDateFields = ["appliedDate", "appliedAt", "processedAt", "processed_at"];
+  const recordedDateFields = ["createdAt", "created_at", "timestamp", "at", "time", "updatedAt", "updated_at"];
+  const fields = [...actualDateFields, ...neutralDateFields, ...processingDateFields, ...recordedDateFields];
   let rawDate = null;
   let sourceField = "";
+  let owner = "record";
   for (const field of fields) {
     if (record && record[field] != null && record[field] !== "") {
       rawDate = record[field];
       sourceField = field;
+      owner = "record";
       break;
     }
   }
@@ -4260,19 +4849,29 @@ function getRecordDateInfo(record, parent) {
       if (parent[field] != null && parent[field] !== "") {
         rawDate = parent[field];
         sourceField = `parent.${field}`;
+        owner = "parent";
         break;
       }
     }
   }
-  const isAtField = sourceField === "at" || sourceField === "parent.at";
+  const plainField = sourceField.replace(/^parent\./, "");
+  const isAtField = plainField === "at";
   if (isAtField) outboundTrendDiagnostics.atFieldDetectedCount += 1;
-  if (rawDate == null || rawDate === "") return { date: null, hasRaw: false, sourceField: "", rawDate: null };
+  if (rawDate == null || rawDate === "") return { date: null, hasRaw: false, sourceField: "", rawDate: null, basis: "missing", owner };
   const date = parseTrendDate(rawDate);
   if (isAtField) {
     if (date) outboundTrendDiagnostics.atParsedSuccessCount += 1;
     else outboundTrendDiagnostics.atParseFailedCount += 1;
   }
-  return { date, hasRaw: true, sourceField, rawDate };
+  const lowerSource = String(sourceHint || "").toLowerCase();
+  const isExcelLike = /excel|orderanalysis|lastorderanalysis|deduction|주문|차감/.test(lowerSource) || /excel|주문|차감/.test(`${getObjectText(record)} ${getObjectText(parent)}`.toLowerCase());
+  let basis = "recordedAt";
+  if (actualDateFields.includes(plainField)) basis = "actualOutboundDate";
+  else if (processingDateFields.includes(plainField)) basis = "processingDate";
+  else if (plainField === "date") basis = isExcelLike ? "ambiguousDate" : "recordDate";
+  else if ((plainField === "at" || plainField === "createdAt" || plainField === "created_at" || plainField === "timestamp" || plainField === "time") && isExcelLike) basis = "processingDate";
+  else if (plainField === "updatedAt" || plainField === "updated_at") basis = "ambiguousDate";
+  return { date, hasRaw: true, sourceField, rawDate, basis, owner };
 }
 
 function getRecordDateValue(record, parent) {
@@ -4403,44 +5002,67 @@ function getDetailListFromRecord(record) {
 
 function normalizeOutboundTrendRecord(record, parent, sourceHint = "") {
   if (!record || typeof record !== "object") return null;
-  outboundTrendDiagnostics.candidateRecordCount += 1;
   collectDiagnosticFieldNames(record);
   const sku = getRecordSku(record, parent);
   const sourceText = `${sourceHint || ""} ${getObjectText(parent)} ${getObjectText(record)}`.toLowerCase();
   if (isReturnOrRestoreRecord(record, parent)) {
     incrementDiagnosticReason("restoreOrReturn");
+    noteSelectedSkuCandidate(record, parent, sourceHint, "restoreOrReturn", { sku });
     return null;
   }
   if (/inbound|입고/.test(sourceText) && !/outbound|출고|차감|deduct|shipment/.test(sourceText)) {
     incrementDiagnosticReason("inbound");
+    noteSelectedSkuCandidate(record, parent, sourceHint, "inbound", { sku });
     return null;
   }
   if (!sku || !state.stock[sku]) {
     incrementDiagnosticReason("noProduct");
+    noteSelectedSkuCandidate(record, parent, sourceHint, "noProduct", { sku });
     return null;
   }
   if (!isOutboundRecord(record, parent, sourceHint)) {
     incrementDiagnosticReason("uncertain");
+    noteSelectedSkuCandidate(record, parent, sourceHint, "uncertain", { sku });
     return null;
   }
+  markSelectedSkuPipelineStage(record, parent, sourceHint, "typeAccepted", { sku });
   const units = getRecordUnits(record);
   if (!units) {
     incrementDiagnosticReason("noQuantity");
+    noteSelectedSkuCandidate(record, parent, sourceHint, "noQuantity", { sku, units });
     return null;
   }
-  const dateInfo = getRecordDateInfo(record, parent);
+  markSelectedSkuPipelineStage(record, parent, sourceHint, "quantityAccepted", { sku, units });
+  const dateInfo = getRecordDateInfo(record, parent, sourceHint);
   const date = dateInfo.date;
   if (!date) {
-    incrementDiagnosticReason(dateInfo.hasRaw ? "dateParseFailed" : "noDate");
+    const reason = dateInfo.hasRaw ? "dateParseFailed" : "noDate";
+    incrementDiagnosticReason(reason);
+    noteSelectedSkuCandidate(record, parent, sourceHint, reason, { sku, units, dateRaw: dateInfo.rawDate });
     return null;
   }
+  markSelectedSkuPipelineStage(record, parent, sourceHint, "dateAccepted", { sku, units });
   outboundTrendDiagnostics.outboundCandidateCount += 1;
+  noteSelectedSkuCandidate(record, parent, sourceHint, "matched", { sku, units, dateRaw: dateInfo.rawDate });
+  const source = sourceHint || record?.source || parent?.source || "local";
+  const sourceFamily = getOutboundSourceFamily(source);
+  const calculationEligible = isOutboundTrendCalculationSource(source);
   return {
     sku,
     units,
     date,
     id: record?.id || parent?.id || "",
-    source: record?.source || parent?.source || sourceHint || "local",
+    source,
+    sourceHint: sourceHint || "",
+    sourceFamily,
+    sourceRole: getOutboundTrendSourceRole(source),
+    calculationEligible,
+    sourcePriority: getOutboundSourcePriority(source),
+    fingerprint: buildRecordDedupeFingerprint(record, parent, sourceHint),
+    rawNames: getRecordNameCandidates(record, parent),
+    dateFieldUsed: dateInfo.sourceField || "",
+    dateRaw: dateInfo.rawDate || "",
+    dateBasis: dateInfo.basis || "unknown",
   };
 }
 
@@ -4453,19 +5075,31 @@ function collectRecordsFromCandidate(candidate, sourceHint, depth = 0, output = 
   if (typeof candidate !== "object") return output;
 
   outboundTrendDiagnostics.candidateRecordCount += 1;
-  collectCandidateFields(candidate);
+  try {
+    collectCandidateFields(candidate);
+  } catch (error) {
+    incrementDiagnosticReason("recordError");
+    addDiagnosticRecordError(error, `${sourceHint}:fields`);
+  }
 
   try {
     const normalized = normalizeOutboundTrendRecord(candidate, parentContext, sourceHint);
     if (normalized) output.push(normalized);
   } catch (error) {
     incrementDiagnosticReason("recordError");
-    outboundTrendDiagnostics.lastError = String(error);
+    addDiagnosticRecordError(error, sourceHint);
   }
 
   const details = getDetailListFromRecord(candidate);
   if (details.length) {
-    details.forEach((detail) => collectRecordsFromCandidate(detail, `${sourceHint}.details`, depth + 1, output, candidate));
+    details.forEach((detail, index) => {
+      try {
+        collectRecordsFromCandidate(detail, `${sourceHint}.details[${index}]`, depth + 1, output, candidate);
+      } catch (error) {
+        incrementDiagnosticReason("recordError");
+        addDiagnosticRecordError(error, `${sourceHint}.details`);
+      }
+    });
   }
 
   const relevantNestedKeys = [
@@ -4493,19 +5127,26 @@ function collectRecordsFromCandidate(candidate, sourceHint, depth = 0, output = 
     "list",
   ];
   relevantNestedKeys.forEach((key) => {
-    if (candidate[key]) collectRecordsFromCandidate(candidate[key], `${sourceHint}.${key}`, depth + 1, output, candidate);
+    try {
+      if (candidate[key]) collectRecordsFromCandidate(candidate[key], `${sourceHint}.${key}`, depth + 1, output, candidate);
+    } catch (error) {
+      incrementDiagnosticReason("recordError");
+      addDiagnosticRecordError(error, `${sourceHint}.${key}`);
+    }
   });
   return output;
 }
 
 function collectStoredOutboundTrendRecords() {
   outboundTrendDiagnostics.functionCalled.collect = true;
+  outboundTrendDiagnostics.collectionStatus = "collecting";
   outboundTrendDiagnostics.renderStatus = "collecting";
   const records = [];
   try {
     const stateHistory = Array.isArray(state.history) ? state.history : [];
     const stateAdminLogs = Array.isArray(state.adminActionLogs) ? state.adminActionLogs : [];
-    outboundTrendDiagnostics.dataSourcesRead = ["state.history", "state.adminActionLogs"];
+    addDiagnosticDataSource("state.history");
+    addDiagnosticDataSource("state.adminActionLogs");
     collectRecordsFromCandidate(stateHistory, "state.history", 0, records);
     collectRecordsFromCandidate(stateAdminLogs, "state.adminActionLogs", 0, records);
     addDiagnosticKeySummary({ key: "state.history", ...describeDiagnosticValue(stateHistory) });
@@ -4514,48 +5155,177 @@ function collectStoredOutboundTrendRecords() {
     getCandidateStorageKeys().forEach((key) => {
       let parsed = null;
       try {
-        const raw = typeof localStorage !== "undefined" && localStorage ? localStorage.getItem(key) : null;
+        if (!(outboundTrendDiagnostics.localStorageAvailable && typeof localStorage !== "undefined" && localStorage)) {
+          addDiagnosticKeySummary({ key: `localStorage:${key}`, type: "접근 불가", count: 0, error: outboundTrendDiagnostics.localStorageFailureReason || "localStorage 사용 불가" });
+          return;
+        }
+        const raw = localStorage.getItem(key);
+        if (raw == null || raw === "") {
+          addDiagnosticKeySummary({ key: `localStorage:${key}`, type: "저장값 없음", count: 0 });
+          return;
+        }
         parsed = safeParseStorageJson(raw, key);
         if (parsed) {
           addDiagnosticKeySummary({ key: `localStorage:${key}`, ...describeDiagnosticValue(parsed) });
-          outboundTrendDiagnostics.dataSourcesRead.push(`localStorage:${key}`);
+          addDiagnosticDataSource(`localStorage:${key}`);
           collectRecordsFromCandidate(parsed, `localStorage:${key}`, 0, records);
         }
       } catch (error) {
         addDiagnosticKeySummary({ key: `localStorage:${key}`, type: "읽기 실패", count: 0, error: error?.message || String(error) });
-        outboundTrendDiagnostics.lastError = `localStorage 읽기 실패(${key}): ${error?.message || error}`;
+        addDiagnosticRecordError(error, `localStorage:${key}`);
       }
     });
 
+    const targetSku = getSelectedTargetSku();
+    const calculationRecords = records.filter((record) => record && record.calculationEligible);
+    summarizeOutboundSourceScopeDiagnostics(records, calculationRecords, targetSku);
+    outboundTrendDiagnostics.selectedSkuAcceptedBeforeDedupe = targetSku
+      ? calculationRecords.filter((record) => canonicalSku(record.sku) === targetSku).length
+      : 0;
+
     const seen = new Set();
-    const uniqueRecords = records.filter((record) => {
-      const key = record.id
-        ? `id:${record.id}`
-        : [
-            record.sku,
-            dateKey(record.date),
-            Math.round(record.units * 1000) / 1000,
-          ].join("|");
+    const sortedRecords = sortOutboundRecordsBySourcePriority(calculationRecords);
+    const uniqueRecords = sortedRecords.filter((record) => {
+      const key = buildOutboundDedupeKey(record);
+      record.dedupeKey = key;
       if (seen.has(key)) {
         outboundTrendDiagnostics.duplicateExcludedCount += 1;
         incrementDiagnosticReason("duplicate");
+        if (targetSku && canonicalSku(record.sku) === targetSku) {
+          outboundTrendDiagnostics.selectedSkuExcludedDuplicate += 1;
+          outboundTrendDiagnostics.selectedSkuDuplicateExcludedCount += 1;
+          addSelectedSkuSample("selectedSkuDuplicateSamples", buildSelectedRecordSample(record, "duplicate"));
+        }
         return false;
       }
       seen.add(key);
+      countSelectedSkuAcceptedSource(record);
+      if (targetSku && canonicalSku(record.sku) === targetSku) {
+        addSelectedSkuSample("selectedSkuDedupeRepresentativeSamples", buildSelectedRecordSample(record, "representative"));
+      }
       return true;
     });
     outboundTrendDiagnostics.candidateRecordCount = Math.max(outboundTrendDiagnostics.candidateRecordCount, records.length);
     outboundTrendDiagnostics.outboundCandidateCount = uniqueRecords.length;
+    finalizeOutboundFinalCalculationSourceDiagnostics(uniqueRecords, targetSku);
+    outboundTrendDiagnostics.selectedSkuAcceptedAfterDedupe = targetSku
+      ? uniqueRecords.filter((record) => canonicalSku(record.sku) === targetSku).length
+      : 0;
+    outboundTrendDiagnostics.collectionStatus = "collected";
     outboundTrendDiagnostics.renderStatus = "collected";
     return uniqueRecords;
   } catch (error) {
-    outboundTrendDiagnostics.lastError = error?.stack || error?.message || String(error);
+    addDiagnosticRecordError(error, "collectStoredOutboundTrendRecords");
+    outboundTrendDiagnostics.collectionStatus = "collect-error";
     outboundTrendDiagnostics.renderStatus = "collect-error";
-    throw error;
+    return records;
   }
 }
 
+
+function normalizeTrendDateBasisLabel(basis = "") {
+  if (basis === "actualOutboundDate") return "실제 출고일 기준";
+  if (basis === "processingDate") return "엑셀 차감/처리일 기준";
+  if (basis === "recordDate") return "기록일 기준";
+  if (basis === "recordedAt") return "기록 생성일 기준";
+  if (basis === "ambiguousDate") return "날짜 기준 확인 필요";
+  return "날짜 기준 확인 필요";
+}
+
+function addLimitedDiagnosticSample(listName, sample, limit = 10) {
+  const list = outboundTrendDiagnostics[listName];
+  if (!Array.isArray(list) || list.length >= limit) return;
+  list.push(sample);
+}
+
+function incrementDiagnosticCounterMap(mapName, key) {
+  const name = String(key || "unknown");
+  if (!outboundTrendDiagnostics[mapName] || typeof outboundTrendDiagnostics[mapName] !== "object") outboundTrendDiagnostics[mapName] = {};
+  outboundTrendDiagnostics[mapName][name] = (outboundTrendDiagnostics[mapName][name] || 0) + 1;
+}
+
+function addTrendDateDiagnostics(record, dateKeyValue) {
+  if (!record) return;
+  const basis = record.dateBasis || "unknown";
+  const field = record.dateFieldUsed || "unknown";
+  incrementDiagnosticCounterMap("selectedSkuDateBasisCounts", basis);
+  incrementDiagnosticCounterMap("selectedSkuDateFieldCounts", field);
+  if (basis === "actualOutboundDate") outboundTrendDiagnostics.recordsGroupedByActualOutboundDateCount += 1;
+  else if (basis === "processingDate") outboundTrendDiagnostics.recordsGroupedByProcessingDateCount += 1;
+  else {
+    outboundTrendDiagnostics.dateAmbiguousRecordCount += 1;
+    addLimitedDiagnosticSample("dateAmbiguousSamples", {
+      sku: record.sku || "",
+      units: record.units || 0,
+      date: record.date instanceof Date ? record.date.toISOString() : String(record.date || ""),
+      field,
+      basis,
+      source: record.source || "",
+    }, 8);
+  }
+  const sample = {
+    date: dateKeyValue || (record.date instanceof Date ? dateKey(record.date) : ""),
+    sku: record.sku || "",
+    units: record.units || 0,
+    field,
+    basis,
+    source: record.source || "",
+  };
+  addLimitedDiagnosticSample("dailyOutboundSamples", sample, 12);
+  if (dateKeyValue && dateKeyValue === todayKey()) {
+    outboundTrendDiagnostics.todayOutboundTotal += cleanNumber(record.units);
+    outboundTrendDiagnostics.todayOutboundRecordCount += 1;
+    addLimitedDiagnosticSample("todayOutboundSamples", sample, 12);
+  }
+}
+
+function finalizeTrendDateDiagnostics(dailyData, recentRecords) {
+  const basisCounts = outboundTrendDiagnostics.selectedSkuDateBasisCounts || {};
+  const fieldCounts = outboundTrendDiagnostics.selectedSkuDateFieldCounts || {};
+  const sortedBasis = Object.entries(basisCounts).sort((a, b) => b[1] - a[1]);
+  const sortedFields = Object.entries(fieldCounts).sort((a, b) => b[1] - a[1]);
+  outboundTrendDiagnostics.trendDateBasis = sortedBasis.length === 1
+    ? sortedBasis[0][0]
+    : sortedBasis.length > 1
+      ? "mixed"
+      : "no-records";
+  outboundTrendDiagnostics.trendDateFieldUsed = sortedFields.length ? `${sortedFields[0][0]} (${sortedFields[0][1].toLocaleString()}건)` : "";
+  outboundTrendDiagnostics.trendDateSource = sortedBasis.length
+    ? `${normalizeTrendDateBasisLabel(outboundTrendDiagnostics.trendDateBasis)} · ${sortedFields[0]?.[0] || "필드 확인 필요"}`
+    : "집계 가능한 날짜 기록 없음";
+  outboundTrendDiagnostics.selectedSkuDailyBreakdown = (dailyData || [])
+    .filter((point) => point.units > 0)
+    .map((point) => ({ date: dateKey(point.date), units: point.units }))
+    .slice(-12);
+  outboundTrendDiagnostics.selectedSkuTodayBreakdown = (recentRecords || [])
+    .filter((record) => record.date instanceof Date && dateKey(record.date) === todayKey())
+    .map((record) => ({
+      sku: record.sku,
+      units: record.units,
+      source: record.source || "",
+      dateFieldUsed: record.dateFieldUsed || "",
+      dateBasis: record.dateBasis || "",
+      date: record.date.toISOString(),
+    }))
+    .slice(0, 12);
+}
+
+function getOutboundSourceScopeNotice() {
+  return "현재 유효 재고 기록 기준 · backup/undo/마지막 엑셀 분석 결과는 기본 집계 제외";
+}
+
+function getTrendBasisNotice() {
+  const basis = outboundTrendDiagnostics.trendDateBasis;
+  const fieldText = outboundTrendDiagnostics.trendDateFieldUsed ? ` · 사용 필드 ${outboundTrendDiagnostics.trendDateFieldUsed}` : "";
+  if (basis === "actualOutboundDate") return `실제 출고일 기준${fieldText}`;
+  if (basis === "processingDate") return `엑셀 차감/처리일 기준${fieldText} · 실제 출고일 필드가 없으면 처리일에 수량이 몰릴 수 있습니다.`;
+  if (basis === "mixed") return `혼합 날짜 기준${fieldText} · 실제 출고일과 처리일/기록일이 섞여 있어 진단 확인이 필요합니다.`;
+  if (basis === "ambiguousDate" || basis === "recordedAt" || basis === "recordDate") return `${normalizeTrendDateBasisLabel(basis)}${fieldText} · 실제 출고일 필드가 없으면 날짜 해석에 주의가 필요합니다.`;
+  return "날짜 기준 확인 필요";
+}
+
 function buildSkuOutboundTrend(sku, days = 30) {
+  outboundTrendDiagnostics.functionCalled.trend = true;
   const targetSku = canonicalSku(sku);
   const today = startOfDay(new Date());
   const from = addDays(today, -(days - 1));
@@ -4565,7 +5335,12 @@ function buildSkuOutboundTrend(sku, days = 30) {
     daily.set(dateKey(date), { date, units: 0 });
   }
 
-  const allRecords = collectStoredOutboundTrendRecords().filter((record) => record.sku === targetSku);
+  const allUniqueRecords = collectStoredOutboundTrendRecords();
+  analyzeSelectedSkuSupplementalSources(targetSku);
+  const allRecords = allUniqueRecords.filter((record) => canonicalSku(record.sku) === targetSku);
+  outboundTrendDiagnostics.selectedSkuMatchedCount = allRecords.length;
+  outboundTrendDiagnostics.selectedSkuAcceptedAfterDedupe = allRecords.length;
+  outboundTrendDiagnostics.selectedSkuExcludedNameMismatch = Math.max(0, allUniqueRecords.length - allRecords.length);
   const recentRecords = [];
   allRecords.forEach((record) => {
     const date = startOfDay(record.date);
@@ -4575,10 +5350,13 @@ function buildSkuOutboundTrend(sku, days = 30) {
     }
     if (date < from || date > today) {
       incrementDiagnosticReason("oldRecord");
+      outboundTrendDiagnostics.selectedSkuExcludedOldRecord += 1;
       return;
     }
     recentRecords.push(record);
+    addSelectedSkuSample("selectedSkuFinalAcceptedSamples", buildSelectedRecordSample(record, "finalAccepted"));
     const key = dateKey(date);
+    addTrendDateDiagnostics(record, key);
     if (!daily.has(key)) daily.set(key, { date, units: 0 });
     daily.get(key).units += record.units;
   });
@@ -4588,16 +5366,26 @@ function buildSkuOutboundTrend(sku, days = 30) {
   const activeDays = dailyData.filter((item) => item.units > 0).length;
   const averagePerDay = total > 0 ? total / days : 0;
   outboundTrendDiagnostics.recentOutboundCount = recentRecords.length;
+  outboundTrendDiagnostics.selectedSkuRecentCount = recentRecords.length;
+  if (INVENTORY_DEFS[targetSku]?.isBox && outboundTrendDiagnostics.selectedSkuBoxUsageCount > 0 && recentRecords.length === 0) {
+    outboundTrendDiagnostics.selectedSkuHasBoxUsageOnly = true;
+    outboundTrendDiagnostics.selectedSkuDiagnosticNote = "선택 품목은 포장 부자재이며, 박스 사용량은 boxUsages에 별도 저장되어 있어 상품 순출고 추적에는 자동 합산하지 않았습니다.";
+  }
+  finalizeTrendDateDiagnostics(dailyData, recentRecords);
   outboundTrendDiagnostics.averageDailyOutbound = averagePerDay;
-  return { days, total, activeDays, averagePerDay, dailyData, records: recentRecords, allRecords };
+  outboundTrendDiagnostics.selectedSkuDisplayReason = getSelectedSkuNoDataMessage(targetSku);
+  return { days, total, activeDays, averagePerDay, dailyData, records: recentRecords, allRecords, dateBasis: outboundTrendDiagnostics.trendDateBasis };
 }
 
 function getTrendStatusForSku(sku) {
+  outboundTrendDiagnostics.functionCalled.stockout = true;
   const targetSku = canonicalSku(sku);
   const stock = state.stock[targetSku] || null;
   const currentUnits = Math.max(0, cleanNumber(stock?.units));
+  summarizeCurrentStockForDiagnostics(targetSku);
   outboundTrendDiagnostics.stockRead = !!stock;
   outboundTrendDiagnostics.stockUnitsTotal = currentUnits;
+  outboundTrendDiagnostics.selectedStockUnits = currentUnits;
   outboundTrendDiagnostics.stockReadFailureReason = stock ? (currentUnits > 0 ? "" : "현재 재고 수량 0") : "선택 품목 재고 데이터를 찾지 못함";
   const trend = buildSkuOutboundTrend(targetSku, 30);
   if (!currentUnits) {
@@ -4615,13 +5403,41 @@ function getTrendStatusForSku(sku) {
     daysLeft,
     depletionDate,
     value: `${formatTrendDate(depletionDate)} · 약 ${daysLeft.toLocaleString()}일`,
-    note: `최근 30일 평균 ${Math.round(trend.averagePerDay).toLocaleString()}개/일 기준`,
+    note: `최근 30일 평균 ${Math.round(trend.averagePerDay).toLocaleString()}개/일 기준 · ${getTrendBasisNotice()}`,
   };
 }
 
 function formatTrendDate(date) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "-";
   return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+
+function getSelectedSkuNoDataMessage(sku) {
+  sku = canonicalSku(sku);
+  const diag = outboundTrendDiagnostics;
+  if (diag.collectionStatus === "collect-error") return "출고 기록 수집 실패 · 진단 패널에서 실패 사유를 확인해주세요.";
+  if (INVENTORY_DEFS[sku]?.isBox && diag.selectedSkuBoxUsageCount > 0) {
+    return "박스 사용량 기록은 별도 데이터(boxUsages)에 저장되어 있어 상품 순출고 추적에는 자동 합산하지 않았습니다.";
+  }
+  if ((diag.selectedSkuRecentCount || 0) > 0) return "최근 30일 출고 기록이 집계되었습니다.";
+  if ((diag.selectedSkuAcceptedAfterDedupe || 0) > 0 && (diag.selectedSkuRecentCount || 0) === 0) {
+    return "선택 품목 출고 후보가 있고 대표 기록도 남았지만 최근 30일 범위 밖입니다.";
+  }
+  if ((diag.selectedSkuAcceptedBeforeDedupe || 0) > 0 && (diag.selectedSkuAcceptedAfterDedupe || 0) === 0) {
+    return "선택 품목 출고 후보는 있으나 중복 제거 과정에서 모두 제외되었습니다. 진단 패널에서 원본/중복 기준을 확인해주세요.";
+  }
+  if ((diag.selectedSkuNameMatchedBeforeFilter || 0) > 0) {
+    if ((diag.selectedSkuExcludedNoDate || 0) > 0) return "선택 품목 출고 후보가 있으나 날짜 정보가 없어 추적에서 제외되었습니다.";
+    if ((diag.selectedSkuExcludedNoQuantity || 0) > 0) return "선택 품목 출고 후보가 있으나 수량 정보가 없어 추적에서 제외되었습니다.";
+    if ((diag.selectedSkuExcludedType || 0) > 0) return "선택 품목 출고 후보는 있으나 출고 유형으로 확정되지 않아 제외되었습니다.";
+    if ((diag.selectedSkuExcludedDuplicate || 0) > 0) return "선택 품목 후보는 있으나 중복 제거 후 대표 기록이 남지 않았습니다.";
+    return "선택 품목과 유사하거나 일치하는 후보는 있으나 계산 가능한 출고 기록으로 확정되지 않았습니다.";
+  }
+  if ((diag.outboundCandidateCount || 0) > 0) {
+    return "전체 출고 후보는 있으나 선택 품목과 일치하는 출고 기록이 없습니다.";
+  }
+  return "최근 30일 출고 기록이 없습니다.";
 }
 
 function refreshInventoryItemOrderTrendIfOpen() {
@@ -4631,63 +5447,114 @@ function refreshInventoryItemOrderTrendIfOpen() {
 }
 
 function renderInventoryItemOrderTrend() {
+  const overlay = $("inventoryItemOverlay");
+  const rawActiveSku = activeInventoryDetailSku;
+  const overlayOpen = !!(overlay && !overlay.hidden);
+
+  if (!overlayOpen && !rawActiveSku) {
+    if (outboundTrendDiagnostics.renderStatus === "not-rendered") {
+      resetOutboundTrendDiagnostics();
+      outboundTrendDiagnostics.functionCalled.render = true;
+      outboundTrendDiagnostics.detailOverlayOpen = false;
+      markOutboundTrendRenderSkip("품목 상세창이 열려 있지 않아 예상 소진일 렌더링을 건너뜀", "");
+      try {
+        getCandidateStorageKeys();
+      } catch (error) {
+        addDiagnosticRecordError(error, "renderInventoryItemOrderTrend.noOpenDetail");
+      }
+      renderOutboundTrendDiagnostics();
+    }
+    return;
+  }
+
   resetOutboundTrendDiagnostics();
   outboundTrendDiagnostics.functionCalled.render = true;
-  const sku = canonicalSku(activeInventoryDetailSku);
+  outboundTrendDiagnostics.detailOverlayOpen = overlayOpen;
+
+  const sku = canonicalSku(rawActiveSku);
+  outboundTrendDiagnostics.selectedSku = sku || "";
+  outboundTrendDiagnostics.currentSku = sku || "";
+  outboundTrendDiagnostics.selectedItemName = sku || "";
+  outboundTrendDiagnostics.currentItemName = sku || "";
+
   const valueEl = $("inventoryItemStockoutValue");
   const noteEl = $("inventoryItemStockoutNote");
   const canvas = $("inventoryItemOrderChart");
   const meta = $("inventoryItemOrderTrendMeta");
   const summary = $("inventoryItemOrderTrendSummary");
   const empty = $("inventoryItemOrderChartEmpty");
+  const list = $("inventoryItemOrderTrendList");
 
   if (!sku) {
+    markOutboundTrendRenderSkip("선택된 품목 SKU가 없어 예상 소진일/순출고 추적을 계산하지 못함", "");
+    try {
+      collectStoredOutboundTrendRecords();
+    } catch (error) {
+      addDiagnosticRecordError(error, "renderInventoryItemOrderTrend.noSku.collect");
+    }
+    outboundTrendDiagnostics.renderStatus = "render-skipped";
     if (valueEl) valueEl.textContent = "데이터 확인 필요";
     if (noteEl) noteEl.textContent = "품목 정보가 없어 예상 소진일을 계산할 수 없습니다.";
-    if (meta) meta.textContent = "출고 기록을 불러오지 못했습니다.";
+    if (meta) meta.textContent = "선택 품목 정보가 없어 출고 기록을 연결하지 못했습니다.";
     if (empty) {
       empty.hidden = false;
       empty.textContent = "품목 정보가 없어 날짜별 출고 기록을 표시할 수 없습니다.";
     }
-    if (summary) summary.innerHTML = "";
+    if (summary) summary.innerHTML = `<div class="detail-empty">선택 품목 정보 확인이 필요합니다.</div>`;
+    if (list) list.innerHTML = `<span class="muted">선택 품목 없음</span>`;
     renderOutboundTrendDiagnostics();
     return;
   }
 
   try {
     const status = getTrendStatusForSku(sku);
-    const trend = status.trend;
-    const hasData = trend.total > 0;
-    const recentPoints = trend.dailyData.filter((point) => point.units > 0).slice(-7);
-    outboundTrendDiagnostics.functionCalled.stockout = true;
-    outboundTrendDiagnostics.functionCalled.trend = true;
+    const trend = status.trend || { total: 0, activeDays: 0, averagePerDay: 0, dailyData: [], records: [] };
+    const collectionFailed = outboundTrendDiagnostics.collectionStatus === "collect-error";
+    const hasData = !collectionFailed && trend.total > 0;
+    const recentPoints = (trend.dailyData || []).filter((point) => point.units > 0).slice(-7);
+    const recentRecords = [...(trend.records || [])]
+      .sort((a, b) => b.date - a.date)
+      .slice(0, 6);
+
     outboundTrendDiagnostics.recentOutboundCount = trend.records?.length || 0;
     outboundTrendDiagnostics.averageDailyOutbound = trend.averagePerDay || 0;
-    outboundTrendDiagnostics.stockRead = true;
-    outboundTrendDiagnostics.stockUnitsTotal = state.stock?.[sku]?.units || 0;
-    outboundTrendDiagnostics.renderStatus = hasData ? "rendered-with-data" : "rendered-no-records";
+    outboundTrendDiagnostics.renderStatus = collectionFailed ? "rendered-collect-error" : (hasData ? "rendered-with-data" : "rendered-no-records");
 
-    if (valueEl) valueEl.textContent = status.value;
-    if (noteEl) noteEl.textContent = status.note;
+    if (valueEl) valueEl.textContent = collectionFailed ? "데이터 확인 필요" : status.value;
+    if (noteEl) {
+      noteEl.textContent = collectionFailed
+        ? "출고 기록 수집 중 오류가 있어 진단 패널의 마지막 오류와 record 단위 오류를 확인해야 합니다."
+        : status.note;
+    }
     if (meta) {
-      meta.textContent = hasData
-        ? `최근 30일 순출고 ${formatStock(sku, trend.total)} · 출고 발생 ${trend.activeDays.toLocaleString()}일 · 평균 ${Math.round(trend.averagePerDay).toLocaleString()}개/일`
-        : "최근 30일 출고 기록이 없습니다.";
+      meta.textContent = collectionFailed
+        ? "출고 기록 수집 실패 · 진단 패널에서 실패 사유를 확인해주세요."
+        : hasData
+          ? `최근 30일 순출고 ${formatStock(sku, trend.total)} · 출고 발생 ${trend.activeDays.toLocaleString()}일 · 평균 ${Math.round(trend.averagePerDay).toLocaleString()}개/일 · ${getTrendBasisNotice()} · ${getOutboundSourceScopeNotice()}`
+          : `${getSelectedSkuNoDataMessage(sku)} · ${getTrendBasisNotice()} · ${getOutboundSourceScopeNotice()}`;
     }
 
     if (summary) {
-      summary.innerHTML = hasData
-        ? recentPoints.map((point) => `
-          <div class="sku-order-trend-pill">
-            <span>${shortDateLabel(point.date)}</span>
-            <strong>${escapeHtml(formatStock(sku, point.units))}</strong>
-          </div>`).join("")
-        : `<div class="detail-empty">최근 30일 안에 이 품목으로 저장된 순출고 기록이 없습니다.</div>`;
+      summary.innerHTML = collectionFailed
+        ? `<div class="detail-empty">출고 기록 수집 실패 · 진단 패널 확인 필요</div>`
+        : hasData
+          ? recentPoints.map((point) => `
+            <div class="sku-order-trend-pill">
+              <span>${shortDateLabel(point.date)}</span>
+              <strong>${escapeHtml(formatStock(sku, point.units))}</strong>
+            </div>`).join("")
+          : `<div class="detail-empty">${escapeHtml(getSelectedSkuNoDataMessage(sku))}</div>`;
+    }
+
+    if (list) {
+      list.innerHTML = hasData
+        ? recentRecords.map((record) => `<span>${escapeHtml(shortDateLabel(record.date))} · ${escapeHtml(formatStock(sku, record.units))}</span>`).join("")
+        : `<span class="muted">${escapeHtml(collectionFailed ? "출고 기록 수집 실패" : getSelectedSkuNoDataMessage(sku))}</span>`;
     }
 
     if (empty) {
       empty.hidden = hasData;
-      empty.textContent = "최근 30일 출고 기록이 없습니다.";
+      empty.textContent = collectionFailed ? "출고 기록을 수집하지 못했습니다." : getSelectedSkuNoDataMessage(sku);
     }
 
     if (!canvas || !canvas.getContext) {
@@ -4712,7 +5579,7 @@ function renderInventoryItemOrderTrend() {
       return;
     }
 
-    const padding = { top: 18, right: 16, bottom: 42, left: 42 };
+    const padding = { top: 36, right: 16, bottom: 42, left: 42 };
     const chartW = Math.max(1, width - padding.left - padding.right);
     const chartH = Math.max(1, height - padding.top - padding.bottom);
     const maxValue = Math.max(...trend.dailyData.map((point) => point.units), 1);
@@ -4765,6 +5632,38 @@ function renderInventoryItemOrderTrend() {
       ctx.fill();
     });
 
+    const nonZeroPoints = trend.dailyData
+      .map((point, idx) => ({ point, idx }))
+      .filter((entry) => entry.point.units > 0);
+    const maxPointIndex = nonZeroPoints.reduce((maxIdx, entry) => {
+      if (maxIdx < 0) return entry.idx;
+      return entry.point.units > trend.dailyData[maxIdx].units ? entry.idx : maxIdx;
+    }, -1);
+    const valueLabelStep = Math.max(1, Math.ceil(nonZeroPoints.length / (width < 430 ? 4 : 7)));
+    const labelIndexes = new Set();
+    nonZeroPoints.forEach((entry, orderIdx) => {
+      if (entry.idx === maxPointIndex || orderIdx % valueLabelStep === 0 || orderIdx === nonZeroPoints.length - 1) {
+        labelIndexes.add(entry.idx);
+      }
+    });
+    ctx.font = "11px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    [...labelIndexes].sort((a, b) => a - b).forEach((idx) => {
+      const point = trend.dailyData[idx];
+      const x = padding.left + idx * stepX;
+      const y = padding.top + chartH - (point.units / maxValue) * chartH;
+      const label = Math.round(point.units).toLocaleString("ko-KR");
+      const labelY = Math.max(12, y - 16);
+      const textWidth = ctx.measureText(label).width + 8;
+      ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
+      ctx.fillRect(x - textWidth / 2, labelY - 8, textWidth, 16);
+      ctx.strokeStyle = "rgba(37, 99, 235, 0.16)";
+      ctx.strokeRect(x - textWidth / 2, labelY - 8, textWidth, 16);
+      ctx.fillStyle = "#0f172a";
+      ctx.fillText(label, x, labelY);
+    });
+
     ctx.fillStyle = "#64748b";
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
@@ -4787,10 +5686,10 @@ function renderInventoryItemOrderTrend() {
       empty.textContent = "출고 기록을 불러오지 못했습니다.";
     }
     if (summary) summary.innerHTML = "";
+    if (list) list.innerHTML = `<span class="muted">오류 확인 필요</span>`;
     renderOutboundTrendDiagnostics();
   }
 }
-
 
 function buildOutboundDiagnosticsText() {
   const payload = {
@@ -4799,6 +5698,7 @@ function buildOutboundDiagnosticsText() {
     renderStatus: outboundTrendDiagnostics.renderStatus,
     functionCalled: outboundTrendDiagnostics.functionCalled,
     localStorageAvailable: outboundTrendDiagnostics.localStorageAvailable,
+    localStorageFailureReason: outboundTrendDiagnostics.localStorageFailureReason,
     scannedKeys: outboundTrendDiagnostics.scannedKeys,
     keySummaries: outboundTrendDiagnostics.keySummaries,
     candidateRecordCount: outboundTrendDiagnostics.candidateRecordCount,
@@ -4812,10 +5712,89 @@ function buildOutboundDiagnosticsText() {
     atParsedSuccessCount: outboundTrendDiagnostics.atParsedSuccessCount,
     atParseFailedCount: outboundTrendDiagnostics.atParseFailedCount,
     stockReadFailureReason: outboundTrendDiagnostics.stockReadFailureReason,
-    localStorageFailureReason: outboundTrendDiagnostics.localStorageFailureReason,
+    renderSkipReason: outboundTrendDiagnostics.renderSkipReason,
+    collectionStatus: outboundTrendDiagnostics.collectionStatus,
+    selectedSku: outboundTrendDiagnostics.selectedSku,
+    currentSku: outboundTrendDiagnostics.currentSku,
+    selectedItemName: outboundTrendDiagnostics.selectedItemName,
+    currentItemName: outboundTrendDiagnostics.currentItemName,
+    selectedStockUnits: outboundTrendDiagnostics.selectedStockUnits,
+    totalStockUnitsAll: outboundTrendDiagnostics.totalStockUnitsAll,
+    detailOverlayOpen: outboundTrendDiagnostics.detailOverlayOpen,
+    selectedSkuCandidateCount: outboundTrendDiagnostics.selectedSkuCandidateCount,
+    selectedSkuMatchedCount: outboundTrendDiagnostics.selectedSkuMatchedCount,
+    selectedSkuRecentCount: outboundTrendDiagnostics.selectedSkuRecentCount,
+    selectedSkuExcludedNoDate: outboundTrendDiagnostics.selectedSkuExcludedNoDate,
+    selectedSkuExcludedNoQuantity: outboundTrendDiagnostics.selectedSkuExcludedNoQuantity,
+    selectedSkuExcludedNameMismatch: outboundTrendDiagnostics.selectedSkuExcludedNameMismatch,
+    selectedSkuExcludedType: outboundTrendDiagnostics.selectedSkuExcludedType,
+    selectedSkuExcludedDuplicate: outboundTrendDiagnostics.selectedSkuExcludedDuplicate,
+    selectedSkuExcludedOldRecord: outboundTrendDiagnostics.selectedSkuExcludedOldRecord,
+    selectedSkuPossibleNameMatches: outboundTrendDiagnostics.selectedSkuPossibleNameMatches,
+    selectedSkuRecordSamples: outboundTrendDiagnostics.selectedSkuRecordSamples,
+    selectedSkuExcludedSamples: outboundTrendDiagnostics.selectedSkuExcludedSamples,
+    selectedSkuBoxUsageCount: outboundTrendDiagnostics.selectedSkuBoxUsageCount,
+    selectedSkuBoxUsageRecordCount: outboundTrendDiagnostics.selectedSkuBoxUsageRecordCount,
+    selectedSkuDeductionCount: outboundTrendDiagnostics.selectedSkuDeductionCount,
+    selectedSkuDeductionRecordCount: outboundTrendDiagnostics.selectedSkuDeductionRecordCount,
+    selectedSkuHasBoxUsageOnly: outboundTrendDiagnostics.selectedSkuHasBoxUsageOnly,
+    selectedSkuNameMatchedBeforeFilter: outboundTrendDiagnostics.selectedSkuNameMatchedBeforeFilter,
+    selectedSkuTypeAcceptedCount: outboundTrendDiagnostics.selectedSkuTypeAcceptedCount,
+    selectedSkuDateAcceptedCount: outboundTrendDiagnostics.selectedSkuDateAcceptedCount,
+    selectedSkuQuantityAcceptedCount: outboundTrendDiagnostics.selectedSkuQuantityAcceptedCount,
+    selectedSkuAcceptedBeforeDedupe: outboundTrendDiagnostics.selectedSkuAcceptedBeforeDedupe,
+    selectedSkuDuplicateExcludedCount: outboundTrendDiagnostics.selectedSkuDuplicateExcludedCount,
+    selectedSkuAcceptedAfterDedupe: outboundTrendDiagnostics.selectedSkuAcceptedAfterDedupe,
+    selectedSkuDedupeRepresentativeSamples: outboundTrendDiagnostics.selectedSkuDedupeRepresentativeSamples,
+    selectedSkuDuplicateSamples: outboundTrendDiagnostics.selectedSkuDuplicateSamples,
+    selectedSkuRejectedByTypeSamples: outboundTrendDiagnostics.selectedSkuRejectedByTypeSamples,
+    selectedSkuRejectedByDateSamples: outboundTrendDiagnostics.selectedSkuRejectedByDateSamples,
+    selectedSkuRejectedByQuantitySamples: outboundTrendDiagnostics.selectedSkuRejectedByQuantitySamples,
+    selectedSkuFinalAcceptedSamples: outboundTrendDiagnostics.selectedSkuFinalAcceptedSamples,
+    selectedSkuDisplayReason: outboundTrendDiagnostics.selectedSkuDisplayReason,
+    selectedSkuDedupeStrategy: outboundTrendDiagnostics.selectedSkuDedupeStrategy,
+    selectedSkuPrimarySourceCount: outboundTrendDiagnostics.selectedSkuPrimarySourceCount,
+    selectedSkuBackupSourceCount: outboundTrendDiagnostics.selectedSkuBackupSourceCount,
+    selectedSkuUndoSourceCount: outboundTrendDiagnostics.selectedSkuUndoSourceCount,
+    selectedSkuDiagnosticNote: outboundTrendDiagnostics.selectedSkuDiagnosticNote,
+    trendDateSource: outboundTrendDiagnostics.trendDateSource,
+    trendDateFieldUsed: outboundTrendDiagnostics.trendDateFieldUsed,
+    trendDateBasis: outboundTrendDiagnostics.trendDateBasis,
+    outboundTrendCalculationSources: outboundTrendDiagnostics.outboundTrendCalculationSources,
+    outboundTrendDiagnosticOnlySources: outboundTrendDiagnostics.outboundTrendDiagnosticOnlySources,
+    excludedDiagnosticSources: outboundTrendDiagnostics.excludedDiagnosticSources,
+    todayOutboundBySource: outboundTrendDiagnostics.todayOutboundBySource,
+    dailyOutboundBySource: outboundTrendDiagnostics.dailyOutboundBySource,
+    todayExcludedBackupUnits: outboundTrendDiagnostics.todayExcludedBackupUnits,
+    todayExcludedUndoUnits: outboundTrendDiagnostics.todayExcludedUndoUnits,
+    todayExcludedLastAnalysisUnits: outboundTrendDiagnostics.todayExcludedLastAnalysisUnits,
+    todayIncludedActiveHistoryUnits: outboundTrendDiagnostics.todayIncludedActiveHistoryUnits,
+    backupUndoExcludedCount: outboundTrendDiagnostics.backupUndoExcludedCount,
+    lastAnalysisExcludedCount: outboundTrendDiagnostics.lastAnalysisExcludedCount,
+    activeHistoryRecordCount: outboundTrendDiagnostics.activeHistoryRecordCount,
+    calculationRecordCount: outboundTrendDiagnostics.calculationRecordCount,
+    diagnosticOnlyRecordCount: outboundTrendDiagnostics.diagnosticOnlyRecordCount,
+    sourceContributionSamples: outboundTrendDiagnostics.sourceContributionSamples,
+    todaySourceContributionSamples: outboundTrendDiagnostics.todaySourceContributionSamples,
+    selectedSkuCalculationSourceBreakdown: outboundTrendDiagnostics.selectedSkuCalculationSourceBreakdown,
+    selectedSkuDiagnosticSourceBreakdown: outboundTrendDiagnostics.selectedSkuDiagnosticSourceBreakdown,
+    restoredOrBackupRecordDetectedCount: outboundTrendDiagnostics.restoredOrBackupRecordDetectedCount,
+    dailyOutboundSamples: outboundTrendDiagnostics.dailyOutboundSamples,
+    todayOutboundTotal: outboundTrendDiagnostics.todayOutboundTotal,
+    todayOutboundRecordCount: outboundTrendDiagnostics.todayOutboundRecordCount,
+    todayOutboundSamples: outboundTrendDiagnostics.todayOutboundSamples,
+    recordsGroupedByProcessingDateCount: outboundTrendDiagnostics.recordsGroupedByProcessingDateCount,
+    recordsGroupedByActualOutboundDateCount: outboundTrendDiagnostics.recordsGroupedByActualOutboundDateCount,
+    dateAmbiguousRecordCount: outboundTrendDiagnostics.dateAmbiguousRecordCount,
+    dateAmbiguousSamples: outboundTrendDiagnostics.dateAmbiguousSamples,
+    selectedSkuDailyBreakdown: outboundTrendDiagnostics.selectedSkuDailyBreakdown,
+    selectedSkuTodayBreakdown: outboundTrendDiagnostics.selectedSkuTodayBreakdown,
+    selectedSkuDateFieldCounts: outboundTrendDiagnostics.selectedSkuDateFieldCounts,
+    selectedSkuDateBasisCounts: outboundTrendDiagnostics.selectedSkuDateBasisCounts,
     dataSourcesRead: outboundTrendDiagnostics.dataSourcesRead,
     excludedReasons: outboundTrendDiagnostics.excludedReasons,
     candidateFields: outboundTrendDiagnostics.candidateFields,
+    recordErrors: outboundTrendDiagnostics.recordErrors,
     lastError: outboundTrendDiagnostics.lastError,
     supabaseStatus: outboundTrendDiagnostics.supabaseStatus,
     note: outboundTrendDiagnostics.note,
@@ -4842,20 +5821,72 @@ function renderOutboundTrendDiagnostics() {
   body.innerHTML = `
     <div class="diagnostic-grid">
       <div><strong>렌더링 상태</strong><span>${escapeHtml(diag.renderStatus || "-")}</span></div>
+      <div><strong>수집 상태</strong><span>${escapeHtml(diag.collectionStatus || "-")}</span></div>
+      <div><strong>함수 호출</strong><span>${escapeHtml(`render:${!!diag.functionCalled?.render} / collect:${!!diag.functionCalled?.collect} / stockout:${!!diag.functionCalled?.stockout} / trend:${!!diag.functionCalled?.trend}`)}</span></div>
+      <div><strong>선택 품목</strong><span>${escapeHtml(diag.currentSku || diag.selectedSku || "없음")}</span></div>
+      <div><strong>상세창</strong><span>${diag.detailOverlayOpen ? "열림" : "닫힘/확인 필요"}</span></div>
       <div><strong>localStorage</strong><span>${diag.localStorageAvailable ? "사용 가능" : "확인 필요"}</span></div>
       <div><strong>출고 후보</strong><span>${Number(diag.outboundCandidateCount || 0).toLocaleString()}건</span></div>
       <div><strong>최근 30일</strong><span>${Number(diag.recentOutboundCount || 0).toLocaleString()}건</span></div>
+      <div><strong>선택 후보</strong><span>${Number(diag.selectedSkuCandidateCount || 0).toLocaleString()}건</span></div>
+      <div><strong>선택 매칭</strong><span>${Number(diag.selectedSkuMatchedCount || 0).toLocaleString()}건 / 최근 ${Number(diag.selectedSkuRecentCount || 0).toLocaleString()}건</span></div>
+      <div><strong>선택 단계</strong><span>이름 ${Number(diag.selectedSkuNameMatchedBeforeFilter || 0).toLocaleString()} / 유형 ${Number(diag.selectedSkuTypeAcceptedCount || 0).toLocaleString()} / 수량 ${Number(diag.selectedSkuQuantityAcceptedCount || 0).toLocaleString()} / 날짜 ${Number(diag.selectedSkuDateAcceptedCount || 0).toLocaleString()} / dedupe전 ${Number(diag.selectedSkuAcceptedBeforeDedupe || 0).toLocaleString()} / dedupe후 ${Number(diag.selectedSkuAcceptedAfterDedupe || 0).toLocaleString()}</span></div>
+      <div><strong>선택 제외</strong><span>이름 ${Number(diag.selectedSkuExcludedNameMismatch || 0).toLocaleString()} / 날짜 ${Number(diag.selectedSkuExcludedNoDate || 0).toLocaleString()} / 수량 ${Number(diag.selectedSkuExcludedNoQuantity || 0).toLocaleString()} / 유형 ${Number(diag.selectedSkuExcludedType || 0).toLocaleString()} / 중복 ${Number(diag.selectedSkuExcludedDuplicate || 0).toLocaleString()} / 기간외 ${Number(diag.selectedSkuExcludedOldRecord || 0).toLocaleString()}</span></div>
+      <div><strong>선택 출처</strong><span>원본 ${Number(diag.selectedSkuPrimarySourceCount || 0).toLocaleString()} / 백업 ${Number(diag.selectedSkuBackupSourceCount || 0).toLocaleString()} / undo ${Number(diag.selectedSkuUndoSourceCount || 0).toLocaleString()}</span></div>
+      <div><strong>선택 deductions</strong><span>${Number(diag.selectedSkuDeductionCount || 0).toLocaleString()}개 / ${Number(diag.selectedSkuDeductionRecordCount || 0).toLocaleString()}건</span></div>
+      <div><strong>선택 boxUsages</strong><span>${Number(diag.selectedSkuBoxUsageCount || 0).toLocaleString()}개 / ${Number(diag.selectedSkuBoxUsageRecordCount || 0).toLocaleString()}건</span></div>
       <div><strong>현재 재고 읽기</strong><span>${diag.stockRead ? "성공" : "확인 필요"}</span></div>
+      <div><strong>선택 재고</strong><span>${Number(diag.selectedStockUnits || 0).toLocaleString()}개</span></div>
+      <div><strong>전체 재고 합계</strong><span>${Number(diag.totalStockUnitsAll || 0).toLocaleString()}개</span></div>
       <div><strong>일평균 출고</strong><span>${Math.round(diag.averageDailyOutbound || 0).toLocaleString()}개/일</span></div>
       <div><strong>중복 제외</strong><span>${Number(diag.duplicateExcludedCount || 0).toLocaleString()}건</span></div>
       <div><strong>파싱 실패 키</strong><span>${Number(diag.parseFailedKeys || 0).toLocaleString()}개</span></div>
       <div><strong>at 날짜</strong><span>${Number(diag.atFieldDetectedCount || 0).toLocaleString()} 감지 / ${Number(diag.atParsedSuccessCount || 0).toLocaleString()} 성공 / ${Number(diag.atParseFailedCount || 0).toLocaleString()} 실패</span></div>
+      <div><strong>날짜 기준</strong><span>${escapeHtml(diag.trendDateSource || getTrendBasisNotice())}</span></div>
+      <div><strong>계산 출처</strong><span>${escapeHtml((diag.outboundTrendCalculationSources || []).join(", ") || "현재 유효 history 없음")}</span></div>
+      <div><strong>진단 전용 출처</strong><span>${escapeHtml((diag.outboundTrendDiagnosticOnlySources || []).join(", ") || "없음")}</span></div>
+      <div><strong>계산/진단 건수</strong><span>계산 ${Number(diag.calculationRecordCount || 0).toLocaleString()} / 진단전용 ${Number(diag.diagnosticOnlyRecordCount || 0).toLocaleString()} / 백업·undo 제외 ${Number(diag.backupUndoExcludedCount || 0).toLocaleString()} / 마지막분석 제외 ${Number(diag.lastAnalysisExcludedCount || 0).toLocaleString()}</span></div>
+      <div><strong>오늘 집계</strong><span>${Number(diag.todayOutboundTotal || 0).toLocaleString()}개 / ${Number(diag.todayOutboundRecordCount || 0).toLocaleString()}건 · 계산포함 ${Number(diag.todayIncludedActiveHistoryUnits || 0).toLocaleString()}개</span></div>
+      <div><strong>오늘 제외 수량</strong><span>backup ${Number(diag.todayExcludedBackupUnits || 0).toLocaleString()} / undo ${Number(diag.todayExcludedUndoUnits || 0).toLocaleString()} / lastAnalysis ${Number(diag.todayExcludedLastAnalysisUnits || 0).toLocaleString()}</span></div>
+      <div><strong>날짜 그룹</strong><span>실제 ${Number(diag.recordsGroupedByActualOutboundDateCount || 0).toLocaleString()} / 처리 ${Number(diag.recordsGroupedByProcessingDateCount || 0).toLocaleString()} / 확인필요 ${Number(diag.dateAmbiguousRecordCount || 0).toLocaleString()}</span></div>
       <div><strong>재고 사유</strong><span>${escapeHtml(diag.stockReadFailureReason || "없음")}</span></div>
       <div><strong>localStorage 사유</strong><span>${escapeHtml(diag.localStorageFailureReason || "없음")}</span></div>
+      <div><strong>렌더 건너뜀 사유</strong><span>${escapeHtml(diag.renderSkipReason || "없음")}</span></div>
     </div>
     <div class="diagnostic-section">
       <strong>제외 사유</strong>
       <div class="diagnostic-pill-row">${reasonRows}</div>
+    </div>
+    <div class="diagnostic-section">
+      <strong>선택 품목 진단</strong>
+      <p class="muted">${escapeHtml(diag.selectedSkuDiagnosticNote || getSelectedSkuNoDataMessage(diag.currentSku || diag.selectedSku || ""))}</p>
+      <p class="muted">표시 사유: ${escapeHtml(diag.selectedSkuDisplayReason || getSelectedSkuNoDataMessage(diag.currentSku || diag.selectedSku || ""))}</p>
+      <p class="muted">중복 기준: ${escapeHtml(diag.selectedSkuDedupeStrategy || "확인 필요")}</p>
+      <p class="muted">유사 후보: ${escapeHtml((diag.selectedSkuPossibleNameMatches || []).map((item) => `${item.name}(${item.source})`).join(", ") || "없음")}</p>
+      <p class="muted">매칭 샘플: ${escapeHtml((diag.selectedSkuRecordSamples || []).map((item) => `${item.reason}:${item.sku || "-"}:${item.units || 0}`).join(" / ") || "없음")}</p>
+      <p class="muted">대표 샘플: ${escapeHtml((diag.selectedSkuDedupeRepresentativeSamples || []).map((item) => `${item.reason}:${item.sku || "-"}:${item.units || 0}:${item.source || "-"}`).join(" / ") || "없음")}</p>
+      <p class="muted">최종 집계 샘플: ${escapeHtml((diag.selectedSkuFinalAcceptedSamples || []).map((item) => `${item.reason}:${item.sku || "-"}:${item.units || 0}`).join(" / ") || "없음")}</p>
+      <p class="muted">중복 샘플: ${escapeHtml((diag.selectedSkuDuplicateSamples || []).map((item) => `${item.reason}:${item.sku || "-"}:${item.units || 0}:${item.source || "-"}`).join(" / ") || "없음")}</p>
+      <p class="muted">제외 샘플: ${escapeHtml((diag.selectedSkuExcludedSamples || []).map((item) => `${item.reason}:${item.sku || "-"}:${item.units || 0}`).join(" / ") || "없음")}</p>
+    </div>
+    <div class="diagnostic-section">
+      <strong>날짜 기준 진단</strong>
+      <p class="muted">기준: ${escapeHtml(`${diag.trendDateSource || getTrendBasisNotice()} · ${getOutboundSourceScopeNotice()}`)}</p>
+      <p class="muted">날짜 필드: ${escapeHtml(JSON.stringify(diag.selectedSkuDateFieldCounts || {}))}</p>
+      <p class="muted">날짜 기준 분포: ${escapeHtml(JSON.stringify(diag.selectedSkuDateBasisCounts || {}))}</p>
+      <p class="muted">오늘 집계 샘플: ${escapeHtml((diag.todayOutboundSamples || []).map((item) => `${item.date}:${item.units}:${item.field}:${item.basis}:${item.source}`).join(" / ") || "없음")}</p>
+      <p class="muted">일자별 집계: ${escapeHtml((diag.selectedSkuDailyBreakdown || []).map((item) => `${item.date}:${item.units}`).join(" / ") || "없음")}</p>
+      <p class="muted">날짜 확인 필요 샘플: ${escapeHtml((diag.dateAmbiguousSamples || []).map((item) => `${item.date}:${item.units}:${item.field}:${item.source}`).join(" / ") || "없음")}</p>
+    </div>
+    <div class="diagnostic-section">
+      <strong>계산 소스 분리 진단</strong>
+      <p class="muted">계산용: ${escapeHtml((diag.outboundTrendCalculationSources || []).join(", ") || "없음")}</p>
+      <p class="muted">진단용 제외: ${escapeHtml((diag.excludedDiagnosticSources || []).join(", ") || "없음")}</p>
+      <p class="muted">오늘 소스별 수량: ${escapeHtml(JSON.stringify(diag.todayOutboundBySource || {}))}</p>
+      <p class="muted">선택 SKU 계산 소스: ${escapeHtml(JSON.stringify(diag.selectedSkuCalculationSourceBreakdown || {}))}</p>
+      <p class="muted">선택 SKU 진단전용 소스: ${escapeHtml(JSON.stringify(diag.selectedSkuDiagnosticSourceBreakdown || {}))}</p>
+      <p class="muted">오늘 소스 샘플: ${escapeHtml((diag.todaySourceContributionSamples || []).map((item) => `${item.role}:${item.date}:${item.units}:${item.source}:${item.dateFieldUsed}`).join(" / ") || "없음")}</p>
+      <p class="muted">소스 샘플: ${escapeHtml((diag.sourceContributionSamples || []).map((item) => `${item.role}:${item.date}:${item.units}:${item.source}`).join(" / ") || "없음")}</p>
     </div>
     <div class="diagnostic-section">
       <strong>발견 필드명</strong>
@@ -4868,6 +5899,7 @@ function renderOutboundTrendDiagnostics() {
     <div class="diagnostic-section">
       <strong>마지막 오류</strong>
       <pre class="diagnostic-error">${escapeHtml(diag.lastError || "오류 없음")}</pre>
+      <p class="muted">${escapeHtml((diag.recordErrors || []).map((item) => `${item.source}: ${item.error}`).join(" / ") || "record 단위 오류 없음")}</p>
     </div>
     <div class="diagnostic-section diagnostic-table-wrap">
       <strong>관련 저장 키</strong>
@@ -4880,8 +5912,19 @@ function renderOutboundTrendDiagnostics() {
   `;
 }
 
+function getOutboundTrendDiagnosticsCopy() {
+  return buildOutboundDiagnosticsText();
+}
+
+function renderOutboundTrendDiagnosticPanel() {
+  return renderOutboundTrendDiagnostics();
+}
+
 async function copyOutboundTrendDiagnostics() {
-  const text = buildOutboundDiagnosticsText();
+  if (outboundTrendDiagnostics.renderStatus === "not-rendered") {
+    renderInventoryItemOrderTrend();
+  }
+  const text = getOutboundTrendDiagnosticsCopy();
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);
@@ -4903,6 +5946,7 @@ async function copyOutboundTrendDiagnostics() {
 }
 
 function openInventoryItemDetail(sku) {
+    sku = canonicalSku(sku);
     const def = INVENTORY_DEFS[sku];
     const item = state.stock[sku];
     if (!def || !item) return;
@@ -5580,6 +6624,19 @@ function openInventoryItemDetail(sku) {
     const parsed = value instanceof Date ? value : new Date(value);
     if (Number.isNaN(parsed.getTime())) return String(value ?? "");
     return `${parsed.getMonth() + 1}/${parsed.getDate()}`;
+  }
+
+  function shortDateLabel(value) {
+    const parsed = value instanceof Date ? value : new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return `${parsed.getMonth() + 1}/${parsed.getDate()}`;
+    }
+    const raw = String(value ?? "").trim();
+    const match = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (match) {
+      return `${Number(match[2])}/${Number(match[3])}`;
+    }
+    return raw || "-";
   }
 
   function cssEscape(value) {

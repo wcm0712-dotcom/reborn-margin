@@ -9810,3 +9810,122 @@ body.admin-active #syncCard .admin-auth-form:has(#adminEmail[hidden]) {
     width: 100%;
   }
 }
+
+/* Excel processing result readability fix: scoped to the Excel order result card only. */
+#page-wms #orderResultCard,
+#page-wms #orderResultCard .result-pane,
+#page-wms #orderResultCard .mini-summary,
+#page-wms #orderResultCard .notice,
+#page-wms #orderResultCard .table-wrap,
+#page-wms #orderResultCard .result-table,
+#page-wms #orderResultCard p,
+#page-wms #orderResultCard li,
+#page-wms #orderResultCard span:not(.subtab):not(.badge):not(.pill):not(.status-pill):not(.diagnostic-pill) {
+  color: #334155;
+}
+
+#page-wms #orderResultCard strong,
+#page-wms #orderResultCard b,
+#page-wms #orderResultCard h2,
+#page-wms #orderResultCard h3,
+#page-wms #orderResultCard h4,
+#page-wms #orderResultCard td,
+#page-wms #orderResultCard .mini-summary strong,
+#page-wms #orderResultCard .result-pane strong {
+  color: #0f172a;
+}
+
+#page-wms #orderResultCard th {
+  color: #334155;
+  background: #f8fafc;
+}
+
+#page-wms #orderResultCard tbody tr:hover {
+  background: rgba(37, 99, 235, 0.045);
+}
+
+#page-wms #orderResultCard .muted,
+#page-wms #orderResultCard small,
+#page-wms #orderResultCard .notice small {
+  color: #64748b;
+}
+
+#page-wms #orderResultCard .negative {
+  color: #dc2626;
+}
+
+#page-wms #orderResultCard .positive {
+  color: #16a34a;
+}
+
+/* 2026-05-02: Excel order processing result readability, scoped only to the Excel order card/result area. */
+#page-wms #excelOrderCard,
+#page-wms #excelOrderCard .mini-summary,
+#page-wms #excelOrderCard .notice,
+#page-wms #excelOrderCard .excel-file-box,
+#page-wms #excelOrderCard .excel-file-copy,
+#page-wms #excelOrderCard .excel-file-copy strong,
+#page-wms #excelOrderCard .excel-file-copy small,
+#page-wms #orderResultCard,
+#page-wms #orderResultCard .result-pane,
+#page-wms #orderResultCard .table-wrap,
+#page-wms #orderResultCard table,
+#page-wms #orderResultCard p,
+#page-wms #orderResultCard li {
+  color: #1e293b;
+}
+
+#page-wms #excelOrderCard #excelSummary,
+#page-wms #excelOrderCard #excelSummary div,
+#page-wms #excelOrderCard #excelNotice,
+#page-wms #excelOrderCard #excelFormatWarning,
+#page-wms #orderResultCard td,
+#page-wms #orderResultCard th {
+  color: #1f2937;
+}
+
+#page-wms #excelOrderCard #excelSummary strong,
+#page-wms #excelOrderCard #excelNotice strong,
+#page-wms #orderResultCard td:nth-child(1),
+#page-wms #orderResultCard td:nth-child(2),
+#page-wms #orderResultCard td:nth-child(3),
+#page-wms #orderResultCard strong,
+#page-wms #orderResultCard b {
+  color: #0f172a;
+  font-weight: 850;
+}
+
+#page-wms #excelOrderCard #excelSummary .asset-loss,
+#page-wms #excelOrderCard #excelSummary .asset-loss strong {
+  color: #9f1239;
+  font-weight: 850;
+}
+
+#page-wms #excelOrderCard .muted,
+#page-wms #excelOrderCard .muted-small,
+#page-wms #excelOrderCard small,
+#page-wms #orderResultCard .muted,
+#page-wms #orderResultCard small {
+  color: #475569;
+}
+
+#page-wms #orderResultCard th {
+  background: #f8fafc;
+  border-bottom-color: #cbd5e1;
+  font-weight: 850;
+}
+
+#page-wms #orderResultCard tbody tr,
+#page-wms #orderResultCard .result-pane,
+#page-wms #orderResultCard .table-wrap {
+  background-color: #ffffff;
+}
+
+#page-wms #orderResultCard .subtab:not(.active) {
+  color: #334155;
+}
+
+#page-wms #orderResultCard .subtab.active {
+  color: #0f172a;
+  font-weight: 850;
+}
