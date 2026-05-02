@@ -1002,9 +1002,9 @@
     });
 
     const urlState = getPasswordRecoveryUrlState();
-    if (!urlState.isRecovery) return;
+    if (!urlstate.isRecovery) return;
 
-    if (urlState.error || urlState.errorCode) {
+    if (urlstate.error || urlstate.errorCode) {
       passwordRecoveryMode = false;
       showPasswordRecoveryOverlay(koreanPasswordRecoveryError(urlState), "danger");
       return;
@@ -3843,6 +3843,7 @@ function refreshActiveOrderAnalysisSummary() {
         closeInventoryItemDetail();
       }
     });
+    $("copyOutboundDiagnosticsBtn")?.addEventListener("click", copyOutboundTrendDiagnostics);
     $("exportBackup")?.addEventListener("click", () => {
       if (!requireEditor("백업 파일 받기")) return;
       exportBackup();
@@ -4053,28 +4054,155 @@ function refreshActiveOrderAnalysisSummary() {
   }
 
 
-  function safeParseStorageJson(raw) {
+  function safeParseStorageJson(raw, key = "") {
   if (!raw || typeof raw !== "string") return null;
   try {
-    return JSON.parse(raw);
-  } catch (_) {
+    const parsed = JSON.parse(raw);
+    outboundTrendDiagnostics.parsedKeys += key ? 1 : 0;
+    return parsed;
+  } catch (error) {
+    if (key) {
+      outboundTrendDiagnostics.parseFailedKeys += 1;
+      addDiagnosticKeySummary({ key, type: "파싱 실패", count: 0, error: error?.message || String(error) });
+    }
     return null;
   }
 }
 
 function isOutboundStorageKey(key) {
   if (!key) return false;
-  return /reborn|ribbon|wms|inventory|stock|excel|order|history|movement|outbound|app_state/i.test(key)
-    && !/manifest|theme|setting|preference/i.test(key);
+  return OUTBOUND_DIAGNOSTIC_STORAGE_KEYWORDS.some((word) => key.toLowerCase().includes(word))
+    && !/manifest|theme|setting|preference|accent|appearance/i.test(key);
+}
+
+
+
+const OUTBOUND_DIAGNOSTIC_STORAGE_KEYWORDS = [
+  "stock",
+  "wms",
+  "inventory",
+  "history",
+  "log",
+  "movement",
+  "outbound",
+  "order",
+  "excel",
+  "shipment",
+  "dispatch",
+  "backup",
+  "reborn",
+  "ribbon"
+];
+
+let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
+
+function createEmptyOutboundTrendDiagnostics() {
+  return {
+    generatedAt: new Date().toISOString(),
+    cacheVersion: "outtrend-normalize-at-fix-02",
+    functionCalled: {
+      collect: false,
+      stockout: false,
+      trend: false,
+      render: false,
+    },
+    localStorageAvailable: false,
+    scannedKeys: [],
+    keySummaries: [],
+    parsedKeys: 0,
+    parseFailedKeys: 0,
+    candidateRecordCount: 0,
+    outboundCandidateCount: 0,
+    recentOutboundCount: 0,
+    stockUnitsTotal: 0,
+    stockRead: false,
+    averageDailyOutbound: 0,
+    duplicateExcludedCount: 0,
+    atFieldDetectedCount: 0,
+    atParsedSuccessCount: 0,
+    atParseFailedCount: 0,
+    normalizeHelperAvailable: true,
+    stockReadFailureReason: "확인 필요",
+    localStorageFailureReason: "",
+    dataSourcesRead: [],
+    excludedReasons: {
+      noDate: 0,
+      noQuantity: 0,
+      noProduct: 0,
+      inbound: 0,
+      restoreOrReturn: 0,
+      dateParseFailed: 0,
+      uncertain: 0,
+      duplicate: 0,
+      oldRecord: 0,
+      recordError: 0,
+    },
+    possibleKeys: [],
+    candidateFields: [],
+    lastError: "",
+    renderStatus: "not-rendered",
+    supabaseStatus: "확인 필요",
+    note: "ZIP 파일에는 실제 브라우저 localStorage 데이터가 포함되지 않을 수 있습니다. 실제 앱 데이터 확인은 진단 결과 복사 내용으로 확인해야 합니다.",
+  };
+}
+
+function resetOutboundTrendDiagnostics() {
+  outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
+}
+
+function incrementDiagnosticReason(reason) {
+  if (!outboundTrendDiagnostics.excludedReasons[reason]) outboundTrendDiagnostics.excludedReasons[reason] = 0;
+  outboundTrendDiagnostics.excludedReasons[reason] += 1;
+}
+
+function describeDiagnosticValue(value) {
+  if (Array.isArray(value)) return { type: "배열", count: value.length };
+  if (value && typeof value === "object") {
+    const arrays = [];
+    Object.keys(value).forEach((key) => {
+      if (Array.isArray(value[key])) arrays.push(`${key}:${value[key].length}`);
+    });
+    return { type: "객체", count: arrays.length ? arrays.join(", ") : Object.keys(value).length };
+  }
+  if (typeof value === "string") return { type: "문자열", count: value.length };
+  return { type: typeof value, count: 0 };
+}
+
+function addDiagnosticKeySummary(summary) {
+  outboundTrendDiagnostics.keySummaries.push(summary);
+  if (summary?.key) outboundTrendDiagnostics.scannedKeys.push(summary.key);
+}
+
+function collectDiagnosticFieldNames(record) {
+  if (!record || typeof record !== "object") return;
+  Object.keys(record).slice(0, 24).forEach((key) => {
+    if (!outboundTrendDiagnostics.candidateFields.includes(key)) {
+      outboundTrendDiagnostics.candidateFields.push(key);
+    }
+  });
 }
 
 function getCandidateStorageKeys() {
   const keys = new Set([STORAGE_KEY]);
   try {
+    if (typeof localStorage === "undefined" || !localStorage) {
+      outboundTrendDiagnostics.localStorageAvailable = false;
+      outboundTrendDiagnostics.localStorageFailureReason = "localStorage 객체 없음 또는 접근 불가";
+      return [...keys];
+    }
+    outboundTrendDiagnostics.localStorageAvailable = true;
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (isOutboundStorageKey(key)) keys.add(key);
+    }
     Object.keys(localStorage || {}).forEach((key) => {
       if (isOutboundStorageKey(key)) keys.add(key);
     });
-  } catch (_) {}
+  } catch (error) {
+    outboundTrendDiagnostics.localStorageAvailable = false;
+    outboundTrendDiagnostics.localStorageFailureReason = error?.message || String(error);
+    outboundTrendDiagnostics.lastError = `localStorage 키 스캔 실패: ${error?.message || error}`;
+  }
   return [...keys];
 }
 
@@ -4099,62 +4227,96 @@ function getObjectText(value) {
     value.title,
     value.memo,
     value.note,
+    value.message,
+    value.description,
   ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
 }
 
+function safeNormalizeText(value) {
+  if (value == null) return "";
+  return String(value)
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function getRecordDateInfo(record, parent) {
+  const fields = ["at", "date", "createdAt", "created_at", "timestamp", "processedAt", "processed_at", "time", "updatedAt", "updated_at"];
+  let rawDate = null;
+  let sourceField = "";
+  for (const field of fields) {
+    if (record && record[field] != null && record[field] !== "") {
+      rawDate = record[field];
+      sourceField = field;
+      break;
+    }
+  }
+  if ((rawDate == null || rawDate === "") && parent) {
+    for (const field of fields) {
+      if (parent[field] != null && parent[field] !== "") {
+        rawDate = parent[field];
+        sourceField = `parent.${field}`;
+        break;
+      }
+    }
+  }
+  const isAtField = sourceField === "at" || sourceField === "parent.at";
+  if (isAtField) outboundTrendDiagnostics.atFieldDetectedCount += 1;
+  if (rawDate == null || rawDate === "") return { date: null, hasRaw: false, sourceField: "", rawDate: null };
+  const date = parseTrendDate(rawDate);
+  if (isAtField) {
+    if (date) outboundTrendDiagnostics.atParsedSuccessCount += 1;
+    else outboundTrendDiagnostics.atParseFailedCount += 1;
+  }
+  return { date, hasRaw: true, sourceField, rawDate };
+}
+
 function getRecordDateValue(record, parent) {
-  return (
-    record?.at ||
-    record?.date ||
-    record?.createdAt ||
-    record?.created_at ||
-    record?.timestamp ||
-    record?.processedAt ||
-    record?.processed_at ||
-    record?.time ||
-    record?.updatedAt ||
-    record?.updated_at ||
-    parent?.at ||
-    parent?.date ||
-    parent?.createdAt ||
-    parent?.created_at ||
-    parent?.timestamp ||
-    parent?.processedAt ||
-    parent?.processed_at ||
-    parent?.time ||
-    parent?.updatedAt ||
-    parent?.updated_at ||
-    null
-  );
+  return getRecordDateInfo(record, parent).rawDate;
 }
 
 function parseTrendDate(value) {
-  if (!value) return null;
+  if (value == null || value === "") return null;
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
   if (typeof value === "number") {
-    const date = new Date(value);
+    const normalized = value > 0 && value < 1000000000000 ? value * 1000 : value;
+    const date = new Date(normalized);
     return Number.isNaN(date.getTime()) ? null : date;
   }
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-    const normalized = trimmed
-      .replace(/(년|\.)/g, "-")
-      .replace(/월/g, "-")
-      .replace(/일/g, "")
-      .replace(/--+/g, "-")
-      .replace(/\s+/g, " ");
-    const direct = new Date(trimmed);
-    if (!Number.isNaN(direct.getTime())) return direct;
-    const fallback = new Date(normalized);
-    if (!Number.isNaN(fallback.getTime())) return fallback;
+  let text = String(value).trim();
+  if (!text) return null;
+  if (/^\d+$/.test(text)) return parseTrendDate(Number(text));
+  const direct = new Date(text);
+  if (!Number.isNaN(direct.getTime())) return direct;
+  let normalizedText = text
+    .replace(/년/g, "-")
+    .replace(/월/g, "-")
+    .replace(/일/g, " ")
+    .replace(/[.]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+  const isPm = /오후|PM/i.test(normalizedText);
+  const isAm = /오전|AM/i.test(normalizedText);
+  normalizedText = normalizedText.replace(/오전|오후|AM|PM/gi, "").replace(/\s+/g, " ").trim();
+  const match = normalizedText.match(/(\d{4})-(\d{1,2})-(\d{1,2})(?:\s+(\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}))?)?/);
+  if (match) {
+    const year = Number(match[1]);
+    const month = Number(match[2]) - 1;
+    const day = Number(match[3]);
+    let hour = Number(match[4] || 0);
+    const minute = Number(match[5] || 0);
+    const second = Number(match[6] || 0);
+    if (isPm && hour < 12) hour += 12;
+    if (isAm && hour === 12) hour = 0;
+    const parsed = new Date(year, month, day, hour, minute, second);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
   }
   return null;
 }
-
 function getRecordSku(record, parent) {
   const raw =
     record?.sku ||
@@ -4165,6 +4327,7 @@ function getRecordSku(record, parent) {
     record?.item ||
     record?.name ||
     record?.title ||
+    record?.label ||
     parent?.sku ||
     parent?.productSku ||
     parent?.product ||
@@ -4173,13 +4336,14 @@ function getRecordSku(record, parent) {
     parent?.item ||
     parent?.name ||
     parent?.title ||
+    parent?.label ||
     "";
   const direct = canonicalSku(raw);
-  if (direct && State.stock[direct]) return direct;
-  const normalized = normalizeText(raw);
+  if (direct && state.stock[direct]) return direct;
+  const normalized = safeNormalizeText(raw);
   if (!normalized) return "";
   return Object.keys(INVENTORY_DEFS).find((name) => {
-    const normalizedName = normalizeText(name);
+    const normalizedName = safeNormalizeText(name);
     return normalized.includes(normalizedName) || normalizedName.includes(normalized);
   }) || direct || "";
 }
@@ -4197,6 +4361,11 @@ function getRecordUnits(record) {
     "qty",
     "quantity",
     "count",
+    "totalQty",
+    "ea",
+    "deductedQty",
+    "shippedQty",
+    "qtyText",
     "amount",
   ];
   for (const field of fields) {
@@ -4233,13 +4402,39 @@ function getDetailListFromRecord(record) {
 }
 
 function normalizeOutboundTrendRecord(record, parent, sourceHint = "") {
+  if (!record || typeof record !== "object") return null;
+  outboundTrendDiagnostics.candidateRecordCount += 1;
+  collectDiagnosticFieldNames(record);
   const sku = getRecordSku(record, parent);
-  if (!sku || !State.stock[sku]) return null;
-  if (!isOutboundRecord(record, parent, sourceHint)) return null;
+  const sourceText = `${sourceHint || ""} ${getObjectText(parent)} ${getObjectText(record)}`.toLowerCase();
+  if (isReturnOrRestoreRecord(record, parent)) {
+    incrementDiagnosticReason("restoreOrReturn");
+    return null;
+  }
+  if (/inbound|입고/.test(sourceText) && !/outbound|출고|차감|deduct|shipment/.test(sourceText)) {
+    incrementDiagnosticReason("inbound");
+    return null;
+  }
+  if (!sku || !state.stock[sku]) {
+    incrementDiagnosticReason("noProduct");
+    return null;
+  }
+  if (!isOutboundRecord(record, parent, sourceHint)) {
+    incrementDiagnosticReason("uncertain");
+    return null;
+  }
   const units = getRecordUnits(record);
-  if (!units) return null;
-  const date = parseTrendDate(getRecordDateValue(record, parent));
-  if (!date) return null;
+  if (!units) {
+    incrementDiagnosticReason("noQuantity");
+    return null;
+  }
+  const dateInfo = getRecordDateInfo(record, parent);
+  const date = dateInfo.date;
+  if (!date) {
+    incrementDiagnosticReason(dateInfo.hasRaw ? "dateParseFailed" : "noDate");
+    return null;
+  }
+  outboundTrendDiagnostics.outboundCandidateCount += 1;
   return {
     sku,
     units,
@@ -4249,25 +4444,29 @@ function normalizeOutboundTrendRecord(record, parent, sourceHint = "") {
   };
 }
 
-function collectRecordsFromCandidate(candidate, sourceHint, depth = 0, output = []) {
+function collectRecordsFromCandidate(candidate, sourceHint, depth = 0, output = [], parentContext = null) {
   if (!candidate || depth > 5) return output;
   if (Array.isArray(candidate)) {
-    candidate.forEach((entry) => collectRecordsFromCandidate(entry, sourceHint, depth + 1, output));
+    candidate.forEach((entry) => collectRecordsFromCandidate(entry, sourceHint, depth + 1, output, parentContext));
     return output;
   }
   if (typeof candidate !== "object") return output;
 
-  const details = getDetailListFromRecord(candidate);
-  if (details.length) {
-    details.forEach((detail) => {
-      const normalized = normalizeOutboundTrendRecord(detail, candidate, sourceHint);
-      if (normalized) output.push(normalized);
-      collectRecordsFromCandidate(detail, sourceHint, depth + 1, output);
-    });
+  outboundTrendDiagnostics.candidateRecordCount += 1;
+  collectCandidateFields(candidate);
+
+  try {
+    const normalized = normalizeOutboundTrendRecord(candidate, parentContext, sourceHint);
+    if (normalized) output.push(normalized);
+  } catch (error) {
+    incrementDiagnosticReason("recordError");
+    outboundTrendDiagnostics.lastError = String(error);
   }
 
-  const direct = normalizeOutboundTrendRecord(candidate, null, sourceHint);
-  if (direct) output.push(direct);
+  const details = getDetailListFromRecord(candidate);
+  if (details.length) {
+    details.forEach((detail) => collectRecordsFromCandidate(detail, `${sourceHint}.details`, depth + 1, output, candidate));
+  }
 
   const relevantNestedKeys = [
     "history",
@@ -4286,40 +4485,74 @@ function collectRecordsFromCandidate(candidate, sourceHint, depth = 0, output = 
     "state",
     "data",
     "payload",
+    "logs",
+    "records",
+    "items",
+    "orders",
+    "entries",
+    "list",
   ];
   relevantNestedKeys.forEach((key) => {
-    if (candidate[key]) collectRecordsFromCandidate(candidate[key], `${sourceHint}.${key}`, depth + 1, output);
+    if (candidate[key]) collectRecordsFromCandidate(candidate[key], `${sourceHint}.${key}`, depth + 1, output, candidate);
   });
   return output;
 }
 
 function collectStoredOutboundTrendRecords() {
+  outboundTrendDiagnostics.functionCalled.collect = true;
+  outboundTrendDiagnostics.renderStatus = "collecting";
   const records = [];
-  collectRecordsFromCandidate(State.history || [], "State.history", 0, records);
-  collectRecordsFromCandidate(State.adminActionLogs || [], "State.adminActionLogs", 0, records);
+  try {
+    const stateHistory = Array.isArray(state.history) ? state.history : [];
+    const stateAdminLogs = Array.isArray(state.adminActionLogs) ? state.adminActionLogs : [];
+    outboundTrendDiagnostics.dataSourcesRead = ["state.history", "state.adminActionLogs"];
+    collectRecordsFromCandidate(stateHistory, "state.history", 0, records);
+    collectRecordsFromCandidate(stateAdminLogs, "state.adminActionLogs", 0, records);
+    addDiagnosticKeySummary({ key: "state.history", ...describeDiagnosticValue(stateHistory) });
+    addDiagnosticKeySummary({ key: "state.adminActionLogs", ...describeDiagnosticValue(stateAdminLogs) });
 
-  getCandidateStorageKeys().forEach((key) => {
-    let parsed = null;
-    try {
-      parsed = safeParseStorageJson(localStorage.getItem(key));
-    } catch (_) {
-      parsed = null;
-    }
-    if (parsed) collectRecordsFromCandidate(parsed, `localStorage:${key}`, 0, records);
-  });
+    getCandidateStorageKeys().forEach((key) => {
+      let parsed = null;
+      try {
+        const raw = typeof localStorage !== "undefined" && localStorage ? localStorage.getItem(key) : null;
+        parsed = safeParseStorageJson(raw, key);
+        if (parsed) {
+          addDiagnosticKeySummary({ key: `localStorage:${key}`, ...describeDiagnosticValue(parsed) });
+          outboundTrendDiagnostics.dataSourcesRead.push(`localStorage:${key}`);
+          collectRecordsFromCandidate(parsed, `localStorage:${key}`, 0, records);
+        }
+      } catch (error) {
+        addDiagnosticKeySummary({ key: `localStorage:${key}`, type: "읽기 실패", count: 0, error: error?.message || String(error) });
+        outboundTrendDiagnostics.lastError = `localStorage 읽기 실패(${key}): ${error?.message || error}`;
+      }
+    });
 
-  const seen = new Set();
-  return records.filter((record) => {
-    const key = [
-      record.id || "",
-      record.sku,
-      dateKey(record.date),
-      Math.round(record.units * 1000) / 1000,
-    ].join("|");
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+    const seen = new Set();
+    const uniqueRecords = records.filter((record) => {
+      const key = record.id
+        ? `id:${record.id}`
+        : [
+            record.sku,
+            dateKey(record.date),
+            Math.round(record.units * 1000) / 1000,
+          ].join("|");
+      if (seen.has(key)) {
+        outboundTrendDiagnostics.duplicateExcludedCount += 1;
+        incrementDiagnosticReason("duplicate");
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+    outboundTrendDiagnostics.candidateRecordCount = Math.max(outboundTrendDiagnostics.candidateRecordCount, records.length);
+    outboundTrendDiagnostics.outboundCandidateCount = uniqueRecords.length;
+    outboundTrendDiagnostics.renderStatus = "collected";
+    return uniqueRecords;
+  } catch (error) {
+    outboundTrendDiagnostics.lastError = error?.stack || error?.message || String(error);
+    outboundTrendDiagnostics.renderStatus = "collect-error";
+    throw error;
+  }
 }
 
 function buildSkuOutboundTrend(sku, days = 30) {
@@ -4332,27 +4565,40 @@ function buildSkuOutboundTrend(sku, days = 30) {
     daily.set(dateKey(date), { date, units: 0 });
   }
 
-  collectStoredOutboundTrendRecords()
-    .filter((record) => record.sku === targetSku)
-    .forEach((record) => {
-      const date = startOfDay(record.date);
-      if (Number.isNaN(date.getTime()) || date < from || date > today) return;
-      const key = dateKey(date);
-      if (!daily.has(key)) daily.set(key, { date, units: 0 });
-      daily.get(key).units += record.units;
-    });
+  const allRecords = collectStoredOutboundTrendRecords().filter((record) => record.sku === targetSku);
+  const recentRecords = [];
+  allRecords.forEach((record) => {
+    const date = startOfDay(record.date);
+    if (Number.isNaN(date.getTime())) {
+      incrementDiagnosticReason("dateParseFailed");
+      return;
+    }
+    if (date < from || date > today) {
+      incrementDiagnosticReason("oldRecord");
+      return;
+    }
+    recentRecords.push(record);
+    const key = dateKey(date);
+    if (!daily.has(key)) daily.set(key, { date, units: 0 });
+    daily.get(key).units += record.units;
+  });
 
   const dailyData = [...daily.values()].sort((a, b) => a.date - b.date);
   const total = dailyData.reduce((sum, item) => sum + item.units, 0);
   const activeDays = dailyData.filter((item) => item.units > 0).length;
   const averagePerDay = total > 0 ? total / days : 0;
-  return { days, total, activeDays, averagePerDay, dailyData };
+  outboundTrendDiagnostics.recentOutboundCount = recentRecords.length;
+  outboundTrendDiagnostics.averageDailyOutbound = averagePerDay;
+  return { days, total, activeDays, averagePerDay, dailyData, records: recentRecords, allRecords };
 }
 
 function getTrendStatusForSku(sku) {
   const targetSku = canonicalSku(sku);
-  const stock = State.stock[targetSku] || {};
-  const currentUnits = Math.max(0, cleanNumber(stock.units));
+  const stock = state.stock[targetSku] || null;
+  const currentUnits = Math.max(0, cleanNumber(stock?.units));
+  outboundTrendDiagnostics.stockRead = !!stock;
+  outboundTrendDiagnostics.stockUnitsTotal = currentUnits;
+  outboundTrendDiagnostics.stockReadFailureReason = stock ? (currentUnits > 0 ? "" : "현재 재고 수량 0") : "선택 품목 재고 데이터를 찾지 못함";
   const trend = buildSkuOutboundTrend(targetSku, 30);
   if (!currentUnits) {
     return { trend, currentUnits, status: "noStock", value: "현재 재고 없음", note: "재고 수량이 0이거나 입력되지 않았습니다." };
@@ -4385,6 +4631,8 @@ function refreshInventoryItemOrderTrendIfOpen() {
 }
 
 function renderInventoryItemOrderTrend() {
+  resetOutboundTrendDiagnostics();
+  outboundTrendDiagnostics.functionCalled.render = true;
   const sku = canonicalSku(activeInventoryDetailSku);
   const valueEl = $("inventoryItemStockoutValue");
   const noteEl = $("inventoryItemStockoutNote");
@@ -4402,6 +4650,7 @@ function renderInventoryItemOrderTrend() {
       empty.textContent = "품목 정보가 없어 날짜별 출고 기록을 표시할 수 없습니다.";
     }
     if (summary) summary.innerHTML = "";
+    renderOutboundTrendDiagnostics();
     return;
   }
 
@@ -4410,6 +4659,13 @@ function renderInventoryItemOrderTrend() {
     const trend = status.trend;
     const hasData = trend.total > 0;
     const recentPoints = trend.dailyData.filter((point) => point.units > 0).slice(-7);
+    outboundTrendDiagnostics.functionCalled.stockout = true;
+    outboundTrendDiagnostics.functionCalled.trend = true;
+    outboundTrendDiagnostics.recentOutboundCount = trend.records?.length || 0;
+    outboundTrendDiagnostics.averageDailyOutbound = trend.averagePerDay || 0;
+    outboundTrendDiagnostics.stockRead = true;
+    outboundTrendDiagnostics.stockUnitsTotal = state.stock?.[sku]?.units || 0;
+    outboundTrendDiagnostics.renderStatus = hasData ? "rendered-with-data" : "rendered-no-records";
 
     if (valueEl) valueEl.textContent = status.value;
     if (noteEl) noteEl.textContent = status.note;
@@ -4434,9 +4690,15 @@ function renderInventoryItemOrderTrend() {
       empty.textContent = "최근 30일 출고 기록이 없습니다.";
     }
 
-    if (!canvas || !canvas.getContext) return;
+    if (!canvas || !canvas.getContext) {
+      renderOutboundTrendDiagnostics();
+      return;
+    }
     const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) {
+      renderOutboundTrendDiagnostics();
+      return;
+    }
     const ratio = window.devicePixelRatio || 1;
     const width = canvas.clientWidth || canvas.parentElement?.clientWidth || 320;
     const height = Number(canvas.getAttribute("height")) || 260;
@@ -4445,7 +4707,10 @@ function renderInventoryItemOrderTrend() {
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.clearRect(0, 0, width, height);
 
-    if (!hasData) return;
+    if (!hasData) {
+      renderOutboundTrendDiagnostics();
+      return;
+    }
 
     const padding = { top: 18, right: 16, bottom: 42, left: 42 };
     const chartW = Math.max(1, width - padding.left - padding.right);
@@ -4509,7 +4774,10 @@ function renderInventoryItemOrderTrend() {
       const x = padding.left + idx * stepX;
       ctx.fillText(shortDateLabel(point.date), x, padding.top + chartH + 12);
     });
+    renderOutboundTrendDiagnostics();
   } catch (error) {
+    outboundTrendDiagnostics.lastError = error?.stack || error?.message || String(error);
+    outboundTrendDiagnostics.renderStatus = "render-error";
     console.warn("[inventory trend] render failed", error);
     if (valueEl) valueEl.textContent = "데이터 확인 필요";
     if (noteEl) noteEl.textContent = "출고 기록 데이터 구조를 확인해야 합니다.";
@@ -4519,6 +4787,118 @@ function renderInventoryItemOrderTrend() {
       empty.textContent = "출고 기록을 불러오지 못했습니다.";
     }
     if (summary) summary.innerHTML = "";
+    renderOutboundTrendDiagnostics();
+  }
+}
+
+
+function buildOutboundDiagnosticsText() {
+  const payload = {
+    generatedAt: outboundTrendDiagnostics.generatedAt,
+    cacheVersion: outboundTrendDiagnostics.cacheVersion,
+    renderStatus: outboundTrendDiagnostics.renderStatus,
+    functionCalled: outboundTrendDiagnostics.functionCalled,
+    localStorageAvailable: outboundTrendDiagnostics.localStorageAvailable,
+    scannedKeys: outboundTrendDiagnostics.scannedKeys,
+    keySummaries: outboundTrendDiagnostics.keySummaries,
+    candidateRecordCount: outboundTrendDiagnostics.candidateRecordCount,
+    outboundCandidateCount: outboundTrendDiagnostics.outboundCandidateCount,
+    recentOutboundCount: outboundTrendDiagnostics.recentOutboundCount,
+    stockRead: outboundTrendDiagnostics.stockRead,
+    stockUnitsTotal: outboundTrendDiagnostics.stockUnitsTotal,
+    averageDailyOutbound: outboundTrendDiagnostics.averageDailyOutbound,
+    duplicateExcludedCount: outboundTrendDiagnostics.duplicateExcludedCount,
+    atFieldDetectedCount: outboundTrendDiagnostics.atFieldDetectedCount,
+    atParsedSuccessCount: outboundTrendDiagnostics.atParsedSuccessCount,
+    atParseFailedCount: outboundTrendDiagnostics.atParseFailedCount,
+    stockReadFailureReason: outboundTrendDiagnostics.stockReadFailureReason,
+    localStorageFailureReason: outboundTrendDiagnostics.localStorageFailureReason,
+    dataSourcesRead: outboundTrendDiagnostics.dataSourcesRead,
+    excludedReasons: outboundTrendDiagnostics.excludedReasons,
+    candidateFields: outboundTrendDiagnostics.candidateFields,
+    lastError: outboundTrendDiagnostics.lastError,
+    supabaseStatus: outboundTrendDiagnostics.supabaseStatus,
+    note: outboundTrendDiagnostics.note,
+  };
+  return JSON.stringify(payload, null, 2);
+}
+
+function renderOutboundTrendDiagnostics() {
+  const body = $("outboundDiagnosticsBody");
+  if (!body) return;
+  const diag = outboundTrendDiagnostics;
+  const reasonRows = Object.entries(diag.excludedReasons || {})
+    .filter(([, count]) => count > 0)
+    .map(([reason, count]) => `<span class="diagnostic-pill">${escapeHtml(reason)} ${Number(count).toLocaleString()}</span>`)
+    .join("") || '<span class="muted">제외 사유 없음</span>';
+  const keyRows = (diag.keySummaries || []).slice(0, 18).map((summary) => `
+    <tr>
+      <td>${escapeHtml(summary.key || "-")}</td>
+      <td>${escapeHtml(summary.type || "-")}</td>
+      <td>${escapeHtml(String(summary.count ?? 0))}</td>
+      <td>${escapeHtml(summary.error || "")}</td>
+    </tr>
+  `).join("") || '<tr><td colspan="4" class="muted">발견된 관련 키가 없습니다.</td></tr>';
+  body.innerHTML = `
+    <div class="diagnostic-grid">
+      <div><strong>렌더링 상태</strong><span>${escapeHtml(diag.renderStatus || "-")}</span></div>
+      <div><strong>localStorage</strong><span>${diag.localStorageAvailable ? "사용 가능" : "확인 필요"}</span></div>
+      <div><strong>출고 후보</strong><span>${Number(diag.outboundCandidateCount || 0).toLocaleString()}건</span></div>
+      <div><strong>최근 30일</strong><span>${Number(diag.recentOutboundCount || 0).toLocaleString()}건</span></div>
+      <div><strong>현재 재고 읽기</strong><span>${diag.stockRead ? "성공" : "확인 필요"}</span></div>
+      <div><strong>일평균 출고</strong><span>${Math.round(diag.averageDailyOutbound || 0).toLocaleString()}개/일</span></div>
+      <div><strong>중복 제외</strong><span>${Number(diag.duplicateExcludedCount || 0).toLocaleString()}건</span></div>
+      <div><strong>파싱 실패 키</strong><span>${Number(diag.parseFailedKeys || 0).toLocaleString()}개</span></div>
+      <div><strong>at 날짜</strong><span>${Number(diag.atFieldDetectedCount || 0).toLocaleString()} 감지 / ${Number(diag.atParsedSuccessCount || 0).toLocaleString()} 성공 / ${Number(diag.atParseFailedCount || 0).toLocaleString()} 실패</span></div>
+      <div><strong>재고 사유</strong><span>${escapeHtml(diag.stockReadFailureReason || "없음")}</span></div>
+      <div><strong>localStorage 사유</strong><span>${escapeHtml(diag.localStorageFailureReason || "없음")}</span></div>
+    </div>
+    <div class="diagnostic-section">
+      <strong>제외 사유</strong>
+      <div class="diagnostic-pill-row">${reasonRows}</div>
+    </div>
+    <div class="diagnostic-section">
+      <strong>발견 필드명</strong>
+      <p class="muted">${escapeHtml((diag.candidateFields || []).slice(0, 36).join(", ") || "확인된 필드 없음")}</p>
+    </div>
+    <div class="diagnostic-section">
+      <strong>읽은 데이터 출처</strong>
+      <p class="muted">${escapeHtml((diag.dataSourcesRead || []).join(", ") || "없음")}</p>
+    </div>
+    <div class="diagnostic-section">
+      <strong>마지막 오류</strong>
+      <pre class="diagnostic-error">${escapeHtml(diag.lastError || "오류 없음")}</pre>
+    </div>
+    <div class="diagnostic-section diagnostic-table-wrap">
+      <strong>관련 저장 키</strong>
+      <table class="diagnostic-table">
+        <thead><tr><th>키</th><th>타입</th><th>개수/요약</th><th>오류</th></tr></thead>
+        <tbody>${keyRows}</tbody>
+      </table>
+    </div>
+    <p class="muted diagnostic-note">${escapeHtml(diag.note || "")}</p>
+  `;
+}
+
+async function copyOutboundTrendDiagnostics() {
+  const text = buildOutboundDiagnosticsText();
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "readonly");
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+    }
+    alert("출고 데이터 진단 결과를 복사했습니다.");
+  } catch (error) {
+    alert("진단 결과 복사에 실패했습니다. 브라우저 권한을 확인해주세요.");
   }
 }
 
