@@ -329,6 +329,7 @@
       history: [],
       orderStatus: [],
       purchaseCompletedRecords: [],
+      purchaseCompletedHiddenIds: [],
       returnAdjustments: [],
       appliedOrderFiles: [],
       adminActionLogs: [],
@@ -450,6 +451,21 @@
   }
 
 
+  function isValidPurchaseStableId(value) {
+    const text = String(value || "").trim();
+    return /^pg_[a-z0-9]+$/i.test(text);
+  }
+
+  function normalizePurchaseCompletedHiddenIds(input) {
+    const values = Array.isArray(input) ? input : [];
+    const seen = new Set();
+    values.forEach((value) => {
+      const id = String(value || "").trim();
+      if (isValidPurchaseStableId(id)) seen.add(id);
+    });
+    return Array.from(seen);
+  }
+
   function normalizePurchaseCompletedRecord(record) {
     if (!record || typeof record !== "object") return null;
     const paymentAmount = cleanNumber(record.paymentAmount ?? record.amount ?? record.depositAmount ?? 0);
@@ -457,9 +473,9 @@
     const paymentDate = normalizePurchaseDate(record.paymentDate || record.depositDate || "", record.createdAt || new Date());
     if (paymentAmount <= 0 || !inboundDate || !paymentDate) return null;
     const sourcePurchaseIds = Array.isArray(record.sourcePurchaseIds)
-      ? record.sourcePurchaseIds.map((id) => String(id || "")).filter(Boolean)
-      : record.sourcePurchaseId
-        ? [String(record.sourcePurchaseId)]
+      ? normalizePurchaseCompletedHiddenIds(record.sourcePurchaseIds)
+      : isValidPurchaseStableId(record.sourcePurchaseId)
+        ? [String(record.sourcePurchaseId).trim()]
         : [];
     return {
       id: String(record.id || `purchase-completed-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
@@ -507,6 +523,15 @@
       normalizedPallets[key] = Number(parsed.pallets?.[key] ?? fresh.pallets[key] ?? 0) || 0;
     });
 
+    const completedRecords = Array.isArray(parsed.purchaseCompletedRecords)
+      ? parsed.purchaseCompletedRecords.map(normalizePurchaseCompletedRecord).filter(Boolean)
+      : [];
+    const completedRecordSourceIds = completedRecords.flatMap((record) => record.sourcePurchaseIds || []);
+    const purchaseCompletedHiddenIds = normalizePurchaseCompletedHiddenIds([
+      ...(Array.isArray(parsed.purchaseCompletedHiddenIds) ? parsed.purchaseCompletedHiddenIds : []),
+      ...completedRecordSourceIds
+    ]);
+
     return {
       ...fresh,
       ...parsed,
@@ -515,7 +540,8 @@
       pallets: normalizedPallets,
       history: Array.isArray(parsed.history) ? parsed.history.map(normalizeHistoryRecord) : [],
       orderStatus: Array.isArray(parsed.orderStatus) ? parsed.orderStatus.map(normalizePurchaseItem).filter(Boolean) : [],
-      purchaseCompletedRecords: Array.isArray(parsed.purchaseCompletedRecords) ? parsed.purchaseCompletedRecords.map(normalizePurchaseCompletedRecord).filter(Boolean) : [],
+      purchaseCompletedRecords: completedRecords,
+      purchaseCompletedHiddenIds,
       returnAdjustments: Array.isArray(parsed.returnAdjustments) ? parsed.returnAdjustments.map(normalizeReturnAdjustment).filter(Boolean) : [],
       appliedOrderFiles: Array.isArray(parsed.appliedOrderFiles) ? parsed.appliedOrderFiles.map(normalizeAppliedOrderFile).filter(Boolean).slice(0, APPLIED_ORDER_HISTORY_LIMIT) : [],
       adminActionLogs: Array.isArray(parsed.adminActionLogs) ? parsed.adminActionLogs.map(normalizeAdminActionLog).filter(Boolean).slice(0, ADMIN_ACTION_LOG_STORAGE_LIMIT) : [],
@@ -1608,6 +1634,66 @@
   }
 
 
+  function initMarginZeroButtons() {
+    const marginPage = $("page-margin");
+    if (!marginPage) return;
+
+    const zeroButtonInputIds = [
+      "salePrice",
+      "saleQty",
+      "unitCost",
+      "shippingFee",
+      "boxFee",
+      "commissionRate",
+      "vatRate",
+      "earlyRate"
+    ];
+
+    zeroButtonInputIds.forEach((inputId) => {
+      const input = $(inputId);
+      if (!input || input.dataset.zeroButtonReady) return;
+      if (!marginPage.contains(input) || input.matches("select, textarea") || input.type !== "number") return;
+
+      input.dataset.zeroButtonReady = "1";
+      const fieldLabel = Array.from(input.closest("label.field")?.children || [])
+        .find((child) => child.tagName === "SPAN" && !child.classList.contains("margin-zero-input-wrap"))
+        ?.textContent?.trim() || inputId;
+
+      let wrapper = input.closest(".margin-zero-input-wrap");
+      if (!wrapper) {
+        wrapper = document.createElement("span");
+        wrapper.className = "margin-zero-input-wrap";
+        input.parentNode.insertBefore(wrapper, input);
+        wrapper.appendChild(input);
+      }
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "margin-input-zero-btn";
+      button.dataset.marginZeroTarget = inputId;
+      button.setAttribute("aria-label", `${fieldLabel} 0으로 초기화`);
+      button.textContent = "0";
+
+      button.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        input.value = "0";
+        input.dataset.marginEdited = "1";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        calculateMargin();
+      });
+
+      wrapper.appendChild(button);
+    });
+  }
+
+
   function initCollapsibleSections() {
     document.querySelectorAll("[data-collapsible]").forEach((card) => {
       if (card.dataset.collapseReady) return;
@@ -1931,6 +2017,7 @@
     renderProductOptions();
     enhanceNativeSelects($("page-margin") || document);
     initMarginClearOnFocus();
+    initMarginZeroButtons();
     select.addEventListener("change", () => {
       const option = select.selectedOptions[0];
       const cost = cleanNumber(option?.dataset.cost);
@@ -2581,6 +2668,102 @@ function refreshActiveOrderAnalysisSummary() {
     return `${String(sectionDate || "")}|${String(group?.key || "")}`;
   }
 
+  function purchaseStableIdToken(value) {
+    return String(value ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ");
+  }
+
+  function purchaseStableIdHash(value) {
+    const text = String(value || "");
+    let hash = 2166136261;
+    for (let i = 0; i < text.length; i += 1) {
+      hash ^= text.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(36).padStart(7, "0");
+  }
+
+  function getPurchaseGroupStableId(sectionDate, group) {
+    if (!group || typeof group !== "object") return "";
+    const items = Array.isArray(group.items) ? group.items : [];
+    const rawTokenGroups = items.map((item) => [
+      purchaseStableIdToken(item.productKey),
+      purchaseStableIdToken(item.name),
+      purchaseStableIdToken(item.qty),
+      purchaseStableIdToken(item.unit),
+      purchaseStableIdToken(item.unitPrice),
+      purchaseStableIdToken(item.status),
+      purchaseStableIdToken(item.memo),
+      purchaseStableIdToken(item.batchId),
+      purchaseStableIdToken(item.batchName),
+      purchaseStableIdToken(item.orderDate),
+    ]);
+    const itemParts = rawTokenGroups.map((tokens) => tokens.join("|")).sort();
+    const meaningfulTokens = [
+      purchaseStableIdToken(sectionDate),
+      purchaseStableIdToken(group.key),
+      purchaseStableIdToken(group.name),
+      purchaseStableIdToken(group.productKey),
+      purchaseStableIdToken(group.batchId),
+      purchaseStableIdToken(group.orderDate),
+      ...rawTokenGroups.flat(),
+    ].filter((part) => part && part !== "0");
+    if (meaningfulTokens.length < 3) return "";
+    const baseParts = [
+      "purchase-group-v1",
+      purchaseStableIdToken(sectionDate),
+      purchaseStableIdToken(group.key),
+      purchaseStableIdToken(group.name),
+      purchaseStableIdToken(group.productKey),
+      purchaseStableIdToken(group.batchId),
+      purchaseStableIdToken(group.orderDate),
+      String(items.length),
+      ...itemParts,
+    ].filter(Boolean);
+    return `pg_${purchaseStableIdHash(baseParts.join("||"))}`;
+  }
+
+  function getPurchaseStableIdDiagnostics(sectionDate, group) {
+    const stableId = getPurchaseGroupStableId(sectionDate, group);
+    if (!stableId) {
+      return {
+        stableId: "",
+        label: "식별값 확인 필요",
+        status: "warn",
+        message: "안전하게 비교할 수 있는 발주 항목 정보가 부족합니다. 저장/숨김 처리는 하지 않습니다.",
+        duplicateCount: 0,
+      };
+    }
+    const items = Array.isArray(state.orderStatus)
+      ? state.orderStatus.map(normalizePurchaseItem).filter(Boolean)
+      : [];
+    const sections = buildPurchaseDateSections(items);
+    let sameIdCount = 0;
+    sections.forEach((section) => {
+      (section.groups || []).forEach((candidate) => {
+        if (getPurchaseGroupStableId(section.date, candidate) === stableId) sameIdCount += 1;
+      });
+    });
+    if (sameIdCount > 1) {
+      return {
+        stableId,
+        label: stableId,
+        status: "warn",
+        message: `동일한 식별값이 ${sameIdCount}개 그룹에서 확인되었습니다. 나중 단계에서 숨김 처리 전 추가 확인이 필요합니다.`,
+        duplicateCount: sameIdCount,
+      };
+    }
+    return {
+      stableId,
+      label: stableId,
+      status: "ok",
+      message: "저장하지 않는 검증용 식별값입니다. 새로고침 후 같은 항목에서 동일한지 확인해주세요.",
+      duplicateCount: sameIdCount,
+    };
+  }
+
   function findPurchaseGroupByCompleteKey(groupKey) {
     const targetKey = String(groupKey || "");
     if (!targetKey) return null;
@@ -2609,8 +2792,18 @@ function refreshActiveOrderAnalysisSummary() {
     if (!isEditorSession() || purchaseCompleteDraftKey !== formKey) return "";
     const today = todayKey();
     const suggestedAmount = Math.max(0, Math.round(cleanNumber(group?.amount)));
+    const stableInfo = getPurchaseStableIdDiagnostics(section?.date, group);
     return `
-      <form class="purchase-complete-form" data-purchase-complete-form="${escapeHtml(formKey)}" data-admin-only="true">
+      <form class="purchase-complete-form purchase-complete-step2-preview" data-purchase-complete-form="${escapeHtml(formKey)}" data-purchase-complete-preview="${escapeHtml(formKey)}" data-admin-only="true" role="group" aria-label="처리완료 저장 입력">
+        <div class="purchase-complete-form-head">
+          <strong>처리완료 입력 확인</strong>
+          <span>5단계에서는 저장 후 발주현황 화면에서만 숨깁니다.</span>
+        </div>
+        <div class="purchase-complete-stable-check ${stableInfo.status === "ok" ? "is-ok" : "is-warn"}">
+          <span class="purchase-complete-stable-label">발주 식별값</span>
+          <strong>${escapeHtml(stableInfo.label)}</strong>
+          <small>${escapeHtml(stableInfo.message)}</small>
+        </div>
         <div class="purchase-complete-form-grid">
           <label>
             <span>입금금액</span>
@@ -2626,10 +2819,11 @@ function refreshActiveOrderAnalysisSummary() {
           </label>
         </div>
         <div class="purchase-complete-form-actions">
-          <button type="submit" class="btn purchase-complete-save" data-purchase-complete-save="${escapeHtml(formKey)}">저장</button>
-          <button type="button" class="btn ghost" data-purchase-complete-cancel="true">취소</button>
+          <button type="button" class="btn ghost" data-purchase-complete-cancel="true">닫기</button>
+          <button type="submit" class="btn purchase-complete-validate-btn" data-purchase-complete-save="${escapeHtml(formKey)}">저장</button>
         </div>
-        <p class="purchase-complete-form-note">저장 내역 화면과 CSV에는 입금금액 · 입고날짜 · 입금날짜만 표시됩니다. 기존 발주현황 원본은 삭제하지 않습니다.</p>
+        <p class="purchase-complete-form-message" data-purchase-complete-message="${escapeHtml(formKey)}" hidden></p>
+        <p class="purchase-complete-form-note">정상 입력 시 처리완료 내역에 저장하고, 안전한 식별값이 확인된 발주 항목만 화면에서 숨깁니다. 원본 데이터는 삭제하지 않습니다.</p>
       </form>`;
   }
 
@@ -2640,44 +2834,56 @@ function refreshActiveOrderAnalysisSummary() {
       ? state.purchaseCompletedRecords.map(normalizePurchaseCompletedRecord).filter(Boolean)
       : [];
     state.purchaseCompletedRecords = records;
-    const total = records.reduce((sum, record) => sum + cleanNumber(record.paymentAmount), 0);
-    const latest = [...records].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
-    const preview = latest.slice(0, 5);
-    const restCount = Math.max(0, latest.length - preview.length);
-    const cardsHtml = records.length ? `
-      <div class="purchase-completed-list">
-        ${preview.map((record) => `
-          <article class="purchase-completed-card">
-            <strong>${money(record.paymentAmount)}</strong>
-            <span>입고 ${escapeHtml(formatPurchaseCompactDate(record.inboundDate))}</span>
-            <span>입금 ${escapeHtml(formatPurchaseCompactDate(record.paymentDate))}</span>
-          </article>`).join("")}
-      </div>
-      ${restCount ? `<p class="purchase-completed-more">최근 5건 먼저 표시 · 전체 ${number(records.length)}건은 CSV로 다운로드할 수 있습니다.</p>` : ""}` : `
-      <div class="purchase-completed-empty">저장된 처리완료 내역이 없습니다.</div>`;
+    const totalAmount = records.reduce((sum, record) => sum + Number(record.paymentAmount || record.amount || 0), 0);
+    const canEditCompletedRecords = isEditorSession();
+    const recordCards = records
+      .slice()
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+      .map((record) => `
+        <article class="purchase-completed-record-card">
+          <div class="purchase-completed-record-main">
+            <span class="purchase-completed-record-label">입금금액</span>
+            <strong>${number(record.paymentAmount || record.amount || 0)}원</strong>
+          </div>
+          <div class="purchase-completed-record-dates">
+            <span><b>입고날짜</b> ${escapeHtml(record.inboundDate || record.receivedDate || "-")}</span>
+            <span><b>입금날짜</b> ${escapeHtml(record.paymentDate || record.paidDate || "-")}</span>
+          </div>
+          ${canEditCompletedRecords ? `
+            <div class="purchase-completed-record-actions" data-admin-only="true">
+              <button type="button" class="btn ghost purchase-completed-remove-btn" data-purchase-completed-remove="${escapeHtml(record.id)}">내역 삭제</button>
+            </div>
+          ` : ""}
+        </article>
+      `)
+      .join("");
+
     root.innerHTML = `
-      <details class="purchase-completed-panel">
+      <details class="purchase-completed-panel" ${records.length ? "open" : ""}>
         <summary class="purchase-completed-summary">
-          <span class="purchase-completed-summary-main">
-            <strong>처리완료 내역</strong>
-            <small>관리자·일반 이용자 모두 확인 가능</small>
-          </span>
-          <span class="purchase-completed-summary-side">
-            <span>${number(records.length)}건</span>
-            <strong>${money(total)}</strong>
-          </span>
+          <span>처리완료 내역</span>
+          <strong>${number(records.length)}건 · ${number(totalAmount)}원</strong>
         </summary>
         <div class="purchase-completed-body">
-          <div class="purchase-completed-toolbar">
-            <button type="button" class="btn ghost purchase-completed-download" data-purchase-completed-download="true">CSV 다운로드</button>
-          </div>
-          ${cardsHtml}
+          ${records.length ? `
+            <p class="purchase-completed-note">Step 7 기준으로 CSV 다운로드는 현재 남아 있는 처리완료 내역만 포함합니다. 삭제된 내역, 발주현황 숨김 상태, 원본 발주 데이터는 건드리지 않습니다.</p>
+            <div class="purchase-completed-toolbar">
+              <button type="button" class="btn ghost purchase-completed-download" data-purchase-completed-download="true">CSV 다운로드</button>
+              ${canEditCompletedRecords ? `
+                <button type="button" class="btn ghost purchase-completed-clear-btn" data-admin-only="true" data-purchase-completed-clear="true">처리완료 내역 전체 삭제</button>
+              ` : ""}
+            </div>
+            <div class="purchase-completed-record-grid">${recordCards}</div>
+          ` : `
+            <p class="muted">아직 저장된 처리완료 내역이 없습니다.</p>
+          `}
         </div>
-      </details>`;
+      </details>
+    `;
   }
 
   function startPurchaseComplete(groupKey) {
-    if (!requireEditor("발주 처리완료 저장")) return;
+    if (!requireEditor("발주 처리완료 입력창 열기")) return;
     purchaseCompleteDraftKey = String(groupKey || "");
     renderPurchaseStatus();
   }
@@ -2687,80 +2893,236 @@ function refreshActiveOrderAnalysisSummary() {
     renderPurchaseStatus();
   }
 
+  function normalizePurchaseCompleteAmountInput(value) {
+    const digits = String(value || "").replace(/[^0-9]/g, "");
+    return digits ? number(Number(digits)) : "";
+  }
+
+  function parsePurchaseCompleteAmount(value) {
+    const digits = String(value || "").replace(/[^0-9]/g, "");
+    if (!digits) return 0;
+    const amount = Number(digits);
+    return Number.isFinite(amount) ? amount : 0;
+  }
+
+  function setPurchaseCompleteValidationMessage(formKey, type, message) {
+    const safeKey = String(formKey || "");
+    const box = safeKey ? document.querySelector(`[data-purchase-complete-message="${CSS.escape(safeKey)}"]`) : null;
+    if (!box) return;
+    box.className = `purchase-complete-form-message ${type === "ready" ? "is-ready" : "is-error"}`;
+    box.textContent = message;
+    box.hidden = false;
+  }
+
+  function clearPurchaseCompleteValidationMessage(form) {
+    const box = form?.querySelector?.("[data-purchase-complete-message]");
+    if (box) box.hidden = true;
+  }
+
+  function createPurchaseCompletedRecordId(sourcePurchaseId) {
+    const source = String(sourcePurchaseId || "manual").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32) || "manual";
+    return `pc-${source}-${Date.now().toString(36)}`;
+  }
+
+  function isSafePurchaseCompletedHideTarget(stableInfo) {
+    return isValidPurchaseStableId(stableInfo?.stableId) && Number(stableInfo?.duplicateCount || 0) === 1;
+  }
+
+  function getPurchaseCompletedHiddenIdSet() {
+    const completedRecordIds = Array.isArray(state.purchaseCompletedRecords)
+      ? state.purchaseCompletedRecords.flatMap((record) => Array.isArray(record?.sourcePurchaseIds) ? record.sourcePurchaseIds : [])
+      : [];
+    state.purchaseCompletedHiddenIds = normalizePurchaseCompletedHiddenIds([
+      ...(Array.isArray(state.purchaseCompletedHiddenIds) ? state.purchaseCompletedHiddenIds : []),
+      ...completedRecordIds
+    ]);
+    return new Set(state.purchaseCompletedHiddenIds);
+  }
+
+  function addPurchaseCompletedHiddenId(stableId) {
+    const id = String(stableId || "").trim();
+    if (!isValidPurchaseStableId(id)) return false;
+    state.purchaseCompletedHiddenIds = normalizePurchaseCompletedHiddenIds(state.purchaseCompletedHiddenIds);
+    if (!state.purchaseCompletedHiddenIds.includes(id)) {
+      state.purchaseCompletedHiddenIds.push(id);
+      return true;
+    }
+    return false;
+  }
+
   function completePurchaseGroup(groupKey) {
-    if (!requireEditor("발주 처리완료 저장")) return;
-    const found = findPurchaseGroupByCompleteKey(groupKey);
-    if (!found) {
-      toast("처리완료할 발주 항목을 찾지 못했습니다.");
+    // Step 5: save the completed-record copy and hide only the matching rendered purchase group. Do not mutate original purchase rows.
+    const formKey = String(groupKey || purchaseCompleteDraftKey || "");
+    purchaseCompleteDraftKey = formKey;
+    const form = formKey ? document.querySelector(`[data-purchase-complete-form="${CSS.escape(formKey)}"]`) : null;
+    if (!form) return;
+
+    const amountInput = form.querySelector('[data-purchase-complete-field="paymentAmount"]');
+    const inboundDateInput = form.querySelector('[data-purchase-complete-field="inboundDate"]');
+    const paymentDateInput = form.querySelector('[data-purchase-complete-field="paymentDate"]');
+    const paymentAmount = parsePurchaseCompleteAmount(amountInput?.value);
+    const inboundDate = String(inboundDateInput?.value || "").trim();
+    const paymentDate = String(paymentDateInput?.value || "").trim();
+
+    if (!paymentAmount || paymentAmount <= 0) {
+      setPurchaseCompleteValidationMessage(formKey, "error", "입금금액을 숫자로 입력해주세요. 예: 1,200,000");
+      amountInput?.focus();
       return;
     }
-    const form = Array.from(document.querySelectorAll("[data-purchase-complete-form]")).find((entry) => entry.dataset.purchaseCompleteForm === String(groupKey || ""));
-    if (!form) {
-      toast("처리완료 입력폼을 찾지 못했습니다.");
+    if (!inboundDate) {
+      setPurchaseCompleteValidationMessage(formKey, "error", "입고날짜를 선택해주세요.");
+      inboundDateInput?.focus();
       return;
     }
-    const paymentAmount = cleanNumber(form.querySelector('[data-purchase-complete-field="paymentAmount"]')?.value || 0);
-    const inboundDate = normalizePurchaseDate(form.querySelector('[data-purchase-complete-field="inboundDate"]')?.value || "", new Date());
-    const paymentDate = normalizePurchaseDate(form.querySelector('[data-purchase-complete-field="paymentDate"]')?.value || "", new Date());
-    if (paymentAmount <= 0) {
-      toast("입금금액을 숫자로 입력해주세요.");
+    if (!paymentDate) {
+      setPurchaseCompleteValidationMessage(formKey, "error", "입금날짜를 선택해주세요.");
+      paymentDateInput?.focus();
       return;
     }
-    if (!inboundDate || !paymentDate) {
-      toast("입고날짜와 입금날짜를 모두 입력해주세요.");
-      return;
-    }
+
+    const match = findPurchaseGroupByCompleteKey(formKey);
+    const stableInfo = match ? getPurchaseStableIdDiagnostics(match.section.date, match.group) : { stableId: "", label: "식별값 확인 필요", message: "발주 그룹을 다시 찾을 수 없습니다.", duplicateCount: 0 };
+    const sourcePurchaseId = stableInfo.stableId || "";
     const record = normalizePurchaseCompletedRecord({
-      paymentAmount,
+      id: createPurchaseCompletedRecordId(sourcePurchaseId),
+      amount: paymentAmount,
       inboundDate,
+      receivedDate: inboundDate,
       paymentDate,
+      paidDate: paymentDate,
+      sourcePurchaseId: sourcePurchaseId || null,
+      sourcePurchaseIds: sourcePurchaseId ? [sourcePurchaseId] : [],
       createdAt: new Date().toISOString(),
-      sourcePurchaseIds: (found.group.items || []).map((item) => item.id).filter(Boolean),
-      createdByRole: "admin"
+      createdByRole: isEditorSession() ? "admin" : "user",
     });
-    if (!record) {
-      toast("처리완료 내역을 저장할 수 없습니다.");
+
+    state.purchaseCompletedRecords = Array.isArray(state.purchaseCompletedRecords) ? state.purchaseCompletedRecords : [];
+    state.purchaseCompletedRecords.push(record);
+    const hiddenEligible = isSafePurchaseCompletedHideTarget(stableInfo);
+    const hiddenAdded = hiddenEligible ? addPurchaseCompletedHiddenId(sourcePurchaseId) : false;
+    if (amountInput) amountInput.value = number(paymentAmount);
+    purchaseCompleteDraftKey = "";
+    saveState();
+    renderPurchaseStatus();
+    showWmsStatus(
+      hiddenEligible
+        ? `처리완료 내역 저장 완료 · 발주현황에서 해당 항목을 숨겼습니다. · 입금금액 ${number(paymentAmount)}원`
+        : `처리완료 내역 저장 완료 · 식별값이 안전하지 않아 발주현황 숨김은 적용하지 않았습니다.`,
+      hiddenEligible
+    );
+    console.info("[purchaseComplete:step5:record-saved-and-hidden]", {
+      groupKey: formKey,
+      stableId: sourcePurchaseId || null,
+      duplicateCount: stableInfo.duplicateCount,
+      record,
+      originalPurchaseMutated: false,
+      hiddenEligible,
+      hiddenAdded,
+    });
+  }
+
+
+  function removePurchaseCompletedRecord(recordId) {
+    if (!requireEditor("처리완료 내역 삭제")) return;
+    const id = String(recordId || "").trim();
+    if (!id) return;
+    const beforeCount = Array.isArray(state.purchaseCompletedRecords) ? state.purchaseCompletedRecords.length : 0;
+    state.purchaseCompletedRecords = (Array.isArray(state.purchaseCompletedRecords) ? state.purchaseCompletedRecords : [])
+      .map(normalizePurchaseCompletedRecord)
+      .filter(Boolean)
+      .filter((record) => String(record.id || "") !== id);
+    const removed = state.purchaseCompletedRecords.length < beforeCount;
+    if (!removed) {
+      toast("삭제할 처리완료 내역을 찾지 못했습니다.");
       return;
     }
-    addBackup("발주 처리완료 저장 전 자동 백업");
-    state.purchaseCompletedRecords = [record, ...(Array.isArray(state.purchaseCompletedRecords) ? state.purchaseCompletedRecords : [])];
-    addAdminActionLog("발주 처리완료 저장", {
-      itemName: found.group.name || "발주 처리완료",
-      qty: cleanNumber(found.group.count || found.group.items?.length || 1),
-      unit: "건",
-      memo: `입금 ${money(paymentAmount)} · 입고 ${inboundDate} · 입금일 ${paymentDate}`,
-      source: "purchaseCompletedRecords"
+    // Step 6: delete only the completed record card. Keep purchaseCompletedHiddenIds so completed purchases do not reappear.
+    saveState();
+    renderPurchaseStatus();
+    showWmsStatus("처리완료 내역 1건을 삭제했습니다. 발주현황 숨김 상태는 유지됩니다.", true);
+    console.info("[purchaseComplete:step6:record-removed]", {
+      recordId: id,
+      hiddenIdsKept: true,
+      originalPurchaseMutated: false,
     });
-    purchaseCompleteDraftKey = "";
-    renderAll();
-    saveState("발주 처리완료 내역이 저장되었습니다.");
+  }
+
+  function clearPurchaseCompletedRecords() {
+    if (!requireEditor("처리완료 내역 전체 삭제")) return;
+    const records = Array.isArray(state.purchaseCompletedRecords)
+      ? state.purchaseCompletedRecords.map(normalizePurchaseCompletedRecord).filter(Boolean)
+      : [];
+    if (!records.length) {
+      toast("삭제할 처리완료 내역이 없습니다.");
+      return;
+    }
+    if (!window.confirm(`처리완료 내역 ${number(records.length)}건을 모두 삭제할까요? 발주현황 숨김 상태는 유지됩니다.`)) return;
+    state.purchaseCompletedRecords = [];
+    // Step 6: keep purchaseCompletedHiddenIds unchanged. This prevents completed purchases from returning to the purchase list.
+    saveState();
+    renderPurchaseStatus();
+    showWmsStatus(`처리완료 내역 ${number(records.length)}건을 전체 삭제했습니다. 발주현황 숨김 상태는 유지됩니다.`, true);
+    console.info("[purchaseComplete:step6:records-cleared]", {
+      removedCount: records.length,
+      hiddenIdsKept: true,
+      originalPurchaseMutated: false,
+    });
+  }
+
+
+  function escapeCsvCell(value) {
+    const text = String(value ?? "");
+    if (/[",\r\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+    return text;
+  }
+
+  function formatCsvDateText(value) {
+    const text = String(value || "").trim();
+    if (!text) return "";
+    // Step 7 display fix: keep ISO dates as text in Excel so narrow columns do not show #######.
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return `="${text}"`;
+    return text;
   }
 
   function downloadPurchaseCompletedCsv() {
     const records = Array.isArray(state.purchaseCompletedRecords)
       ? state.purchaseCompletedRecords.map(normalizePurchaseCompletedRecord).filter(Boolean)
       : [];
+    state.purchaseCompletedRecords = records;
     if (!records.length) {
       toast("다운로드할 처리완료 내역이 없습니다.");
       return;
     }
-    const rows = [["입금금액", "입고날짜", "입금날짜"], ...records.map((record) => [
-      String(Math.round(cleanNumber(record.paymentAmount))),
-      record.inboundDate,
-      record.paymentDate
-    ])];
-    const csv = rows.map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
-    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+
+    const headers = ["입금금액", "입고날짜", "입금날짜"];
+    const rows = records
+      .slice()
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+      .map((record) => [
+        String(cleanNumber(record.paymentAmount || record.amount || 0)),
+        formatCsvDateText(record.inboundDate || record.receivedDate || ""),
+        formatCsvDateText(record.paymentDate || record.paidDate || "")
+      ]);
+    const csvText = "\ufeff" + [headers, ...rows]
+      .map((row) => row.map(escapeCsvCell).join(","))
+      .join("\r\n");
+    const blob = new Blob([csvText], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `reborn_purchase_completed_${todayKey()}.csv`;
+    link.download = `reborn-purchase-completed-${todayKey()}.csv`;
     document.body.appendChild(link);
     link.click();
     link.remove();
-    URL.revokeObjectURL(url);
-    toast("처리완료 내역 CSV를 다운로드했습니다.");
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+    toast(`처리완료 내역 CSV ${number(records.length)}건을 다운로드했습니다.`);
+    console.info("[purchaseComplete:step7:csv-downloaded]", {
+      recordCount: records.length,
+      hiddenIdsKept: true,
+      originalPurchaseMutated: false,
+    });
   }
+
 
   function renderPurchaseStatus() {
     renderPurchaseCompletedRecords();
@@ -2769,16 +3131,32 @@ function refreshActiveOrderAnalysisSummary() {
     if (!list) return;
     const items = Array.isArray(state.orderStatus) ? state.orderStatus.map(normalizePurchaseItem).filter(Boolean) : [];
     state.orderStatus = items;
-    renderPurchaseSummary(items);
-    if (!items.length) {
+    const hiddenIdSet = getPurchaseCompletedHiddenIdSet();
+    const sections = buildPurchaseDateSections(items)
+      .map((section) => {
+        const visibleGroups = (section.groups || []).filter((group) => {
+          const stableId = getPurchaseGroupStableId(section.date, group);
+          return !isValidPurchaseStableId(stableId) || !hiddenIdSet.has(stableId);
+        });
+        const visibleItems = visibleGroups.flatMap((group) => Array.isArray(group.items) ? group.items : []);
+        return {
+          ...section,
+          items: visibleItems,
+          groups: visibleGroups,
+          amount: visibleGroups.reduce((sum, group) => sum + cleanNumber(group.amount), 0),
+        };
+      })
+      .filter((section) => section.groups.length > 0);
+    const visibleItems = sections.flatMap((section) => section.items || []);
+    renderPurchaseSummary(visibleItems);
+    if (!visibleItems.length) {
       list.innerHTML = "";
       if (empty) empty.hidden = false;
       applyPurchaseViewMode();
+      updateEditorLock();
       return;
     }
     if (empty) empty.hidden = true;
-
-    const sections = buildPurchaseDateSections(items);
     list.innerHTML = sections.map((section) => `
       <section class="purchase-date-section">
         <div class="purchase-date-head">
@@ -2789,6 +3167,8 @@ function refreshActiveOrderAnalysisSummary() {
           ${section.groups.map((group) => {
             const statusLabel = purchaseGroupStatusLabel(group);
             const isBundle = group.type === "batch" && group.items.length > 1;
+            const completeGroupKey = purchaseCompleteGroupKey(section.date, group);
+            const shouldKeepPurchaseCardOpen = purchaseCompleteDraftKey === completeGroupKey;
             const adminBatchEditor = isEditorSession() && isBundle ? `
               <div class="purchase-bundle-admin" data-admin-only="true">
                 <label>
@@ -2798,7 +3178,7 @@ function refreshActiveOrderAnalysisSummary() {
               </div>` : "";
 
             return `
-              <details class="purchase-card purchase-card-toggle${isBundle ? " purchase-bundle-card" : ""}">
+              <details class="purchase-card purchase-card-toggle${isBundle ? " purchase-bundle-card" : ""}"${shouldKeepPurchaseCardOpen ? " open" : ""}>
                 <summary class="purchase-card-summary">
                   <div class="purchase-card-main">
                     <div class="purchase-card-name">
@@ -2821,7 +3201,7 @@ function refreshActiveOrderAnalysisSummary() {
                   ${adminBatchEditor}
                   ${isEditorSession() ? `
                     <div class="purchase-complete-action-row" data-admin-only="true">
-                      <button type="button" class="btn purchase-complete-start" data-purchase-complete-start="${escapeHtml(purchaseCompleteGroupKey(section.date, group))}">처리완료</button>
+                      <button type="button" class="btn purchase-complete-start" data-purchase-complete-start="${escapeHtml(completeGroupKey)}">처리완료</button>
                     </div>
                     ${renderPurchaseCompleteInlineForm(section, group)}
                   ` : ""}
@@ -4010,17 +4390,44 @@ function refreshActiveOrderAnalysisSummary() {
         cancelPurchaseComplete();
         return;
       }
+      if (event.target.closest("[data-purchase-complete-form], .purchase-complete-action-row")) {
+        event.stopPropagation();
+        return;
+      }
       const target = event.target.closest("[data-purchase-action]");
       if (!target) return;
       if (target.dataset.purchaseAction === "remove") removePurchaseItem(target.dataset.purchaseId);
+    });
+    $("purchaseList")?.addEventListener("input", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement)) return;
+      if (target.matches('[data-purchase-complete-field="paymentAmount"]')) {
+        target.value = normalizePurchaseCompleteAmountInput(target.value);
+        clearPurchaseCompleteValidationMessage(target.closest("[data-purchase-complete-form]"));
+      } else if (target.matches('[data-purchase-complete-field="inboundDate"], [data-purchase-complete-field="paymentDate"]')) {
+        clearPurchaseCompleteValidationMessage(target.closest("[data-purchase-complete-form]"));
+      }
     });
     $("purchaseList")?.addEventListener("submit", (event) => {
       const form = event.target.closest("[data-purchase-complete-form]");
       if (!form) return;
       event.preventDefault();
+      event.stopPropagation();
       completePurchaseGroup(form.dataset.purchaseCompleteForm || "");
     });
     document.addEventListener("click", (event) => {
+      const removeButton = event.target.closest("[data-purchase-completed-remove]");
+      if (removeButton) {
+        event.preventDefault();
+        removePurchaseCompletedRecord(removeButton.dataset.purchaseCompletedRemove || "");
+        return;
+      }
+      const clearButton = event.target.closest("[data-purchase-completed-clear]");
+      if (clearButton) {
+        event.preventDefault();
+        clearPurchaseCompletedRecords();
+        return;
+      }
       const downloadButton = event.target.closest("[data-purchase-completed-download]");
       if (!downloadButton) return;
       event.preventDefault();
@@ -4403,7 +4810,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "inventory-search-mobile-fix-15",
+    cacheVersion: "purchase-complete-no-collapse-fix-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -5961,137 +6368,198 @@ function renderInventoryItemOrderTrend() {
       return;
     }
 
-    const padding = { top: 56, right: 22, bottom: 58, left: 64 };
+    const padding = { top: 54, right: width < 430 ? 16 : 24, bottom: 54, left: width < 430 ? 44 : 56 };
     const chartW = Math.max(1, width - padding.left - padding.right);
     const chartH = Math.max(1, height - padding.top - padding.bottom);
-    const rawMaxValue = Math.max(...trend.dailyData.map((point) => Number(point.units || 0)), 1);
-    const magnitude = Math.pow(10, Math.max(0, Math.floor(Math.log10(rawMaxValue)) - 1));
-    const maxValue = Math.max(1, Math.ceil(rawMaxValue / magnitude) * magnitude);
+    const values = trend.dailyData.map((point) => Number(point.units || 0));
+    const rawMaxValue = Math.max(...values, 1);
+    const headroomValue = rawMaxValue * 1.18;
+    const magnitude = Math.pow(10, Math.max(0, Math.floor(Math.log10(headroomValue)) - 1));
+    const maxValue = Math.max(1, Math.ceil(headroomValue / magnitude) * magnitude);
     const stepX = chartW / Math.max(1, trend.dailyData.length - 1);
+    const fontStack = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
-    const drawRoundRect = (x, y, w, h, r = 6) => {
-      if (ctx.roundRect) {
-        ctx.beginPath();
-        ctx.roundRect(x, y, w, h, r);
-        ctx.fill();
-        return;
-      }
+    const roundPath = (x, y, w, h, r = 10) => {
+      const radius = Math.max(0, Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2));
       ctx.beginPath();
-      ctx.moveTo(x + r, y);
-      ctx.lineTo(x + w - r, y);
-      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-      ctx.lineTo(x + w, y + h);
-      ctx.lineTo(x, y + h);
-      ctx.lineTo(x, y + r);
-      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + w - radius, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+      ctx.lineTo(x + w, y + h - radius);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+      ctx.lineTo(x + radius, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+    };
+    const fillRoundRect = (x, y, w, h, r, fillStyle) => {
+      ctx.fillStyle = fillStyle;
+      roundPath(x, y, w, h, r);
       ctx.fill();
     };
+    const strokeRoundRect = (x, y, w, h, r, strokeStyle, lineWidth = 1) => {
+      ctx.strokeStyle = strokeStyle;
+      ctx.lineWidth = lineWidth;
+      roundPath(x, y, w, h, r);
+      ctx.stroke();
+    };
+    const getPoint = (point, idx) => {
+      const units = Number(point.units || 0);
+      return {
+        x: padding.left + idx * stepX,
+        y: padding.top + chartH - (units / maxValue) * chartH,
+        units,
+        point,
+        idx,
+      };
+    };
+    const points = trend.dailyData.map(getPoint);
 
-    const gridLines = [0, 0.5, 1];
-    ctx.font = "12px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    ctx.lineWidth = 1;
+    const backdrop = ctx.createLinearGradient(0, 0, width, height);
+    backdrop.addColorStop(0, "rgba(22, 28, 52, 0.96)");
+    backdrop.addColorStop(0.58, "rgba(42, 37, 76, 0.98)");
+    backdrop.addColorStop(1, "rgba(20, 27, 49, 0.96)");
+    fillRoundRect(0, 0, width, height, 28, backdrop);
+
+    const glow = ctx.createRadialGradient(width * 0.38, height * 0.1, 20, width * 0.38, height * 0.1, Math.max(width, height) * 0.8);
+    glow.addColorStop(0, "rgba(255, 96, 170, 0.20)");
+    glow.addColorStop(0.55, "rgba(84, 117, 255, 0.10)");
+    glow.addColorStop(1, "rgba(255, 255, 255, 0)");
+    fillRoundRect(0, 0, width, height, 28, glow);
+
+    const gridFractions = [0, 0.25, 0.5, 0.75, 1];
+    ctx.font = `600 ${width < 430 ? 11 : 12}px ${fontStack}`;
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
-    gridLines.forEach((ratioLine) => {
+    gridFractions.forEach((ratioLine) => {
       const y = padding.top + chartH * (1 - ratioLine);
       ctx.beginPath();
       ctx.moveTo(padding.left, y);
       ctx.lineTo(width - padding.right, y);
-      ctx.strokeStyle = ratioLine === 0 ? "rgba(15, 23, 42, 0.18)" : "rgba(148, 163, 184, 0.24)";
+      ctx.strokeStyle = ratioLine === 0 ? "rgba(255, 255, 255, 0.20)" : "rgba(255, 255, 255, 0.12)";
+      ctx.lineWidth = ratioLine === 0 ? 1.3 : 1;
       ctx.stroke();
-      const label = `${Math.round(maxValue * ratioLine).toLocaleString("ko-KR")}개`;
-      ctx.fillStyle = "#64748b";
-      ctx.fillText(label, padding.left - 10, y);
-    });
-
-    const barSlot = chartW / Math.max(1, trend.dailyData.length);
-    const barWidth = Math.max(8, Math.min(24, barSlot * 0.52));
-    const peakIndex = trend.dailyData.reduce((peakIdx, point, idx) => {
-      if (peakIdx < 0) return Number(point.units || 0) > 0 ? idx : peakIdx;
-      return Number(point.units || 0) > Number(trend.dailyData[peakIdx].units || 0) ? idx : peakIdx;
-    }, -1);
-
-    trend.dailyData.forEach((point, idx) => {
-      const units = Number(point.units || 0);
-      if (!units) return;
-      const x = padding.left + idx * stepX;
-      const barH = Math.max(3, (units / maxValue) * chartH);
-      const y = padding.top + chartH - barH;
-      const gradient = ctx.createLinearGradient(0, y, 0, y + barH);
-      if (idx === peakIndex) {
-        gradient.addColorStop(0, "rgba(37, 99, 235, 0.94)");
-        gradient.addColorStop(1, "rgba(37, 99, 235, 0.42)");
-      } else {
-        gradient.addColorStop(0, "rgba(14, 165, 233, 0.82)");
-        gradient.addColorStop(1, "rgba(14, 165, 233, 0.26)");
+      const axisValue = Math.round(maxValue * ratioLine);
+      if (ratioLine === 0 || ratioLine === 1 || width >= 430) {
+        ctx.fillStyle = "rgba(226, 232, 240, 0.78)";
+        const suffix = width < 430 ? "" : "개";
+        ctx.fillText(`${axisValue.toLocaleString("ko-KR")}${suffix}`, padding.left - 10, y);
       }
-      ctx.fillStyle = gradient;
-      drawRoundRect(x - barWidth / 2, y, barWidth, barH, Math.min(6, barWidth / 2));
     });
+
+    const peakIndex = values.reduce((peakIdx, units, idx) => {
+      if (peakIdx < 0) return units > 0 ? idx : peakIdx;
+      return units > values[peakIdx] ? idx : peakIdx;
+    }, -1);
+    const nonZeroPoints = points.filter((entry) => entry.units > 0);
+
+    const areaGradient = ctx.createLinearGradient(0, padding.top, 0, padding.top + chartH);
+    areaGradient.addColorStop(0, "rgba(255, 92, 168, 0.22)");
+    areaGradient.addColorStop(0.68, "rgba(255, 92, 168, 0.06)");
+    areaGradient.addColorStop(1, "rgba(255, 92, 168, 0)");
+    if (points.length > 1) {
+      ctx.beginPath();
+      points.forEach((entry, idx) => {
+        if (idx === 0) ctx.moveTo(entry.x, entry.y);
+        else ctx.lineTo(entry.x, entry.y);
+      });
+      ctx.lineTo(points[points.length - 1].x, padding.top + chartH);
+      ctx.lineTo(points[0].x, padding.top + chartH);
+      ctx.closePath();
+      ctx.fillStyle = areaGradient;
+      ctx.fill();
+    }
 
     ctx.beginPath();
-    trend.dailyData.forEach((point, idx) => {
-      const x = padding.left + idx * stepX;
-      const y = padding.top + chartH - (Number(point.units || 0) / maxValue) * chartH;
-      if (idx === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+    points.forEach((entry, idx) => {
+      if (idx === 0) ctx.moveTo(entry.x, entry.y);
+      else ctx.lineTo(entry.x, entry.y);
     });
-    ctx.strokeStyle = "rgba(37, 99, 235, 0.72)";
-    ctx.lineWidth = 2.2;
+    ctx.strokeStyle = "rgba(255, 92, 168, 0.98)";
+    ctx.lineWidth = width < 430 ? 3.2 : 4;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.shadowColor = "rgba(255, 92, 168, 0.42)";
+    ctx.shadowBlur = 16;
     ctx.stroke();
+    ctx.shadowBlur = 0;
 
-    const nonZeroPoints = trend.dailyData
-      .map((point, idx) => ({ point, idx }))
-      .filter((entry) => Number(entry.point.units || 0) > 0);
-    const valueLabelStep = Math.max(1, Math.ceil(nonZeroPoints.length / (width < 430 ? 4 : 7)));
-    const labelIndexes = new Set();
-    nonZeroPoints.forEach((entry, orderIdx) => {
-      if (entry.idx === peakIndex || orderIdx % valueLabelStep === 0 || orderIdx === nonZeroPoints.length - 1) {
-        labelIndexes.add(entry.idx);
-      }
-    });
-
-    trend.dailyData.forEach((point, idx) => {
-      const units = Number(point.units || 0);
-      if (!units) return;
-      const x = padding.left + idx * stepX;
-      const y = padding.top + chartH - (units / maxValue) * chartH;
+    points.forEach((entry) => {
+      const isPeak = entry.idx === peakIndex;
+      const isNonZero = entry.units > 0;
+      const radius = isPeak ? 6 : isNonZero ? 5 : 4;
       ctx.beginPath();
-      ctx.arc(x, y, idx === peakIndex ? 5 : 3.8, 0, Math.PI * 2);
-      ctx.fillStyle = idx === peakIndex ? "#1d4ed8" : "#2563eb";
+      ctx.arc(entry.x, entry.y, radius + 3, 0, Math.PI * 2);
+      ctx.fillStyle = isNonZero ? "rgba(255, 255, 255, 0.20)" : "rgba(255, 255, 255, 0.10)";
       ctx.fill();
+      ctx.beginPath();
+      ctx.arc(entry.x, entry.y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = isNonZero ? "#111827" : "rgba(17, 24, 39, 0.86)";
+      ctx.fill();
+      ctx.lineWidth = isPeak ? 3 : 2.4;
+      ctx.strokeStyle = isPeak ? "#ffffff" : "rgba(226, 232, 240, 0.90)";
+      ctx.stroke();
     });
 
-    ctx.font = "700 12px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    const labelIndexes = new Set();
+    if (peakIndex >= 0) labelIndexes.add(peakIndex);
+    if (nonZeroPoints.length) {
+      labelIndexes.add(nonZeroPoints[nonZeroPoints.length - 1].idx);
+      const valueLabelStep = Math.max(1, Math.ceil(nonZeroPoints.length / (width < 430 ? 3 : 5)));
+      nonZeroPoints.forEach((entry, orderIdx) => {
+        if (orderIdx % valueLabelStep === 0 || entry.idx === peakIndex) labelIndexes.add(entry.idx);
+      });
+    }
+
+    const placedLabelBoxes = [];
+    const canPlaceLabel = (box, idx) => {
+      if (idx === peakIndex) return true;
+      return !placedLabelBoxes.some((placed) => {
+        return !(box.x2 < placed.x1 || box.x1 > placed.x2 || box.y2 < placed.y1 || box.y1 > placed.y2);
+      });
+    };
+    ctx.font = `800 ${width < 430 ? 12 : 13}px ${fontStack}`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     [...labelIndexes].sort((a, b) => a - b).forEach((idx) => {
-      const point = trend.dailyData[idx];
-      const units = Number(point.units || 0);
-      const x = padding.left + idx * stepX;
-      const y = padding.top + chartH - (units / maxValue) * chartH;
-      const label = `${Math.round(units).toLocaleString("ko-KR")}개`;
-      const labelY = Math.max(24, y - 24);
-      const textWidth = ctx.measureText(label).width + 16;
-      const labelX = Math.max(10, Math.min(width - textWidth - 10, x - textWidth / 2));
-      const labelCenterX = labelX + textWidth / 2;
-      ctx.fillStyle = idx === peakIndex ? "rgba(219, 234, 254, 0.98)" : "rgba(255, 255, 255, 0.98)";
-      drawRoundRect(labelX, labelY - 12, textWidth, 24, 12);
-      ctx.strokeStyle = idx === peakIndex ? "rgba(37, 99, 235, 0.34)" : "rgba(100, 116, 139, 0.18)";
-      ctx.strokeRect(labelX, labelY - 12, textWidth, 24);
-      ctx.fillStyle = idx === peakIndex ? "#1d4ed8" : "#0f172a";
-      ctx.fillText(label, labelCenterX, labelY);
+      const entry = points[idx];
+      if (!entry || entry.units <= 0) return;
+      const label = `${Math.round(entry.units).toLocaleString("ko-KR")}개`;
+      const textWidth = Math.ceil(ctx.measureText(label).width);
+      const boxW = Math.min(width - 18, textWidth + 18);
+      const boxH = width < 430 ? 22 : 24;
+      const boxX = Math.min(width - padding.right - boxW, Math.max(padding.left - 4, entry.x - boxW / 2));
+      const boxY = Math.max(8, entry.y - boxH - 12);
+      const box = { x1: boxX - 3, y1: boxY - 3, x2: boxX + boxW + 3, y2: boxY + boxH + 3 };
+      if (!canPlaceLabel(box, idx)) return;
+      placedLabelBoxes.push(box);
+      fillRoundRect(boxX, boxY, boxW, boxH, 5, idx === peakIndex ? "rgba(255, 255, 255, 0.96)" : "rgba(255, 255, 255, 0.90)");
+      strokeRoundRect(boxX, boxY, boxW, boxH, 5, idx === peakIndex ? "rgba(255, 92, 168, 0.36)" : "rgba(255, 255, 255, 0.18)", 1);
+      ctx.fillStyle = idx === peakIndex ? "#111827" : "#1f2937";
+      ctx.fillText(label, boxX + boxW / 2, boxY + boxH / 2 + 0.5);
     });
 
-    ctx.font = "700 12px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    ctx.fillStyle = "#475569";
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
+    ctx.font = `800 ${width < 430 ? 11 : 12}px ${fontStack}`;
     const labelEvery = Math.max(1, Math.ceil(trend.dailyData.length / (width < 430 ? 5 : 7)));
-    trend.dailyData.forEach((point, idx) => {
-      if (idx % labelEvery !== 0 && idx !== trend.dailyData.length - 1 && idx !== peakIndex) return;
-      const x = padding.left + idx * stepX;
-      ctx.fillText(shortDateLabel(point.date), x, padding.top + chartH + 18);
+    const xLabelCandidates = trend.dailyData.map((point, idx) => ({
+      point,
+      idx,
+      priority: idx === peakIndex ? 1 : Number(point.units || 0) > 0 ? 2 : (idx === 0 || idx === trend.dailyData.length - 1 ? 3 : idx % labelEvery === 0 ? 4 : 9),
+    })).filter((entry) => entry.priority < 9).sort((a, b) => a.priority - b.priority || a.idx - b.idx);
+    const xLabelBoxes = [];
+    xLabelCandidates.forEach(({ point, idx }) => {
+      const entry = points[idx];
+      const dateLabel = shortDateLabel(point.date);
+      const labelWidth = ctx.measureText(dateLabel).width + 14;
+      const box = { x1: entry.x - labelWidth / 2, x2: entry.x + labelWidth / 2 };
+      const overlaps = xLabelBoxes.some((placed) => !(box.x2 < placed.x1 || box.x1 > placed.x2));
+      if (overlaps && idx !== peakIndex) return;
+      xLabelBoxes.push(box);
+      ctx.fillStyle = Number(point.units || 0) > 0 ? "rgba(255, 255, 255, 0.90)" : "rgba(203, 213, 225, 0.70)";
+      ctx.fillText(dateLabel, entry.x, padding.top + chartH + 17);
     });
     renderOutboundTrendDiagnostics();
   } catch (error) {
@@ -6656,7 +7124,7 @@ function openInventoryItemDetail(sku) {
         </div>
         <p id="inventoryItemOrderTrendMeta" class="sku-order-trend-meta">출고 기록을 불러오는 중입니다.</p>
         <div class="sku-order-chart-stage">
-          <canvas id="inventoryItemOrderChart" class="sku-order-trend-chart" height="320" aria-label="날짜별 순출고 그래프"></canvas>
+          <canvas id="inventoryItemOrderChart" height="300" aria-label="날짜별 순출고 그래프"></canvas>
           <div id="inventoryItemOrderChartEmpty" class="detail-empty" hidden>엑셀 주문 차감 적용 이후 저장된 품목별 출고 기록이 아직 없습니다.</div>
         </div>
         <div id="inventoryItemOrderTrendSummary" class="sku-order-trend-summary"></div>
