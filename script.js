@@ -112,7 +112,7 @@
     "네모스낵 불고기맛": { group: "네모스낵", boxesPerPallet: 72, unitsPerBox: 360, structure: "1파렛=72완박스 / 1완박스=12내부박스 / 1내부박스=30개", cost: 172.2, safetyStock: { boxes: 30 } },
     "네모스낵 매콤한맛": { group: "네모스낵", boxesPerPallet: 72, unitsPerBox: 360, structure: "1파렛=72완박스 / 1완박스=12내부박스 / 1내부박스=30개", cost: 172.2, safetyStock: { boxes: 30 } },
     "허니눈꽃 쌀과자 920g": { group: "쌀과자", boxesPerPallet: 42, unitsPerBox: 4, structure: "1파렛=42완박스 / 1완박스=4개", cost: 6800, safetyStock: { pallets: 3 } },
-    "찹쌀 누룽지 무가당": { group: "찹쌀 누룽지", boxesPerPallet: 26, unitsPerBox: 20, structure: "1파렛=26완박스 / 1완박스=20개", cost: 2200, safetyStock: { pallets: 4 } },
+    "찹쌀 누룽지 무가당": { group: "찹쌀 누룽지", boxesPerPallet: 42, unitsPerBox: 14, structure: "1파렛=42완박스 / 1완박스=14개", cost: 2200, safetyStock: { pallets: 4 } },
     "찹쌀 누룽지 츄러스": { group: "찹쌀 누룽지", boxesPerPallet: 42, unitsPerBox: 14, structure: "1파렛=42완박스 / 1완박스=14개", cost: 2300, safetyStock: { pallets: 1 } },
     "찹쌀 누룽지 스위트": { group: "찹쌀 누룽지", boxesPerPallet: 42, unitsPerBox: 14, structure: "1파렛=42완박스 / 1완박스=14개", cost: 2200, safetyStock: { pallets: 4 } },
     "에낙 치킨": { group: "에낙", boxesPerPallet: 70, unitsPerBox: 180, structure: "1파렛=70완박스 / 1완박스=6내부박스 / 1내부박스=30개", cost: 163.8, safetyStock: { pallets: 2 } },
@@ -328,6 +328,7 @@
       pallets: { ...INITIAL_PALLETS },
       history: [],
       orderStatus: [],
+      purchaseCompletedRecords: [],
       returnAdjustments: [],
       appliedOrderFiles: [],
       adminActionLogs: [],
@@ -343,6 +344,7 @@
   let orderChartMode = "daily";
   let chartResizeTimer = null;
   let activeInventoryDetailSku = null;
+  let purchaseCompleteDraftKey = "";
 
   function normalizeMovementDetails(details) {
     if (!Array.isArray(details)) return [];
@@ -434,6 +436,42 @@
     };
   }
 
+  function storedStockUnitsForSku(sku, incoming) {
+    if (!incoming || typeof incoming !== "object") return 0;
+    if (Object.prototype.hasOwnProperty.call(incoming, "units")) {
+      return cleanNumber(incoming.units);
+    }
+    if (Object.prototype.hasOwnProperty.call(incoming, "pallets")
+      || Object.prototype.hasOwnProperty.call(incoming, "boxes")
+      || Object.prototype.hasOwnProperty.call(incoming, "eaches")) {
+      return unitsFromInput(sku, incoming);
+    }
+    return 0;
+  }
+
+
+  function normalizePurchaseCompletedRecord(record) {
+    if (!record || typeof record !== "object") return null;
+    const paymentAmount = cleanNumber(record.paymentAmount ?? record.amount ?? record.depositAmount ?? 0);
+    const inboundDate = normalizePurchaseDate(record.inboundDate || record.receivedDate || record.arrivalDate || "", record.createdAt || new Date());
+    const paymentDate = normalizePurchaseDate(record.paymentDate || record.depositDate || "", record.createdAt || new Date());
+    if (paymentAmount <= 0 || !inboundDate || !paymentDate) return null;
+    const sourcePurchaseIds = Array.isArray(record.sourcePurchaseIds)
+      ? record.sourcePurchaseIds.map((id) => String(id || "")).filter(Boolean)
+      : record.sourcePurchaseId
+        ? [String(record.sourcePurchaseId)]
+        : [];
+    return {
+      id: String(record.id || `purchase-completed-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
+      paymentAmount,
+      inboundDate,
+      paymentDate,
+      createdAt: record.createdAt || new Date().toISOString(),
+      sourcePurchaseIds,
+      createdByRole: String(record.createdByRole || "admin")
+    };
+  }
+
   function normalizeState(parsed) {
     const fresh = createInitialState();
     if (!parsed || typeof parsed !== "object") return fresh;
@@ -446,7 +484,7 @@
       normalizedStock[sku] = {
         ...normalizedStock[sku],
         ...incoming,
-        units: Number(incoming.units) || 0
+        units: storedStockUnitsForSku(sku, incoming)
       };
     });
     const aliasTargetsReset = new Set();
@@ -477,6 +515,7 @@
       pallets: normalizedPallets,
       history: Array.isArray(parsed.history) ? parsed.history.map(normalizeHistoryRecord) : [],
       orderStatus: Array.isArray(parsed.orderStatus) ? parsed.orderStatus.map(normalizePurchaseItem).filter(Boolean) : [],
+      purchaseCompletedRecords: Array.isArray(parsed.purchaseCompletedRecords) ? parsed.purchaseCompletedRecords.map(normalizePurchaseCompletedRecord).filter(Boolean) : [],
       returnAdjustments: Array.isArray(parsed.returnAdjustments) ? parsed.returnAdjustments.map(normalizeReturnAdjustment).filter(Boolean) : [],
       appliedOrderFiles: Array.isArray(parsed.appliedOrderFiles) ? parsed.appliedOrderFiles.map(normalizeAppliedOrderFile).filter(Boolean).slice(0, APPLIED_ORDER_HISTORY_LIMIT) : [],
       adminActionLogs: Array.isArray(parsed.adminActionLogs) ? parsed.adminActionLogs.map(normalizeAdminActionLog).filter(Boolean).slice(0, ADMIN_ACTION_LOG_STORAGE_LIMIT) : [],
@@ -1599,6 +1638,10 @@
         card.classList.toggle("collapsed", collapsed);
         button.setAttribute("aria-expanded", String(!collapsed));
         button.querySelector("span").textContent = collapsed ? "펼치기" : "접기";
+        if (card.id === "outboundDiagnosticsCard") {
+          button.setAttribute("aria-label", collapsed ? "출고 데이터 진단 펼치기" : "출고 데이터 진단 접기");
+          button.setAttribute("title", collapsed ? "출고 데이터 진단 펼치기" : "출고 데이터 진단 접기");
+        }
         if (save) localStorage.setItem(`reborn-collapse:${key}`, collapsed ? "1" : "0");
         if (!collapsed && card.id === "orderChartCard") requestAnimationFrame(renderOrderChart);
       };
@@ -2534,7 +2577,193 @@ function refreshActiveOrderAnalysisSummary() {
       </div>`;
   }
 
+  function purchaseCompleteGroupKey(sectionDate, group) {
+    return `${String(sectionDate || "")}|${String(group?.key || "")}`;
+  }
+
+  function findPurchaseGroupByCompleteKey(groupKey) {
+    const targetKey = String(groupKey || "");
+    if (!targetKey) return null;
+    const items = Array.isArray(state.orderStatus) ? state.orderStatus.map(normalizePurchaseItem).filter(Boolean) : [];
+    const sections = buildPurchaseDateSections(items);
+    for (const section of sections) {
+      for (const group of section.groups || []) {
+        if (purchaseCompleteGroupKey(section.date, group) === targetKey) {
+          return { section, group };
+        }
+      }
+    }
+    return null;
+  }
+
+  function formatPurchaseCompactDate(value) {
+    const text = normalizePurchaseDate(value, new Date());
+    if (!text) return "-";
+    const date = new Date(`${text}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return text;
+    return `${date.getMonth() + 1}/${date.getDate()}`;
+  }
+
+  function renderPurchaseCompleteInlineForm(section, group) {
+    const formKey = purchaseCompleteGroupKey(section?.date, group);
+    if (!isEditorSession() || purchaseCompleteDraftKey !== formKey) return "";
+    const today = todayKey();
+    const suggestedAmount = Math.max(0, Math.round(cleanNumber(group?.amount)));
+    return `
+      <form class="purchase-complete-form" data-purchase-complete-form="${escapeHtml(formKey)}" data-admin-only="true">
+        <div class="purchase-complete-form-grid">
+          <label>
+            <span>입금금액</span>
+            <input type="text" inputmode="numeric" autocomplete="off" value="${escapeHtml(number(suggestedAmount))}" data-purchase-complete-field="paymentAmount" placeholder="예: 1,200,000" aria-label="입금금액" />
+          </label>
+          <label>
+            <span>입고날짜</span>
+            <input type="date" value="${escapeHtml(today)}" data-purchase-complete-field="inboundDate" aria-label="입고날짜" />
+          </label>
+          <label>
+            <span>입금날짜</span>
+            <input type="date" value="${escapeHtml(today)}" data-purchase-complete-field="paymentDate" aria-label="입금날짜" />
+          </label>
+        </div>
+        <div class="purchase-complete-form-actions">
+          <button type="submit" class="btn purchase-complete-save" data-purchase-complete-save="${escapeHtml(formKey)}">저장</button>
+          <button type="button" class="btn ghost" data-purchase-complete-cancel="true">취소</button>
+        </div>
+        <p class="purchase-complete-form-note">저장 내역 화면과 CSV에는 입금금액 · 입고날짜 · 입금날짜만 표시됩니다. 기존 발주현황 원본은 삭제하지 않습니다.</p>
+      </form>`;
+  }
+
+  function renderPurchaseCompletedRecords() {
+    const root = $("purchaseCompletedSection");
+    if (!root) return;
+    const records = Array.isArray(state.purchaseCompletedRecords)
+      ? state.purchaseCompletedRecords.map(normalizePurchaseCompletedRecord).filter(Boolean)
+      : [];
+    state.purchaseCompletedRecords = records;
+    const total = records.reduce((sum, record) => sum + cleanNumber(record.paymentAmount), 0);
+    const latest = [...records].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+    const preview = latest.slice(0, 5);
+    const restCount = Math.max(0, latest.length - preview.length);
+    const cardsHtml = records.length ? `
+      <div class="purchase-completed-list">
+        ${preview.map((record) => `
+          <article class="purchase-completed-card">
+            <strong>${money(record.paymentAmount)}</strong>
+            <span>입고 ${escapeHtml(formatPurchaseCompactDate(record.inboundDate))}</span>
+            <span>입금 ${escapeHtml(formatPurchaseCompactDate(record.paymentDate))}</span>
+          </article>`).join("")}
+      </div>
+      ${restCount ? `<p class="purchase-completed-more">최근 5건 먼저 표시 · 전체 ${number(records.length)}건은 CSV로 다운로드할 수 있습니다.</p>` : ""}` : `
+      <div class="purchase-completed-empty">저장된 처리완료 내역이 없습니다.</div>`;
+    root.innerHTML = `
+      <details class="purchase-completed-panel">
+        <summary class="purchase-completed-summary">
+          <span class="purchase-completed-summary-main">
+            <strong>처리완료 내역</strong>
+            <small>관리자·일반 이용자 모두 확인 가능</small>
+          </span>
+          <span class="purchase-completed-summary-side">
+            <span>${number(records.length)}건</span>
+            <strong>${money(total)}</strong>
+          </span>
+        </summary>
+        <div class="purchase-completed-body">
+          <div class="purchase-completed-toolbar">
+            <button type="button" class="btn ghost purchase-completed-download" data-purchase-completed-download="true">CSV 다운로드</button>
+          </div>
+          ${cardsHtml}
+        </div>
+      </details>`;
+  }
+
+  function startPurchaseComplete(groupKey) {
+    if (!requireEditor("발주 처리완료 저장")) return;
+    purchaseCompleteDraftKey = String(groupKey || "");
+    renderPurchaseStatus();
+  }
+
+  function cancelPurchaseComplete() {
+    purchaseCompleteDraftKey = "";
+    renderPurchaseStatus();
+  }
+
+  function completePurchaseGroup(groupKey) {
+    if (!requireEditor("발주 처리완료 저장")) return;
+    const found = findPurchaseGroupByCompleteKey(groupKey);
+    if (!found) {
+      toast("처리완료할 발주 항목을 찾지 못했습니다.");
+      return;
+    }
+    const form = Array.from(document.querySelectorAll("[data-purchase-complete-form]")).find((entry) => entry.dataset.purchaseCompleteForm === String(groupKey || ""));
+    if (!form) {
+      toast("처리완료 입력폼을 찾지 못했습니다.");
+      return;
+    }
+    const paymentAmount = cleanNumber(form.querySelector('[data-purchase-complete-field="paymentAmount"]')?.value || 0);
+    const inboundDate = normalizePurchaseDate(form.querySelector('[data-purchase-complete-field="inboundDate"]')?.value || "", new Date());
+    const paymentDate = normalizePurchaseDate(form.querySelector('[data-purchase-complete-field="paymentDate"]')?.value || "", new Date());
+    if (paymentAmount <= 0) {
+      toast("입금금액을 숫자로 입력해주세요.");
+      return;
+    }
+    if (!inboundDate || !paymentDate) {
+      toast("입고날짜와 입금날짜를 모두 입력해주세요.");
+      return;
+    }
+    const record = normalizePurchaseCompletedRecord({
+      paymentAmount,
+      inboundDate,
+      paymentDate,
+      createdAt: new Date().toISOString(),
+      sourcePurchaseIds: (found.group.items || []).map((item) => item.id).filter(Boolean),
+      createdByRole: "admin"
+    });
+    if (!record) {
+      toast("처리완료 내역을 저장할 수 없습니다.");
+      return;
+    }
+    addBackup("발주 처리완료 저장 전 자동 백업");
+    state.purchaseCompletedRecords = [record, ...(Array.isArray(state.purchaseCompletedRecords) ? state.purchaseCompletedRecords : [])];
+    addAdminActionLog("발주 처리완료 저장", {
+      itemName: found.group.name || "발주 처리완료",
+      qty: cleanNumber(found.group.count || found.group.items?.length || 1),
+      unit: "건",
+      memo: `입금 ${money(paymentAmount)} · 입고 ${inboundDate} · 입금일 ${paymentDate}`,
+      source: "purchaseCompletedRecords"
+    });
+    purchaseCompleteDraftKey = "";
+    renderAll();
+    saveState("발주 처리완료 내역이 저장되었습니다.");
+  }
+
+  function downloadPurchaseCompletedCsv() {
+    const records = Array.isArray(state.purchaseCompletedRecords)
+      ? state.purchaseCompletedRecords.map(normalizePurchaseCompletedRecord).filter(Boolean)
+      : [];
+    if (!records.length) {
+      toast("다운로드할 처리완료 내역이 없습니다.");
+      return;
+    }
+    const rows = [["입금금액", "입고날짜", "입금날짜"], ...records.map((record) => [
+      String(Math.round(cleanNumber(record.paymentAmount))),
+      record.inboundDate,
+      record.paymentDate
+    ])];
+    const csv = rows.map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `reborn_purchase_completed_${todayKey()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    toast("처리완료 내역 CSV를 다운로드했습니다.");
+  }
+
   function renderPurchaseStatus() {
+    renderPurchaseCompletedRecords();
     const list = $("purchaseList");
     const empty = $("purchaseEmptyState");
     if (!list) return;
@@ -2590,6 +2819,12 @@ function refreshActiveOrderAnalysisSummary() {
                 </summary>
                 <div class="purchase-card-detail-body">
                   ${adminBatchEditor}
+                  ${isEditorSession() ? `
+                    <div class="purchase-complete-action-row" data-admin-only="true">
+                      <button type="button" class="btn purchase-complete-start" data-purchase-complete-start="${escapeHtml(purchaseCompleteGroupKey(section.date, group))}">처리완료</button>
+                    </div>
+                    ${renderPurchaseCompleteInlineForm(section, group)}
+                  ` : ""}
                   <div class="purchase-detail-list">
                     ${group.items.map((item) => {
                       const amount = calculatePurchaseItemAmount(item);
@@ -3162,12 +3397,41 @@ function refreshActiveOrderAnalysisSummary() {
     summary.innerHTML = `${actionLabel} <strong>${number(rows.length)}개 품목</strong> · 파렛 <strong>${number(inputTotals.pallets)}</strong> · 박스/묶음 <strong>${number(inputTotals.boxes)}</strong> · 낱개 <strong>${number(inputTotals.eaches)}</strong> · 총 환산 <strong>${number(inputTotals.units)}개</strong> · 재고자산 ${direction === "out" ? "차감" : "증가"} 예상 <strong>${money(assetValue)}</strong>`;
   }
 
+  function normalizeInventorySearchText(value) {
+    return String(value || "")
+      .normalize("NFKC")
+      .toLowerCase()
+      .replace(/[\s()\[\]{}·._\-/]+/g, "");
+  }
+
+  function updateInventorySearchUi(rawKeyword, matchedCount, totalCount) {
+    const clearBtn = $("inventorySearchClear");
+    if (clearBtn) clearBtn.hidden = !String(rawKeyword || "").trim();
+    const meta = $("inventorySearchMeta");
+    if (!meta) return;
+    if (!String(rawKeyword || "").trim()) {
+      meta.textContent = `전체 ${number(totalCount)}개 품목`;
+      return;
+    }
+    meta.textContent = `검색 결과 ${number(matchedCount)}개 / 전체 ${number(totalCount)}개`;
+  }
+
   function renderInventory() {
     const tbody = $("inventoryTable");
     if (!tbody) return;
-    const keyword = ($("inventorySearch")?.value || "").trim().toLowerCase();
-    const matchedSkus = Object.keys(INVENTORY_DEFS)
-      .filter((sku) => !keyword || sku.toLowerCase().includes(keyword) || INVENTORY_DEFS[sku].group.toLowerCase().includes(keyword));
+    const rawKeyword = ($("inventorySearch")?.value || "").trim();
+    const keyword = normalizeInventorySearchText(rawKeyword);
+    const allSkus = Object.keys(INVENTORY_DEFS);
+    const matchedSkus = allSkus
+      .filter((sku) => {
+        if (!keyword) return true;
+        const def = INVENTORY_DEFS[sku] || {};
+        const searchable = [sku, def.group]
+          .filter(Boolean)
+          .map(normalizeInventorySearchText);
+        return searchable.some((text) => text.includes(keyword));
+      });
+    updateInventorySearchUi(rawKeyword, matchedSkus.length, allSkus.length);
 
     matchedSkus.sort((a, b) => {
       const aLow = safetyStatus(a, state.stock[a]?.units || 0)?.isLow ? 1 : 0;
@@ -3725,9 +3989,42 @@ function refreshActiveOrderAnalysisSummary() {
       handleReturnAdjustmentProcessClick(event);
     });
     $("purchaseList")?.addEventListener("click", (event) => {
+      const completeStart = event.target.closest("[data-purchase-complete-start]");
+      if (completeStart) {
+        event.preventDefault();
+        event.stopPropagation();
+        startPurchaseComplete(completeStart.dataset.purchaseCompleteStart || "");
+        return;
+      }
+      const completeSave = event.target.closest("[data-purchase-complete-save]");
+      if (completeSave) {
+        event.preventDefault();
+        event.stopPropagation();
+        completePurchaseGroup(completeSave.dataset.purchaseCompleteSave || "");
+        return;
+      }
+      const completeCancel = event.target.closest("[data-purchase-complete-cancel]");
+      if (completeCancel) {
+        event.preventDefault();
+        event.stopPropagation();
+        cancelPurchaseComplete();
+        return;
+      }
       const target = event.target.closest("[data-purchase-action]");
       if (!target) return;
       if (target.dataset.purchaseAction === "remove") removePurchaseItem(target.dataset.purchaseId);
+    });
+    $("purchaseList")?.addEventListener("submit", (event) => {
+      const form = event.target.closest("[data-purchase-complete-form]");
+      if (!form) return;
+      event.preventDefault();
+      completePurchaseGroup(form.dataset.purchaseCompleteForm || "");
+    });
+    document.addEventListener("click", (event) => {
+      const downloadButton = event.target.closest("[data-purchase-completed-download]");
+      if (!downloadButton) return;
+      event.preventDefault();
+      downloadPurchaseCompletedCsv();
     });
     $("purchaseList")?.addEventListener("change", (event) => {
       const target = event.target.closest("[data-purchase-action]");
@@ -3752,6 +4049,13 @@ function refreshActiveOrderAnalysisSummary() {
       resetProductCost(button.dataset.productCostReset);
     });
     $("inventorySearch")?.addEventListener("input", renderInventory);
+    $("inventorySearchClear")?.addEventListener("click", () => {
+      const input = $("inventorySearch");
+      if (!input) return;
+      input.value = "";
+      renderInventory();
+      input.focus();
+    });
     $("orderFile")?.addEventListener("change", (event) => {
       const file = event.target.files?.[0] || null;
       const fileName = file?.name || "엑셀 파일 선택";
@@ -4099,7 +4403,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "outtrend-active-source-fix-09",
+    cacheVersion: "inventory-search-mobile-fix-15",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -5412,6 +5716,51 @@ function formatTrendDate(date) {
   return `${date.getMonth() + 1}/${date.getDate()}`;
 }
 
+function formatDetailNumber(value, suffix = "") {
+  const num = Number(value || 0);
+  return `${Number.isFinite(num) ? Math.round(num).toLocaleString("ko-KR") : "0"}${suffix}`;
+}
+
+function formatDetailAverage(value) {
+  const num = Number(value || 0);
+  if (!Number.isFinite(num) || num <= 0) return "0개/일";
+  const fixed = num >= 10 ? Math.round(num).toLocaleString("ko-KR") : num.toFixed(1);
+  return `${fixed}개/일`;
+}
+
+function getStockoutVisualClass(status) {
+  if (!status || status.status === "noStock") return "danger";
+  if (status.status === "noOutbound") return "empty";
+  if (status.status !== "ok") return "warning";
+  const daysLeft = Number(status.daysLeft || 0);
+  if (daysLeft > 0 && daysLeft <= 30) return "danger";
+  if (daysLeft > 0 && daysLeft <= 90) return "warning";
+  return "safe";
+}
+
+function getTrendBasisVisualClass() {
+  const basis = outboundTrendDiagnostics.trendDateBasis;
+  if (basis === "actualOutboundDate") return "is-safe";
+  if (basis === "processingDate" || basis === "mixed" || basis === "recordDate" || basis === "recordedAt") return "is-warning";
+  if (basis === "ambiguousDate" || basis === "missing") return "is-danger";
+  return "is-info";
+}
+
+function getTrendBasisShortLabel() {
+  const basis = outboundTrendDiagnostics.trendDateBasis;
+  if (basis === "actualOutboundDate") return "실제 출고일 기준";
+  if (basis === "processingDate") return "처리일 기준";
+  if (basis === "mixed") return "혼합 날짜 기준";
+  if (basis === "recordDate" || basis === "recordedAt") return "기록일 기준";
+  if (basis === "ambiguousDate") return "날짜 기준 확인 필요";
+  return "날짜 기준 확인 중";
+}
+
+function getRecentTrendPoints(trend, limit = 8) {
+  const points = Array.isArray(trend?.dailyData) ? trend.dailyData : [];
+  return points.filter((point) => Number(point?.units || 0) > 0).slice(-limit);
+}
+
 
 function getSelectedSkuNoDataMessage(sku) {
   sku = canonicalSku(sku);
@@ -5484,6 +5833,13 @@ function renderInventoryItemOrderTrend() {
   const summary = $("inventoryItemOrderTrendSummary");
   const empty = $("inventoryItemOrderChartEmpty");
   const list = $("inventoryItemOrderTrendList");
+  const breakdown = $("inventoryItemOrderTrendBreakdown");
+  const forecastCard = $("inventoryItemStockoutForecast");
+  const trendTotalEl = $("inventoryItemTrendTotal");
+  const trendAverageEl = $("inventoryItemTrendAverage");
+  const trendActiveDaysEl = $("inventoryItemTrendActiveDays");
+  const trendLastDateEl = $("inventoryItemTrendLastDate");
+  const basisBadge = $("inventoryItemOrderTrendBasisBadge");
 
   if (!sku) {
     markOutboundTrendRenderSkip("선택된 품목 SKU가 없어 예상 소진일/순출고 추적을 계산하지 못함", "");
@@ -5502,6 +5858,7 @@ function renderInventoryItemOrderTrend() {
     }
     if (summary) summary.innerHTML = `<div class="detail-empty">선택 품목 정보 확인이 필요합니다.</div>`;
     if (list) list.innerHTML = `<span class="muted">선택 품목 없음</span>`;
+    if (breakdown) breakdown.innerHTML = `<span class="muted">선택 품목 없음</span>`;
     renderOutboundTrendDiagnostics();
     return;
   }
@@ -5520,6 +5877,20 @@ function renderInventoryItemOrderTrend() {
     outboundTrendDiagnostics.averageDailyOutbound = trend.averagePerDay || 0;
     outboundTrendDiagnostics.renderStatus = collectionFailed ? "rendered-collect-error" : (hasData ? "rendered-with-data" : "rendered-no-records");
 
+    if (forecastCard) {
+      forecastCard.classList.remove("safe", "warning", "danger", "empty");
+      forecastCard.classList.add(collectionFailed ? "danger" : getStockoutVisualClass(status));
+    }
+    const latestPoint = [...(trend.dailyData || [])].reverse().find((point) => Number(point?.units || 0) > 0);
+    if (trendTotalEl) trendTotalEl.textContent = formatDetailNumber(trend.total, "개");
+    if (trendAverageEl) trendAverageEl.textContent = formatDetailAverage(trend.averagePerDay);
+    if (trendActiveDaysEl) trendActiveDaysEl.textContent = `${Number(trend.activeDays || 0).toLocaleString("ko-KR")}일`;
+    if (trendLastDateEl) trendLastDateEl.textContent = latestPoint ? shortDateLabel(latestPoint.date) : "기록 없음";
+    if (basisBadge) {
+      basisBadge.textContent = getTrendBasisShortLabel();
+      basisBadge.className = `sku-order-trend-basis ${getTrendBasisVisualClass()}`;
+    }
+
     if (valueEl) valueEl.textContent = collectionFailed ? "데이터 확인 필요" : status.value;
     if (noteEl) {
       noteEl.textContent = collectionFailed
@@ -5536,19 +5907,30 @@ function renderInventoryItemOrderTrend() {
 
     if (summary) {
       summary.innerHTML = collectionFailed
-        ? `<div class="detail-empty">출고 기록 수집 실패 · 진단 패널 확인 필요</div>`
+        ? `<div class="detail-empty sku-trend-empty-card">출고 기록 수집 실패 · 진단 패널 확인 필요</div>`
         : hasData
-          ? recentPoints.map((point) => `
+          ? getRecentTrendPoints(trend, 4).map((point) => `
             <div class="sku-order-trend-pill">
-              <span>${shortDateLabel(point.date)}</span>
-              <strong>${escapeHtml(formatStock(sku, point.units))}</strong>
+              <span>${escapeHtml(shortDateLabel(point.date))}</span>
+              <strong>${escapeHtml(formatDetailNumber(point.units, "개"))}</strong>
             </div>`).join("")
-          : `<div class="detail-empty">${escapeHtml(getSelectedSkuNoDataMessage(sku))}</div>`;
+          : `<div class="detail-empty sku-trend-empty-card">${escapeHtml(getSelectedSkuNoDataMessage(sku))}</div>`;
+    }
+
+    if (breakdown) {
+      const dailyBreakdown = getRecentTrendPoints(trend, 8).reverse();
+      breakdown.innerHTML = hasData
+        ? dailyBreakdown.map((point) => `
+          <div class="sku-order-day-line is-compact">
+            <span>${escapeHtml(shortDateLabel(point.date))}</span>
+            <strong>${escapeHtml(formatDetailNumber(point.units, "개"))}</strong>
+          </div>`).join("")
+        : `<span class="muted">${escapeHtml(collectionFailed ? "출고 기록 수집 실패" : getSelectedSkuNoDataMessage(sku))}</span>`;
     }
 
     if (list) {
       list.innerHTML = hasData
-        ? recentRecords.map((record) => `<span>${escapeHtml(shortDateLabel(record.date))} · ${escapeHtml(formatStock(sku, record.units))}</span>`).join("")
+        ? recentRecords.map((record) => `<div class="sku-order-day-line"><span>${escapeHtml(shortDateLabel(record.date))}</span><strong>${escapeHtml(formatDetailNumber(record.units, "개"))}</strong></div>`).join("")
         : `<span class="muted">${escapeHtml(collectionFailed ? "출고 기록 수집 실패" : getSelectedSkuNoDataMessage(sku))}</span>`;
     }
 
@@ -5579,99 +5961,137 @@ function renderInventoryItemOrderTrend() {
       return;
     }
 
-    const padding = { top: 36, right: 16, bottom: 42, left: 42 };
+    const padding = { top: 56, right: 22, bottom: 58, left: 64 };
     const chartW = Math.max(1, width - padding.left - padding.right);
     const chartH = Math.max(1, height - padding.top - padding.bottom);
-    const maxValue = Math.max(...trend.dailyData.map((point) => point.units), 1);
+    const rawMaxValue = Math.max(...trend.dailyData.map((point) => Number(point.units || 0)), 1);
+    const magnitude = Math.pow(10, Math.max(0, Math.floor(Math.log10(rawMaxValue)) - 1));
+    const maxValue = Math.max(1, Math.ceil(rawMaxValue / magnitude) * magnitude);
     const stepX = chartW / Math.max(1, trend.dailyData.length - 1);
 
+    const drawRoundRect = (x, y, w, h, r = 6) => {
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h, r);
+        ctx.fill();
+        return;
+      }
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h);
+      ctx.lineTo(x, y + h);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.fill();
+    };
+
+    const gridLines = [0, 0.5, 1];
     ctx.font = "12px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
     ctx.lineWidth = 1;
-    ctx.strokeStyle = "rgba(148, 163, 184, 0.32)";
-    ctx.fillStyle = "#64748b";
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
-
-    [0, 0.5, 1].forEach((ratioLine) => {
+    gridLines.forEach((ratioLine) => {
       const y = padding.top + chartH * (1 - ratioLine);
       ctx.beginPath();
       ctx.moveTo(padding.left, y);
       ctx.lineTo(width - padding.right, y);
+      ctx.strokeStyle = ratioLine === 0 ? "rgba(15, 23, 42, 0.18)" : "rgba(148, 163, 184, 0.24)";
       ctx.stroke();
-      const label = Math.round(maxValue * ratioLine).toLocaleString();
-      ctx.fillText(label, padding.left - 8, y);
+      const label = `${Math.round(maxValue * ratioLine).toLocaleString("ko-KR")}개`;
+      ctx.fillStyle = "#64748b";
+      ctx.fillText(label, padding.left - 10, y);
+    });
+
+    const barSlot = chartW / Math.max(1, trend.dailyData.length);
+    const barWidth = Math.max(8, Math.min(24, barSlot * 0.52));
+    const peakIndex = trend.dailyData.reduce((peakIdx, point, idx) => {
+      if (peakIdx < 0) return Number(point.units || 0) > 0 ? idx : peakIdx;
+      return Number(point.units || 0) > Number(trend.dailyData[peakIdx].units || 0) ? idx : peakIdx;
+    }, -1);
+
+    trend.dailyData.forEach((point, idx) => {
+      const units = Number(point.units || 0);
+      if (!units) return;
+      const x = padding.left + idx * stepX;
+      const barH = Math.max(3, (units / maxValue) * chartH);
+      const y = padding.top + chartH - barH;
+      const gradient = ctx.createLinearGradient(0, y, 0, y + barH);
+      if (idx === peakIndex) {
+        gradient.addColorStop(0, "rgba(37, 99, 235, 0.94)");
+        gradient.addColorStop(1, "rgba(37, 99, 235, 0.42)");
+      } else {
+        gradient.addColorStop(0, "rgba(14, 165, 233, 0.82)");
+        gradient.addColorStop(1, "rgba(14, 165, 233, 0.26)");
+      }
+      ctx.fillStyle = gradient;
+      drawRoundRect(x - barWidth / 2, y, barWidth, barH, Math.min(6, barWidth / 2));
     });
 
     ctx.beginPath();
     trend.dailyData.forEach((point, idx) => {
       const x = padding.left + idx * stepX;
-      const y = padding.top + chartH - (point.units / maxValue) * chartH;
+      const y = padding.top + chartH - (Number(point.units || 0) / maxValue) * chartH;
       if (idx === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     });
-    ctx.strokeStyle = "#2563eb";
+    ctx.strokeStyle = "rgba(37, 99, 235, 0.72)";
     ctx.lineWidth = 2.2;
     ctx.stroke();
 
-    ctx.fillStyle = "rgba(37, 99, 235, 0.18)";
-    trend.dailyData.forEach((point, idx) => {
-      if (!point.units) return;
-      const x = padding.left + idx * stepX;
-      const y = padding.top + chartH - (point.units / maxValue) * chartH;
-      const barH = padding.top + chartH - y;
-      ctx.fillRect(x - 3, y, 6, Math.max(2, barH));
-    });
-
-    ctx.fillStyle = "#1d4ed8";
-    trend.dailyData.forEach((point, idx) => {
-      if (!point.units) return;
-      const x = padding.left + idx * stepX;
-      const y = padding.top + chartH - (point.units / maxValue) * chartH;
-      ctx.beginPath();
-      ctx.arc(x, y, 3, 0, Math.PI * 2);
-      ctx.fill();
-    });
-
     const nonZeroPoints = trend.dailyData
       .map((point, idx) => ({ point, idx }))
-      .filter((entry) => entry.point.units > 0);
-    const maxPointIndex = nonZeroPoints.reduce((maxIdx, entry) => {
-      if (maxIdx < 0) return entry.idx;
-      return entry.point.units > trend.dailyData[maxIdx].units ? entry.idx : maxIdx;
-    }, -1);
+      .filter((entry) => Number(entry.point.units || 0) > 0);
     const valueLabelStep = Math.max(1, Math.ceil(nonZeroPoints.length / (width < 430 ? 4 : 7)));
     const labelIndexes = new Set();
     nonZeroPoints.forEach((entry, orderIdx) => {
-      if (entry.idx === maxPointIndex || orderIdx % valueLabelStep === 0 || orderIdx === nonZeroPoints.length - 1) {
+      if (entry.idx === peakIndex || orderIdx % valueLabelStep === 0 || orderIdx === nonZeroPoints.length - 1) {
         labelIndexes.add(entry.idx);
       }
     });
-    ctx.font = "11px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
+    trend.dailyData.forEach((point, idx) => {
+      const units = Number(point.units || 0);
+      if (!units) return;
+      const x = padding.left + idx * stepX;
+      const y = padding.top + chartH - (units / maxValue) * chartH;
+      ctx.beginPath();
+      ctx.arc(x, y, idx === peakIndex ? 5 : 3.8, 0, Math.PI * 2);
+      ctx.fillStyle = idx === peakIndex ? "#1d4ed8" : "#2563eb";
+      ctx.fill();
+    });
+
+    ctx.font = "700 12px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     [...labelIndexes].sort((a, b) => a - b).forEach((idx) => {
       const point = trend.dailyData[idx];
+      const units = Number(point.units || 0);
       const x = padding.left + idx * stepX;
-      const y = padding.top + chartH - (point.units / maxValue) * chartH;
-      const label = Math.round(point.units).toLocaleString("ko-KR");
-      const labelY = Math.max(12, y - 16);
-      const textWidth = ctx.measureText(label).width + 8;
-      ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
-      ctx.fillRect(x - textWidth / 2, labelY - 8, textWidth, 16);
-      ctx.strokeStyle = "rgba(37, 99, 235, 0.16)";
-      ctx.strokeRect(x - textWidth / 2, labelY - 8, textWidth, 16);
-      ctx.fillStyle = "#0f172a";
-      ctx.fillText(label, x, labelY);
+      const y = padding.top + chartH - (units / maxValue) * chartH;
+      const label = `${Math.round(units).toLocaleString("ko-KR")}개`;
+      const labelY = Math.max(24, y - 24);
+      const textWidth = ctx.measureText(label).width + 16;
+      const labelX = Math.max(10, Math.min(width - textWidth - 10, x - textWidth / 2));
+      const labelCenterX = labelX + textWidth / 2;
+      ctx.fillStyle = idx === peakIndex ? "rgba(219, 234, 254, 0.98)" : "rgba(255, 255, 255, 0.98)";
+      drawRoundRect(labelX, labelY - 12, textWidth, 24, 12);
+      ctx.strokeStyle = idx === peakIndex ? "rgba(37, 99, 235, 0.34)" : "rgba(100, 116, 139, 0.18)";
+      ctx.strokeRect(labelX, labelY - 12, textWidth, 24);
+      ctx.fillStyle = idx === peakIndex ? "#1d4ed8" : "#0f172a";
+      ctx.fillText(label, labelCenterX, labelY);
     });
 
-    ctx.fillStyle = "#64748b";
+    ctx.font = "700 12px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.fillStyle = "#475569";
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-    const labelEvery = Math.max(1, Math.ceil(trend.dailyData.length / 6));
+    const labelEvery = Math.max(1, Math.ceil(trend.dailyData.length / (width < 430 ? 5 : 7)));
     trend.dailyData.forEach((point, idx) => {
-      if (idx % labelEvery !== 0 && idx !== trend.dailyData.length - 1) return;
+      if (idx % labelEvery !== 0 && idx !== trend.dailyData.length - 1 && idx !== peakIndex) return;
       const x = padding.left + idx * stepX;
-      ctx.fillText(shortDateLabel(point.date), x, padding.top + chartH + 12);
+      ctx.fillText(shortDateLabel(point.date), x, padding.top + chartH + 18);
     });
     renderOutboundTrendDiagnostics();
   } catch (error) {
@@ -5686,6 +6106,7 @@ function renderInventoryItemOrderTrend() {
       empty.textContent = "출고 기록을 불러오지 못했습니다.";
     }
     if (summary) summary.innerHTML = "";
+    if (breakdown) breakdown.innerHTML = `<span class="muted">오류 확인 필요</span>`;
     if (list) list.innerHTML = `<span class="muted">오류 확인 필요</span>`;
     renderOutboundTrendDiagnostics();
   }
@@ -5802,14 +6223,151 @@ function buildOutboundDiagnosticsText() {
   return JSON.stringify(payload, null, 2);
 }
 
+
+function outboundDiagNumber(value, suffix = "") {
+  const num = Number(value || 0);
+  return `${Number.isFinite(num) ? num.toLocaleString() : "0"}${suffix}`;
+}
+
+function outboundDiagText(value, fallback = "없음") {
+  if (value == null || value === "") return fallback;
+  if (Array.isArray(value)) return value.length ? value.join(", ") : fallback;
+  if (typeof value === "object") return Object.keys(value).length ? JSON.stringify(value) : fallback;
+  return String(value);
+}
+
+function outboundDiagVariantByCount(count, zeroVariant = "quiet") {
+  return Number(count || 0) > 0 ? "warn" : zeroVariant;
+}
+
+function outboundDiagRenderVariant(diag) {
+  if (diag.lastError || String(diag.renderStatus || "").includes("error")) return "danger";
+  if (String(diag.renderStatus || "").includes("rendered")) return "success";
+  if (String(diag.renderStatus || "").includes("skipped")) return "warn";
+  return "info";
+}
+
+function outboundDiagDateVariant(basis = "") {
+  if (basis === "actualOutboundDate") return "success";
+  if (basis === "processingDate" || basis === "mixed" || basis === "recordDate" || basis === "recordedAt") return "warn";
+  if (basis === "ambiguousDate" || basis === "missing") return "danger";
+  return "info";
+}
+
+function outboundDiagCard(title, value, meta = "", variant = "neutral") {
+  return `
+    <article class="outbound-diagnostic-kpi is-${escapeHtml(variant)}">
+      <span class="outbound-diagnostic-kpi-label">${escapeHtml(title)}</span>
+      <strong>${escapeHtml(value)}</strong>
+      ${meta ? `<em>${escapeHtml(meta)}</em>` : ""}
+    </article>
+  `;
+}
+
+function outboundDiagPill(label, value = "", variant = "neutral") {
+  const text = value === "" || value == null ? label : `${label} ${value}`;
+  return `<span class="outbound-diagnostic-pill is-${escapeHtml(variant)}">${escapeHtml(text)}</span>`;
+}
+
+function outboundDiagPillsFromArray(items, variant = "neutral", emptyText = "없음") {
+  if (!Array.isArray(items) || !items.length) return outboundDiagPill(emptyText, "", "quiet");
+  return items.map((item) => outboundDiagPill(String(item), "", variant)).join("");
+}
+
+function outboundDiagPillsFromMap(map, zeroText = "없음", activeVariant = "warn") {
+  const entries = Object.entries(map || {});
+  if (!entries.length) return outboundDiagPill(zeroText, "", "quiet");
+  return entries.map(([key, raw]) => {
+    const value = typeof raw === "object" && raw !== null
+      ? `${outboundDiagNumber(raw.count || 0)}건 · ${outboundDiagNumber(raw.units || raw.value || 0)}개`
+      : outboundDiagNumber(raw || 0);
+    const variant = Number(typeof raw === "object" && raw !== null ? raw.count || raw.units || 0 : raw || 0) > 0 ? activeVariant : "quiet";
+    return outboundDiagPill(key, value, variant);
+  }).join("");
+}
+
+function outboundDiagSimpleRows(rows) {
+  return rows.map(([label, value, variant = "neutral"]) => `
+    <div class="outbound-diagnostic-row is-${escapeHtml(variant)}">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+    </div>
+  `).join("");
+}
+
+function outboundDiagSampleTitle(item) {
+  if (!item || typeof item !== "object") return String(item ?? "-");
+  const parts = [];
+  if (item.date) parts.push(item.date);
+  if (item.sku) parts.push(item.sku);
+  if (item.units != null) parts.push(`${outboundDiagNumber(item.units)}개`);
+  if (item.source) parts.push(item.source);
+  if (item.reason) parts.push(item.reason);
+  if (item.dateFieldUsed) parts.push(`필드:${item.dateFieldUsed}`);
+  if (item.basis || item.dateBasis) parts.push(`기준:${item.basis || item.dateBasis}`);
+  return parts.filter(Boolean).join(" · ") || JSON.stringify(item);
+}
+
+function outboundDiagSampleRows(items, limit = 3) {
+  if (!Array.isArray(items) || !items.length) return '<p class="outbound-diagnostic-empty">샘플 없음</p>';
+  return items.slice(0, limit).map((item) => `
+    <li>
+      <span>${escapeHtml(outboundDiagSampleTitle(item))}</span>
+      <code>${escapeHtml(JSON.stringify(item))}</code>
+    </li>
+  `).join("");
+}
+
+function outboundDiagSummary(title, meta = "", desc = "") {
+  const metaHtml = meta ? `<span class="outbound-diagnostic-summary-count">${escapeHtml(String(meta))}</span>` : "";
+  const descHtml = desc ? `<span class="outbound-diagnostic-summary-desc">${escapeHtml(String(desc))}</span>` : "";
+  return `
+    <summary class="outbound-diagnostic-summary">
+      <span class="outbound-diagnostic-summary-main">
+        <span class="outbound-diagnostic-summary-title">${escapeHtml(String(title || "상세 보기"))}</span>
+        ${descHtml}
+      </span>
+      <span class="outbound-diagnostic-summary-side">
+        ${metaHtml}
+        <span class="outbound-diagnostic-summary-chevron" aria-hidden="true"></span>
+      </span>
+    </summary>
+  `;
+}
+
+function outboundDiagDetails(title, items, limit = 3, open = false) {
+  const count = Array.isArray(items) ? items.length : 0;
+  return `
+    <details class="outbound-diagnostic-details" ${open ? "open" : ""}>
+      ${outboundDiagSummary(title, outboundDiagNumber(count, "건"), "샘플 상세") }
+      <ul class="outbound-diagnostic-sample-list">${outboundDiagSampleRows(items, limit)}</ul>
+    </details>
+  `;
+}
+
+function outboundDiagJsonDetails(title, payload, open = false) {
+  return `
+    <details class="outbound-diagnostic-json" ${open ? "open" : ""}>
+      ${outboundDiagSummary(title, "", "원본 데이터") }
+      <pre>${escapeHtml(typeof payload === "string" ? payload : JSON.stringify(payload || {}, null, 2))}</pre>
+    </details>
+  `;
+}
+
 function renderOutboundTrendDiagnostics() {
   const body = $("outboundDiagnosticsBody");
   if (!body) return;
-  const diag = outboundTrendDiagnostics;
-  const reasonRows = Object.entries(diag.excludedReasons || {})
-    .filter(([, count]) => count > 0)
-    .map(([reason, count]) => `<span class="diagnostic-pill">${escapeHtml(reason)} ${Number(count).toLocaleString()}</span>`)
-    .join("") || '<span class="muted">제외 사유 없음</span>';
+  const diag = outboundTrendDiagnostics || createEmptyOutboundTrendDiagnostics();
+  const renderVariant = outboundDiagRenderVariant(diag);
+  const collectVariant = diag.collectionStatus === "collected" ? "success" : (diag.collectionStatus === "not-started" ? "warn" : "info");
+  const localVariant = diag.localStorageAvailable ? "success" : "warn";
+  const errorVariant = diag.lastError ? "danger" : "success";
+  const dateVariant = outboundDiagDateVariant(diag.trendDateBasis);
+  const rawJson = buildOutboundDiagnosticsText();
+  const excludedReasons = diag.excludedReasons || {};
+  const reasonPills = Object.entries(excludedReasons).map(([reason, count]) => (
+    outboundDiagPill(reason, outboundDiagNumber(count), Number(count || 0) > 0 ? "warn" : "quiet")
+  )).join("") || outboundDiagPill("제외 사유 없음", "", "quiet");
   const keyRows = (diag.keySummaries || []).slice(0, 18).map((summary) => `
     <tr>
       <td>${escapeHtml(summary.key || "-")}</td>
@@ -5818,97 +6376,170 @@ function renderOutboundTrendDiagnostics() {
       <td>${escapeHtml(summary.error || "")}</td>
     </tr>
   `).join("") || '<tr><td colspan="4" class="muted">발견된 관련 키가 없습니다.</td></tr>';
+
   body.innerHTML = `
-    <div class="diagnostic-grid">
-      <div><strong>렌더링 상태</strong><span>${escapeHtml(diag.renderStatus || "-")}</span></div>
-      <div><strong>수집 상태</strong><span>${escapeHtml(diag.collectionStatus || "-")}</span></div>
-      <div><strong>함수 호출</strong><span>${escapeHtml(`render:${!!diag.functionCalled?.render} / collect:${!!diag.functionCalled?.collect} / stockout:${!!diag.functionCalled?.stockout} / trend:${!!diag.functionCalled?.trend}`)}</span></div>
-      <div><strong>선택 품목</strong><span>${escapeHtml(diag.currentSku || diag.selectedSku || "없음")}</span></div>
-      <div><strong>상세창</strong><span>${diag.detailOverlayOpen ? "열림" : "닫힘/확인 필요"}</span></div>
-      <div><strong>localStorage</strong><span>${diag.localStorageAvailable ? "사용 가능" : "확인 필요"}</span></div>
-      <div><strong>출고 후보</strong><span>${Number(diag.outboundCandidateCount || 0).toLocaleString()}건</span></div>
-      <div><strong>최근 30일</strong><span>${Number(diag.recentOutboundCount || 0).toLocaleString()}건</span></div>
-      <div><strong>선택 후보</strong><span>${Number(diag.selectedSkuCandidateCount || 0).toLocaleString()}건</span></div>
-      <div><strong>선택 매칭</strong><span>${Number(diag.selectedSkuMatchedCount || 0).toLocaleString()}건 / 최근 ${Number(diag.selectedSkuRecentCount || 0).toLocaleString()}건</span></div>
-      <div><strong>선택 단계</strong><span>이름 ${Number(diag.selectedSkuNameMatchedBeforeFilter || 0).toLocaleString()} / 유형 ${Number(diag.selectedSkuTypeAcceptedCount || 0).toLocaleString()} / 수량 ${Number(diag.selectedSkuQuantityAcceptedCount || 0).toLocaleString()} / 날짜 ${Number(diag.selectedSkuDateAcceptedCount || 0).toLocaleString()} / dedupe전 ${Number(diag.selectedSkuAcceptedBeforeDedupe || 0).toLocaleString()} / dedupe후 ${Number(diag.selectedSkuAcceptedAfterDedupe || 0).toLocaleString()}</span></div>
-      <div><strong>선택 제외</strong><span>이름 ${Number(diag.selectedSkuExcludedNameMismatch || 0).toLocaleString()} / 날짜 ${Number(diag.selectedSkuExcludedNoDate || 0).toLocaleString()} / 수량 ${Number(diag.selectedSkuExcludedNoQuantity || 0).toLocaleString()} / 유형 ${Number(diag.selectedSkuExcludedType || 0).toLocaleString()} / 중복 ${Number(diag.selectedSkuExcludedDuplicate || 0).toLocaleString()} / 기간외 ${Number(diag.selectedSkuExcludedOldRecord || 0).toLocaleString()}</span></div>
-      <div><strong>선택 출처</strong><span>원본 ${Number(diag.selectedSkuPrimarySourceCount || 0).toLocaleString()} / 백업 ${Number(diag.selectedSkuBackupSourceCount || 0).toLocaleString()} / undo ${Number(diag.selectedSkuUndoSourceCount || 0).toLocaleString()}</span></div>
-      <div><strong>선택 deductions</strong><span>${Number(diag.selectedSkuDeductionCount || 0).toLocaleString()}개 / ${Number(diag.selectedSkuDeductionRecordCount || 0).toLocaleString()}건</span></div>
-      <div><strong>선택 boxUsages</strong><span>${Number(diag.selectedSkuBoxUsageCount || 0).toLocaleString()}개 / ${Number(diag.selectedSkuBoxUsageRecordCount || 0).toLocaleString()}건</span></div>
-      <div><strong>현재 재고 읽기</strong><span>${diag.stockRead ? "성공" : "확인 필요"}</span></div>
-      <div><strong>선택 재고</strong><span>${Number(diag.selectedStockUnits || 0).toLocaleString()}개</span></div>
-      <div><strong>전체 재고 합계</strong><span>${Number(diag.totalStockUnitsAll || 0).toLocaleString()}개</span></div>
-      <div><strong>일평균 출고</strong><span>${Math.round(diag.averageDailyOutbound || 0).toLocaleString()}개/일</span></div>
-      <div><strong>중복 제외</strong><span>${Number(diag.duplicateExcludedCount || 0).toLocaleString()}건</span></div>
-      <div><strong>파싱 실패 키</strong><span>${Number(diag.parseFailedKeys || 0).toLocaleString()}개</span></div>
-      <div><strong>at 날짜</strong><span>${Number(diag.atFieldDetectedCount || 0).toLocaleString()} 감지 / ${Number(diag.atParsedSuccessCount || 0).toLocaleString()} 성공 / ${Number(diag.atParseFailedCount || 0).toLocaleString()} 실패</span></div>
-      <div><strong>날짜 기준</strong><span>${escapeHtml(diag.trendDateSource || getTrendBasisNotice())}</span></div>
-      <div><strong>계산 출처</strong><span>${escapeHtml((diag.outboundTrendCalculationSources || []).join(", ") || "현재 유효 history 없음")}</span></div>
-      <div><strong>진단 전용 출처</strong><span>${escapeHtml((diag.outboundTrendDiagnosticOnlySources || []).join(", ") || "없음")}</span></div>
-      <div><strong>계산/진단 건수</strong><span>계산 ${Number(diag.calculationRecordCount || 0).toLocaleString()} / 진단전용 ${Number(diag.diagnosticOnlyRecordCount || 0).toLocaleString()} / 백업·undo 제외 ${Number(diag.backupUndoExcludedCount || 0).toLocaleString()} / 마지막분석 제외 ${Number(diag.lastAnalysisExcludedCount || 0).toLocaleString()}</span></div>
-      <div><strong>오늘 집계</strong><span>${Number(diag.todayOutboundTotal || 0).toLocaleString()}개 / ${Number(diag.todayOutboundRecordCount || 0).toLocaleString()}건 · 계산포함 ${Number(diag.todayIncludedActiveHistoryUnits || 0).toLocaleString()}개</span></div>
-      <div><strong>오늘 제외 수량</strong><span>backup ${Number(diag.todayExcludedBackupUnits || 0).toLocaleString()} / undo ${Number(diag.todayExcludedUndoUnits || 0).toLocaleString()} / lastAnalysis ${Number(diag.todayExcludedLastAnalysisUnits || 0).toLocaleString()}</span></div>
-      <div><strong>날짜 그룹</strong><span>실제 ${Number(diag.recordsGroupedByActualOutboundDateCount || 0).toLocaleString()} / 처리 ${Number(diag.recordsGroupedByProcessingDateCount || 0).toLocaleString()} / 확인필요 ${Number(diag.dateAmbiguousRecordCount || 0).toLocaleString()}</span></div>
-      <div><strong>재고 사유</strong><span>${escapeHtml(diag.stockReadFailureReason || "없음")}</span></div>
-      <div><strong>localStorage 사유</strong><span>${escapeHtml(diag.localStorageFailureReason || "없음")}</span></div>
-      <div><strong>렌더 건너뜀 사유</strong><span>${escapeHtml(diag.renderSkipReason || "없음")}</span></div>
+    <div class="outbound-diagnostic-shell">
+      <div class="outbound-diagnostic-toolbar">
+        <div>
+          <span class="outbound-diagnostic-eyebrow">Admin diagnostic dashboard</span>
+          <h3>출고 데이터 진단 요약</h3>
+          <p>${escapeHtml(getOutboundSourceScopeNotice ? getOutboundSourceScopeNotice() : "현재 유효 기록 기준으로 진단합니다.")}</p>
+        </div>
+        <div class="outbound-diagnostic-actions">
+          <button type="button" class="outbound-diagnostic-copy" onclick="copyOutboundTrendDiagnostics()">진단 JSON 복사</button>
+        </div>
+      </div>
+
+      <section class="outbound-diagnostic-kpi-grid" aria-label="출고 데이터 진단 핵심 요약">
+        ${outboundDiagCard("렌더 상태", outboundDiagText(diag.renderStatus), diag.lastError ? "오류 확인 필요" : "화면 렌더 흐름", renderVariant)}
+        ${outboundDiagCard("수집 상태", outboundDiagText(diag.collectionStatus), `collect:${!!diag.functionCalled?.collect} · trend:${!!diag.functionCalled?.trend}`, collectVariant)}
+        ${outboundDiagCard("계산 기록", outboundDiagNumber(diag.calculationRecordCount, "건"), `후보 ${outboundDiagNumber(diag.outboundCandidateCount, "건")}`, "info")}
+        ${outboundDiagCard("진단 제외", outboundDiagNumber(diag.diagnosticOnlyRecordCount, "건"), `backup/undo ${outboundDiagNumber(diag.backupUndoExcludedCount, "건")}`, Number(diag.diagnosticOnlyRecordCount || 0) ? "warn" : "quiet")}
+        ${outboundDiagCard("오늘 집계", outboundDiagNumber(diag.todayOutboundTotal, "개"), `${outboundDiagNumber(diag.todayOutboundRecordCount, "건")} · 계산포함 ${outboundDiagNumber(diag.todayIncludedActiveHistoryUnits, "개")}`, Number(diag.todayOutboundTotal || 0) ? "warn" : "success")}
+        ${outboundDiagCard("선택 품목", outboundDiagText(diag.currentSku || diag.selectedSku, "선택 없음"), `재고 ${outboundDiagNumber(diag.selectedStockUnits, "개")}`, "neutral")}
+        ${outboundDiagCard("localStorage", diag.localStorageAvailable ? "사용 가능" : "확인 필요", outboundDiagText(diag.localStorageFailureReason, "정상"), localVariant)}
+        ${outboundDiagCard("lastError", diag.lastError ? "오류 있음" : "오류 없음", diag.lastError ? String(diag.lastError).slice(0, 70) : "record 단위 오류 없음", errorVariant)}
+      </section>
+
+      <section class="outbound-diagnostic-card-grid">
+        <article class="outbound-diagnostic-card is-featured">
+          <div class="outbound-diagnostic-card-head">
+            <div>
+              <span>Selected SKU</span>
+              <h4>선택 품목 진단</h4>
+            </div>
+            ${outboundDiagPill(diag.selectedSkuRecentCount > 0 ? "최근 출고 있음" : "최근 출고 없음", outboundDiagNumber(diag.selectedSkuRecentCount, "건"), diag.selectedSkuRecentCount > 0 ? "success" : "warn")}
+          </div>
+          <div class="outbound-diagnostic-row-grid">
+            ${outboundDiagSimpleRows([
+              ["품목", outboundDiagText(diag.currentSku || diag.selectedSku, "없음"), "neutral"],
+              ["현재 재고", outboundDiagNumber(diag.selectedStockUnits, "개"), "info"],
+              ["최근 30일", outboundDiagNumber(diag.selectedSkuRecentCount, "건"), Number(diag.selectedSkuRecentCount || 0) ? "success" : "warn"],
+              ["dedupe 후", outboundDiagNumber(diag.selectedSkuAcceptedAfterDedupe, "건"), Number(diag.selectedSkuAcceptedAfterDedupe || 0) ? "success" : "warn"],
+              ["중복 제외", outboundDiagNumber(diag.selectedSkuDuplicateExcludedCount, "건"), Number(diag.selectedSkuDuplicateExcludedCount || 0) ? "warn" : "quiet"],
+              ["deductions", `${outboundDiagNumber(diag.selectedSkuDeductionCount, "개")} / ${outboundDiagNumber(diag.selectedSkuDeductionRecordCount, "건")}`, Number(diag.selectedSkuDeductionRecordCount || 0) ? "info" : "quiet"],
+            ])}
+          </div>
+          <div class="outbound-diagnostic-message is-${escapeHtml(diag.selectedSkuDisplayReason ? "info" : "quiet")}">${escapeHtml(diag.selectedSkuDisplayReason || diag.selectedSkuDiagnosticNote || getSelectedSkuNoDataMessage(diag.currentSku || diag.selectedSku || ""))}</div>
+          ${outboundDiagJsonDetails("일자별 집계 보기", diag.selectedSkuDailyBreakdown || [])}
+          ${outboundDiagDetails("최종 집계 샘플", diag.selectedSkuFinalAcceptedSamples || [], 3)}
+          ${outboundDiagDetails("대표 기록 샘플", diag.selectedSkuDedupeRepresentativeSamples || [], 3)}
+          ${outboundDiagDetails("중복 제외 샘플", diag.selectedSkuDuplicateSamples || [], 3)}
+        </article>
+
+        <article class="outbound-diagnostic-card">
+          <div class="outbound-diagnostic-card-head">
+            <div>
+              <span>Sources</span>
+              <h4>소스별 기여도</h4>
+            </div>
+            ${outboundDiagPill("계산/진단", `${outboundDiagNumber(diag.calculationRecordCount)} / ${outboundDiagNumber(diag.diagnosticOnlyRecordCount)}`, "info")}
+          </div>
+          <h5>계산 포함 소스</h5>
+          <div class="outbound-diagnostic-pill-row">${outboundDiagPillsFromArray(diag.outboundTrendCalculationSources, "success", "계산 포함 소스 없음")}</div>
+          <h5>진단 전용 · 계산 제외</h5>
+          <div class="outbound-diagnostic-pill-row">${outboundDiagPillsFromArray(diag.excludedDiagnosticSources || diag.outboundTrendDiagnosticOnlySources, "warn", "진단 전용 소스 없음")}</div>
+          <div class="outbound-diagnostic-row-grid compact">
+            ${outboundDiagSimpleRows([
+              ["오늘 포함", outboundDiagNumber(diag.todayIncludedActiveHistoryUnits, "개"), Number(diag.todayIncludedActiveHistoryUnits || 0) ? "success" : "quiet"],
+              ["backup 제외", outboundDiagNumber(diag.todayExcludedBackupUnits, "개"), Number(diag.todayExcludedBackupUnits || 0) ? "warn" : "quiet"],
+              ["undo 제외", outboundDiagNumber(diag.todayExcludedUndoUnits, "개"), Number(diag.todayExcludedUndoUnits || 0) ? "warn" : "quiet"],
+              ["lastAnalysis 제외", outboundDiagNumber(diag.todayExcludedLastAnalysisUnits, "개"), Number(diag.todayExcludedLastAnalysisUnits || 0) ? "warn" : "quiet"],
+            ])}
+          </div>
+          ${outboundDiagJsonDetails("오늘 소스별 수량", diag.todayOutboundBySource || {})}
+          ${outboundDiagJsonDetails("선택 SKU 계산 소스", diag.selectedSkuCalculationSourceBreakdown || {})}
+          ${outboundDiagJsonDetails("선택 SKU 진단전용 소스", diag.selectedSkuDiagnosticSourceBreakdown || {})}
+          ${outboundDiagDetails("오늘 소스 샘플", diag.todaySourceContributionSamples || [], 3)}
+          ${outboundDiagDetails("소스 기여 샘플", diag.sourceContributionSamples || [], 3)}
+        </article>
+
+        <article class="outbound-diagnostic-card">
+          <div class="outbound-diagnostic-card-head">
+            <div>
+              <span>Date basis</span>
+              <h4>날짜 기준</h4>
+            </div>
+            ${outboundDiagPill(normalizeTrendDateBasisLabel ? normalizeTrendDateBasisLabel(diag.trendDateBasis) : outboundDiagText(diag.trendDateBasis), "", dateVariant)}
+          </div>
+          <div class="outbound-diagnostic-message is-${escapeHtml(dateVariant)}">${escapeHtml(diag.trendDateSource || getTrendBasisNotice())}</div>
+          <div class="outbound-diagnostic-row-grid compact">
+            ${outboundDiagSimpleRows([
+              ["날짜 필드", outboundDiagText(diag.trendDateFieldUsed, "확인 필요"), dateVariant],
+              ["실제 출고일 그룹", outboundDiagNumber(diag.recordsGroupedByActualOutboundDateCount, "건"), Number(diag.recordsGroupedByActualOutboundDateCount || 0) ? "success" : "quiet"],
+              ["처리일 그룹", outboundDiagNumber(diag.recordsGroupedByProcessingDateCount, "건"), Number(diag.recordsGroupedByProcessingDateCount || 0) ? "warn" : "quiet"],
+              ["날짜 확인 필요", outboundDiagNumber(diag.dateAmbiguousRecordCount, "건"), Number(diag.dateAmbiguousRecordCount || 0) ? "danger" : "quiet"],
+            ])}
+          </div>
+          ${outboundDiagJsonDetails("선택 SKU 날짜 필드", diag.selectedSkuDateFieldCounts || {})}
+          ${outboundDiagJsonDetails("선택 SKU 날짜 기준 분포", diag.selectedSkuDateBasisCounts || {})}
+          ${outboundDiagDetails("오늘 집계 샘플", diag.todayOutboundSamples || [], 3)}
+          ${outboundDiagDetails("날짜 확인 필요 샘플", diag.dateAmbiguousSamples || [], 3)}
+        </article>
+
+        <article class="outbound-diagnostic-card">
+          <div class="outbound-diagnostic-card-head">
+            <div>
+              <span>Excluded</span>
+              <h4>제외 사유</h4>
+            </div>
+            ${outboundDiagPill("중복 제외", outboundDiagNumber(diag.duplicateExcludedCount, "건"), Number(diag.duplicateExcludedCount || 0) ? "warn" : "quiet")}
+          </div>
+          <div class="outbound-diagnostic-pill-row">${reasonPills}</div>
+          <div class="outbound-diagnostic-row-grid compact">
+            ${outboundDiagSimpleRows([
+              ["선택 이름 불일치", outboundDiagNumber(diag.selectedSkuExcludedNameMismatch, "건"), outboundDiagVariantByCount(diag.selectedSkuExcludedNameMismatch)],
+              ["선택 날짜 없음", outboundDiagNumber(diag.selectedSkuExcludedNoDate, "건"), outboundDiagVariantByCount(diag.selectedSkuExcludedNoDate)],
+              ["선택 수량 없음", outboundDiagNumber(diag.selectedSkuExcludedNoQuantity, "건"), outboundDiagVariantByCount(diag.selectedSkuExcludedNoQuantity)],
+              ["선택 유형 제외", outboundDiagNumber(diag.selectedSkuExcludedType, "건"), outboundDiagVariantByCount(diag.selectedSkuExcludedType)],
+              ["선택 중복 제외", outboundDiagNumber(diag.selectedSkuExcludedDuplicate, "건"), outboundDiagVariantByCount(diag.selectedSkuExcludedDuplicate)],
+              ["record 오류", outboundDiagNumber((diag.recordErrors || []).length, "건"), (diag.recordErrors || []).length ? "danger" : "success"],
+            ])}
+          </div>
+          ${outboundDiagDetails("유형 제외 샘플", diag.selectedSkuRejectedByTypeSamples || [], 3)}
+          ${outboundDiagDetails("날짜 제외 샘플", diag.selectedSkuRejectedByDateSamples || [], 3)}
+          ${outboundDiagDetails("수량 제외 샘플", diag.selectedSkuRejectedByQuantitySamples || [], 3)}
+          ${outboundDiagDetails("record 오류", diag.recordErrors || [], 3)}
+        </article>
+      </section>
+
+      <section class="outbound-diagnostic-accordion">
+        <details class="outbound-diagnostic-json">
+          ${outboundDiagSummary("발견 필드명", outboundDiagNumber((diag.candidateFields || []).length, "개"), "record 필드 목록")}
+          <div class="outbound-diagnostic-pill-row">${outboundDiagPillsFromArray((diag.candidateFields || []).slice(0, 80), "neutral", "확인된 필드 없음")}</div>
+        </details>
+        <details class="outbound-diagnostic-json">
+          ${outboundDiagSummary("읽은 데이터 출처", outboundDiagNumber((diag.dataSourcesRead || []).length, "개"), "수집된 후보 소스")}
+          <div class="outbound-diagnostic-pill-row">${outboundDiagPillsFromArray(diag.dataSourcesRead || [], "neutral", "읽은 데이터 출처 없음")}</div>
+        </details>
+        <details class="outbound-diagnostic-json">
+          ${outboundDiagSummary("관련 저장 키", outboundDiagNumber((diag.keySummaries || []).length, "개"), "localStorage/state 요약")}
+          <div class="diagnostic-table-wrap">
+            <table class="diagnostic-table">
+              <thead><tr><th>키</th><th>타입</th><th>개수/요약</th><th>오류</th></tr></thead>
+              <tbody>${keyRows}</tbody>
+            </table>
+          </div>
+        </details>
+        <details class="outbound-diagnostic-json">
+          ${outboundDiagSummary("마지막 오류 / 사유", diag.lastError ? "오류" : "정상", "렌더·재고·localStorage 상태")}
+          <pre>${escapeHtml(diag.lastError || "오류 없음")}</pre>
+          <div class="outbound-diagnostic-row-grid compact">
+            ${outboundDiagSimpleRows([
+              ["재고 사유", outboundDiagText(diag.stockReadFailureReason, "없음"), diag.stockRead ? "success" : "warn"],
+              ["localStorage 사유", outboundDiagText(diag.localStorageFailureReason, "없음"), diag.localStorageAvailable ? "success" : "warn"],
+              ["렌더 건너뜀", outboundDiagText(diag.renderSkipReason, "없음"), diag.renderSkipReason ? "warn" : "success"],
+              ["파싱 실패 키", outboundDiagNumber(diag.parseFailedKeys, "개"), Number(diag.parseFailedKeys || 0) ? "warn" : "success"],
+            ])}
+          </div>
+        </details>
+        <details class="outbound-diagnostic-json">
+          ${outboundDiagSummary("원본 JSON 보기", "JSON", "복사되는 진단 원문")}
+          <pre>${escapeHtml(rawJson)}</pre>
+        </details>
+      </section>
+      <p class="outbound-diagnostic-note">${escapeHtml(diag.note || "")}</p>
     </div>
-    <div class="diagnostic-section">
-      <strong>제외 사유</strong>
-      <div class="diagnostic-pill-row">${reasonRows}</div>
-    </div>
-    <div class="diagnostic-section">
-      <strong>선택 품목 진단</strong>
-      <p class="muted">${escapeHtml(diag.selectedSkuDiagnosticNote || getSelectedSkuNoDataMessage(diag.currentSku || diag.selectedSku || ""))}</p>
-      <p class="muted">표시 사유: ${escapeHtml(diag.selectedSkuDisplayReason || getSelectedSkuNoDataMessage(diag.currentSku || diag.selectedSku || ""))}</p>
-      <p class="muted">중복 기준: ${escapeHtml(diag.selectedSkuDedupeStrategy || "확인 필요")}</p>
-      <p class="muted">유사 후보: ${escapeHtml((diag.selectedSkuPossibleNameMatches || []).map((item) => `${item.name}(${item.source})`).join(", ") || "없음")}</p>
-      <p class="muted">매칭 샘플: ${escapeHtml((diag.selectedSkuRecordSamples || []).map((item) => `${item.reason}:${item.sku || "-"}:${item.units || 0}`).join(" / ") || "없음")}</p>
-      <p class="muted">대표 샘플: ${escapeHtml((diag.selectedSkuDedupeRepresentativeSamples || []).map((item) => `${item.reason}:${item.sku || "-"}:${item.units || 0}:${item.source || "-"}`).join(" / ") || "없음")}</p>
-      <p class="muted">최종 집계 샘플: ${escapeHtml((diag.selectedSkuFinalAcceptedSamples || []).map((item) => `${item.reason}:${item.sku || "-"}:${item.units || 0}`).join(" / ") || "없음")}</p>
-      <p class="muted">중복 샘플: ${escapeHtml((diag.selectedSkuDuplicateSamples || []).map((item) => `${item.reason}:${item.sku || "-"}:${item.units || 0}:${item.source || "-"}`).join(" / ") || "없음")}</p>
-      <p class="muted">제외 샘플: ${escapeHtml((diag.selectedSkuExcludedSamples || []).map((item) => `${item.reason}:${item.sku || "-"}:${item.units || 0}`).join(" / ") || "없음")}</p>
-    </div>
-    <div class="diagnostic-section">
-      <strong>날짜 기준 진단</strong>
-      <p class="muted">기준: ${escapeHtml(`${diag.trendDateSource || getTrendBasisNotice()} · ${getOutboundSourceScopeNotice()}`)}</p>
-      <p class="muted">날짜 필드: ${escapeHtml(JSON.stringify(diag.selectedSkuDateFieldCounts || {}))}</p>
-      <p class="muted">날짜 기준 분포: ${escapeHtml(JSON.stringify(diag.selectedSkuDateBasisCounts || {}))}</p>
-      <p class="muted">오늘 집계 샘플: ${escapeHtml((diag.todayOutboundSamples || []).map((item) => `${item.date}:${item.units}:${item.field}:${item.basis}:${item.source}`).join(" / ") || "없음")}</p>
-      <p class="muted">일자별 집계: ${escapeHtml((diag.selectedSkuDailyBreakdown || []).map((item) => `${item.date}:${item.units}`).join(" / ") || "없음")}</p>
-      <p class="muted">날짜 확인 필요 샘플: ${escapeHtml((diag.dateAmbiguousSamples || []).map((item) => `${item.date}:${item.units}:${item.field}:${item.source}`).join(" / ") || "없음")}</p>
-    </div>
-    <div class="diagnostic-section">
-      <strong>계산 소스 분리 진단</strong>
-      <p class="muted">계산용: ${escapeHtml((diag.outboundTrendCalculationSources || []).join(", ") || "없음")}</p>
-      <p class="muted">진단용 제외: ${escapeHtml((diag.excludedDiagnosticSources || []).join(", ") || "없음")}</p>
-      <p class="muted">오늘 소스별 수량: ${escapeHtml(JSON.stringify(diag.todayOutboundBySource || {}))}</p>
-      <p class="muted">선택 SKU 계산 소스: ${escapeHtml(JSON.stringify(diag.selectedSkuCalculationSourceBreakdown || {}))}</p>
-      <p class="muted">선택 SKU 진단전용 소스: ${escapeHtml(JSON.stringify(diag.selectedSkuDiagnosticSourceBreakdown || {}))}</p>
-      <p class="muted">오늘 소스 샘플: ${escapeHtml((diag.todaySourceContributionSamples || []).map((item) => `${item.role}:${item.date}:${item.units}:${item.source}:${item.dateFieldUsed}`).join(" / ") || "없음")}</p>
-      <p class="muted">소스 샘플: ${escapeHtml((diag.sourceContributionSamples || []).map((item) => `${item.role}:${item.date}:${item.units}:${item.source}`).join(" / ") || "없음")}</p>
-    </div>
-    <div class="diagnostic-section">
-      <strong>발견 필드명</strong>
-      <p class="muted">${escapeHtml((diag.candidateFields || []).slice(0, 36).join(", ") || "확인된 필드 없음")}</p>
-    </div>
-    <div class="diagnostic-section">
-      <strong>읽은 데이터 출처</strong>
-      <p class="muted">${escapeHtml((diag.dataSourcesRead || []).join(", ") || "없음")}</p>
-    </div>
-    <div class="diagnostic-section">
-      <strong>마지막 오류</strong>
-      <pre class="diagnostic-error">${escapeHtml(diag.lastError || "오류 없음")}</pre>
-      <p class="muted">${escapeHtml((diag.recordErrors || []).map((item) => `${item.source}: ${item.error}`).join(" / ") || "record 단위 오류 없음")}</p>
-    </div>
-    <div class="diagnostic-section diagnostic-table-wrap">
-      <strong>관련 저장 키</strong>
-      <table class="diagnostic-table">
-        <thead><tr><th>키</th><th>타입</th><th>개수/요약</th><th>오류</th></tr></thead>
-        <tbody>${keyRows}</tbody>
-      </table>
-    </div>
-    <p class="muted diagnostic-note">${escapeHtml(diag.note || "")}</p>
   `;
 }
 
@@ -5925,6 +6556,15 @@ async function copyOutboundTrendDiagnostics() {
     renderInventoryItemOrderTrend();
   }
   const text = getOutboundTrendDiagnosticsCopy();
+  const buttons = Array.from(document.querySelectorAll("#copyOutboundDiagnosticsBtn, .outbound-diagnostic-copy"));
+  const originalLabels = buttons.map((button) => button.textContent);
+  const setCopyButtonState = (label, isError = false) => {
+    buttons.forEach((button) => {
+      button.textContent = label;
+      button.classList.toggle("is-copy-error", !!isError);
+      button.classList.toggle("is-copy-success", !isError && label.includes("완료"));
+    });
+  };
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);
@@ -5939,9 +6579,16 @@ async function copyOutboundTrendDiagnostics() {
       document.execCommand("copy");
       textarea.remove();
     }
-    alert("출고 데이터 진단 결과를 복사했습니다.");
+    setCopyButtonState("복사 완료");
   } catch (error) {
-    alert("진단 결과 복사에 실패했습니다. 브라우저 권한을 확인해주세요.");
+    setCopyButtonState("복사 실패", true);
+  } finally {
+    window.setTimeout(() => {
+      buttons.forEach((button, index) => {
+        button.textContent = originalLabels[index] || "진단 JSON 복사";
+        button.classList.remove("is-copy-error", "is-copy-success");
+      });
+    }, 1600);
   }
 }
 
@@ -5971,15 +6618,31 @@ function openInventoryItemDetail(sku) {
     ];
 
     body.innerHTML = `
-      <div class="inventory-detail-list">
-        ${rows.map(([label, value]) => `<div class="inventory-detail-line"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}
+      <div class="inventory-detail-overview">
+        <article class="inventory-detail-primary-card ${safety?.isLow ? "is-low" : "is-safe"}">
+          <span>현재 재고</span>
+          <strong>${escapeHtml(formatStock(sku, units))}</strong>
+          <em>${escapeHtml(number(units))}개 · ${escapeHtml(safety?.isLow ? "안전재고 주의" : "안전재고 정상")}</em>
+        </article>
+        <div class="inventory-detail-stat-grid">
+          <article><span>안전재고</span><strong>${escapeHtml(safety?.threshold ? safety.thresholdText : "미설정")}</strong></article>
+          <article><span>재고 상태</span><strong>${escapeHtml(safety?.isLow ? `부족 · ${stockPercentText(sku)}` : `정상 · ${stockPercentText(sku)}`)}</strong></article>
+          <article><span>낱개 원가</span><strong>${escapeHtml(Number.isFinite(unitCost) ? money(unitCost) : "원가 미입력")}</strong></article>
+          <article><span>재고 자산</span><strong>${escapeHtml(Number.isFinite(unitCost) ? money(units * unitCost) : "원가 미입력")}</strong></article>
+        </div>
       </div>
-      ${def.isBox ? `<p class="detail-note">박스 재고는 파렛/묶음/장 기준으로 직접 수정할 수 있습니다.</p>` : `<p class="detail-note">이 품목의 입고와 직접 출고는 입고/직접 출고 입력에서 여러 줄로 한 번에 적용할 수 있습니다.</p>`}
+      ${def.isBox ? `<p class="detail-note inventory-detail-note">박스 재고는 파렛/묶음/장 기준으로 직접 수정할 수 있습니다.</p>` : `<p class="detail-note inventory-detail-note">이 품목의 입고와 직접 출고는 입고/직접 출고 입력에서 여러 줄로 한 번에 적용할 수 있습니다.</p>`}
       <section class="sku-stockout-forecast-card empty" id="inventoryItemStockoutForecast">
         <div class="sku-stockout-forecast-main">
           <span>예상 소진일</span>
           <strong id="inventoryItemStockoutValue">계산 중</strong>
           <p id="inventoryItemStockoutNote">엑셀 주문 처리 기록을 기준으로 계산하고 있습니다.</p>
+        </div>
+        <div class="sku-stockout-forecast-metrics">
+          <div><span>최근 30일 총 출고</span><b id="inventoryItemTrendTotal">-</b></div>
+          <div><span>평균 출고량</span><b id="inventoryItemTrendAverage">-</b></div>
+          <div><span>출고 발생일</span><b id="inventoryItemTrendActiveDays">-</b></div>
+          <div><span>최근 출고일</span><b id="inventoryItemTrendLastDate">-</b></div>
         </div>
       </section>
       <section class="sku-order-trend-card" id="inventoryItemOrderTrend">
@@ -5987,17 +6650,22 @@ function openInventoryItemDetail(sku) {
           <div>
             <p class="eyebrow">ORDER OUT TREND</p>
             <strong>날짜별 순출고 추적</strong>
+            <small>현재 유효 재고 기록 기준 · backup/undo 제외</small>
           </div>
-          <span>최근 30일</span>
+          <span id="inventoryItemOrderTrendBasisBadge" class="sku-order-trend-basis is-info">기준 확인 중</span>
         </div>
         <p id="inventoryItemOrderTrendMeta" class="sku-order-trend-meta">출고 기록을 불러오는 중입니다.</p>
         <div class="sku-order-chart-stage">
-          <canvas id="inventoryItemOrderChart" height="260" aria-label="날짜별 순출고 그래프"></canvas>
+          <canvas id="inventoryItemOrderChart" class="sku-order-trend-chart" height="320" aria-label="날짜별 순출고 그래프"></canvas>
           <div id="inventoryItemOrderChartEmpty" class="detail-empty" hidden>엑셀 주문 차감 적용 이후 저장된 품목별 출고 기록이 아직 없습니다.</div>
         </div>
         <div id="inventoryItemOrderTrendSummary" class="sku-order-trend-summary"></div>
         <div class="sku-order-trend-recent">
-          <span>최근 순출고일</span>
+          <span>일자별 최근 출고</span>
+          <div id="inventoryItemOrderTrendBreakdown" class="sku-order-trend-breakdown"></div>
+        </div>
+        <div class="sku-order-trend-recent">
+          <span>최근 출고 기록</span>
           <div id="inventoryItemOrderTrendList" class="sku-order-trend-list"></div>
         </div>
       </section>

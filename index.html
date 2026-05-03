@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="64x64" href="./favicon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
-  <link rel="stylesheet" href="./style.css?v=reborn-outtrend-active-source-fix-09" />
+  <link rel="stylesheet" href="./style.css?v=reborn-inventory-detail-ui-readable-v18" />
 </head>
 <body>
   <div id="appLaunchSplash" class="app-launch-splash" aria-hidden="true">
@@ -234,6 +234,7 @@
           <div class="purchase-summary-list" id="purchaseSummaryList"></div>
           <div class="purchase-list" id="purchaseList"></div>
           <p class="empty-state" id="purchaseEmptyState">등록된 발주 항목이 없습니다.</p>
+          <div id="purchaseCompletedSection" class="purchase-completed-section"></div>
         </section>
 
         <section class="card return-adjust-card" id="returnAdjustmentCard" data-admin-only="true" hidden data-collapsible data-collapse-default="closed">
@@ -296,7 +297,15 @@
               <h2>재고 현황</h2>
               <p>입고 적용과 주문 차감 후 현재 남아있는 재고만 표시합니다.</p>
             </div>
-            <input id="inventorySearch" class="search-input" type="search" placeholder="품목 검색" />
+            <div class="inventory-search-panel" role="search" aria-label="재고 품목 검색">
+              <label class="inventory-search-label" for="inventorySearch">재고 품목 검색</label>
+              <div class="inventory-search-box">
+                <span class="inventory-search-icon" aria-hidden="true">⌕</span>
+                <input id="inventorySearch" class="search-input inventory-search-input" type="search" placeholder="예: 브이콘, 누룽지, 에낙" autocomplete="off" inputmode="search" />
+                <button type="button" class="inventory-search-clear" id="inventorySearchClear" aria-label="검색어 지우기" hidden>×</button>
+              </div>
+              <p class="inventory-search-meta" id="inventorySearchMeta" aria-live="polite"></p>
+            </div>
           </div>
           <div class="table-wrap tall">
             <table>
@@ -675,6 +684,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./script.js?v=reborn-outtrend-active-source-fix-09"></script>
+  <script src="./script.js?v=reborn-inventory-detail-ui-readable-v18"></script>
 </body>
 </html>
