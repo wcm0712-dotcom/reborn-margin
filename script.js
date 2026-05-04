@@ -466,6 +466,40 @@
     return Array.from(seen);
   }
 
+  function normalizePurchaseCompletedDisplayItem(item) {
+    if (typeof item === "string") {
+      const name = replaceLegacySkuText(item).trim();
+      return name ? { name, qtyText: "" } : null;
+    }
+    if (!item || typeof item !== "object") return null;
+    const rawName = item.name || item.productName || item.productKey || item.sku || item.title || item.label || "";
+    const name = replaceLegacySkuText(rawName).trim();
+    if (!name) return null;
+    const explicitQtyText = item.qtyText || item.quantityText || item.qtyLabel || item.quantityLabel || "";
+    let qtyText = String(explicitQtyText || "").trim();
+    if (!qtyText && (item.qty !== undefined || item.quantity !== undefined)) {
+      const qty = cleanNumber(item.qty ?? item.quantity);
+      const unit = String(item.unitLabel || item.unit || "").trim();
+      if (qty) qtyText = unit ? `${formatPurchaseQtyValue(qty)}${unit}` : formatPurchaseQtyValue(qty);
+    }
+    return { name, qtyText };
+  }
+
+  function normalizePurchaseCompletedDisplayItems(input) {
+    const values = Array.isArray(input) ? input : [];
+    const seen = new Set();
+    const result = [];
+    values.forEach((item) => {
+      const normalized = normalizePurchaseCompletedDisplayItem(item);
+      if (!normalized) return;
+      const key = `${normalized.name}__${normalized.qtyText}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      result.push(normalized);
+    });
+    return result;
+  }
+
   function normalizePurchaseCompletedRecord(record) {
     if (!record || typeof record !== "object") return null;
     const paymentAmount = cleanNumber(record.paymentAmount ?? record.amount ?? record.depositAmount ?? 0);
@@ -477,6 +511,11 @@
       : isValidPurchaseStableId(record.sourcePurchaseId)
         ? [String(record.sourcePurchaseId).trim()]
         : [];
+    const purchaseItems = normalizePurchaseCompletedDisplayItems(record.purchaseItems);
+    const productNames = normalizePurchaseCompletedDisplayItems(record.productNames)
+      .map((item) => item.name)
+      .filter(Boolean);
+    const fallbackProductNames = purchaseItems.map((item) => item.name).filter(Boolean);
     return {
       id: String(record.id || `purchase-completed-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
       paymentAmount,
@@ -484,6 +523,8 @@
       paymentDate,
       createdAt: record.createdAt || new Date().toISOString(),
       sourcePurchaseIds,
+      productNames: productNames.length ? productNames : fallbackProductNames,
+      purchaseItems,
       createdByRole: String(record.createdByRole || "admin")
     };
   }
@@ -2827,6 +2868,57 @@ function refreshActiveOrderAnalysisSummary() {
       </form>`;
   }
 
+  function createPurchaseCompletedDisplayItemsFromGroup(group) {
+    const items = Array.isArray(group?.items) ? group.items : [];
+    return normalizePurchaseCompletedDisplayItems(items.map((item) => ({
+      name: item.productKey || item.name,
+      qtyText: purchaseQtyLabel(item),
+    })));
+  }
+
+  function findPurchaseCompletedSourceGroup(record) {
+    const ids = new Set(Array.isArray(record?.sourcePurchaseIds) ? record.sourcePurchaseIds.filter(isValidPurchaseStableId) : []);
+    if (!ids.size) return null;
+    const items = Array.isArray(state.orderStatus) ? state.orderStatus.map(normalizePurchaseItem).filter(Boolean) : [];
+    const sections = buildPurchaseDateSections(items);
+    for (const section of sections) {
+      for (const group of section.groups || []) {
+        const stableId = getPurchaseGroupStableId(section.date, group);
+        if (ids.has(stableId)) return group;
+      }
+    }
+    return null;
+  }
+
+  function getPurchaseCompletedDisplayItems(record) {
+    const directItems = normalizePurchaseCompletedDisplayItems(record?.purchaseItems);
+    if (directItems.length) return directItems;
+    const productNameItems = normalizePurchaseCompletedDisplayItems(record?.productNames);
+    if (productNameItems.length) return productNameItems;
+    const sourceGroup = findPurchaseCompletedSourceGroup(record);
+    const sourceItems = createPurchaseCompletedDisplayItemsFromGroup(sourceGroup);
+    return sourceItems.length ? sourceItems : [];
+  }
+
+  function renderPurchaseCompletedProductNames(record) {
+    const items = getPurchaseCompletedDisplayItems(record);
+    const visibleItems = items.slice(0, 3);
+    const hiddenCount = Math.max(0, items.length - visibleItems.length);
+    const itemHtml = visibleItems.length
+      ? visibleItems.map((item) => `
+          <span class="purchase-completed-product-chip">
+            <strong>${escapeHtml(item.name)}</strong>
+            ${item.qtyText ? `<small>${escapeHtml(item.qtyText)}</small>` : ""}
+          </span>`).join("")
+      : `<span class="purchase-completed-product-chip is-missing"><strong>상품명 확인 필요</strong></span>`;
+    const moreHtml = hiddenCount ? `<span class="purchase-completed-product-more">외 ${number(hiddenCount)}개</span>` : "";
+    return `
+      <div class="purchase-completed-products">
+        <span class="purchase-completed-products-label">상품명</span>
+        <div class="purchase-completed-product-list">${itemHtml}${moreHtml}</div>
+      </div>`;
+  }
+
   function renderPurchaseCompletedRecords() {
     const root = $("purchaseCompletedSection");
     if (!root) return;
@@ -2839,8 +2931,11 @@ function refreshActiveOrderAnalysisSummary() {
     const recordCards = records
       .slice()
       .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
-      .map((record) => `
+      .map((record) => {
+        const productNamesHtml = renderPurchaseCompletedProductNames(record);
+        return `
         <article class="purchase-completed-record-card">
+          ${productNamesHtml}
           <div class="purchase-completed-record-main">
             <span class="purchase-completed-record-label">입금금액</span>
             <strong>${number(record.paymentAmount || record.amount || 0)}원</strong>
@@ -2855,7 +2950,8 @@ function refreshActiveOrderAnalysisSummary() {
             </div>
           ` : ""}
         </article>
-      `)
+      `;
+      })
       .join("");
 
     root.innerHTML = `
@@ -2983,6 +3079,7 @@ function refreshActiveOrderAnalysisSummary() {
     const match = findPurchaseGroupByCompleteKey(formKey);
     const stableInfo = match ? getPurchaseStableIdDiagnostics(match.section.date, match.group) : { stableId: "", label: "식별값 확인 필요", message: "발주 그룹을 다시 찾을 수 없습니다.", duplicateCount: 0 };
     const sourcePurchaseId = stableInfo.stableId || "";
+    const completedPurchaseItems = match ? createPurchaseCompletedDisplayItemsFromGroup(match.group) : [];
     const record = normalizePurchaseCompletedRecord({
       id: createPurchaseCompletedRecordId(sourcePurchaseId),
       amount: paymentAmount,
@@ -2992,6 +3089,8 @@ function refreshActiveOrderAnalysisSummary() {
       paidDate: paymentDate,
       sourcePurchaseId: sourcePurchaseId || null,
       sourcePurchaseIds: sourcePurchaseId ? [sourcePurchaseId] : [],
+      productNames: completedPurchaseItems.map((item) => item.name).filter(Boolean),
+      purchaseItems: completedPurchaseItems,
       createdAt: new Date().toISOString(),
       createdByRole: isEditorSession() ? "admin" : "user",
     });

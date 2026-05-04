@@ -11755,3 +11755,66 @@ body.admin-active #syncCard .admin-auth-form:has(#adminEmail[hidden]) {
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
   }
 }
+
+/* purchase complete product name display */
+.purchase-completed-products {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.purchase-completed-products-label {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.purchase-completed-product-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.purchase-completed-product-chip,
+.purchase-completed-product-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  border: 1px solid rgba(99, 102, 241, 0.16);
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #1e293b;
+  padding: 5px 8px;
+  font-size: 12px;
+  line-height: 1.25;
+}
+.purchase-completed-product-chip strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 800;
+}
+.purchase-completed-product-chip small {
+  color: #64748b;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.purchase-completed-product-chip.is-missing {
+  border-color: rgba(245, 158, 11, 0.28);
+  background: #fffbeb;
+  color: #92400e;
+}
+.purchase-completed-product-more {
+  color: #475569;
+  font-weight: 800;
+}
+@media (max-width: 640px) {
+  .purchase-completed-product-list {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .purchase-completed-product-chip,
+  .purchase-completed-product-more {
+    width: 100%;
+    border-radius: 12px;
+    justify-content: space-between;
+  }
+}
