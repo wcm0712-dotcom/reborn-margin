@@ -3747,17 +3747,35 @@ function refreshActiveOrderAnalysisSummary() {
     return new Date(`${date}T12:00:00`).toISOString();
   }
 
-  function resolveDirectOutboundUnitPrice(row, sku) {
-    const raw = String(row?.unitPriceRaw || "").replace(/,/g, "").trim();
-    const hasManualPrice = raw !== "";
-    const inputPrice = cleanNumber(row?.unitPrice);
-    if (hasManualPrice && (!Number.isFinite(inputPrice) || inputPrice <= 0)) {
-      return { ok: false, unitPrice: 0, source: "invalid", message: `${sku} 출고 단가는 0보다 큰 숫자로 입력해주세요.` };
+  function parseStockMoveUnitPriceInput(rawValue) {
+    const raw = rawValue === null || rawValue === undefined ? "" : String(rawValue).trim();
+    if (raw === "") return { hasValue: false, valid: false, value: null };
+    const normalized = raw.replace(/,/g, "").replace(/[^0-9.-]/g, "").trim();
+    if (!normalized || normalized === "-" || normalized === "." || normalized === "-.") {
+      return { hasValue: true, valid: false, value: null };
     }
-    if (inputPrice > 0) return { ok: true, unitPrice: inputPrice, source: "manual" };
+    const value = Number(normalized);
+    return { hasValue: true, valid: Number.isFinite(value) && value >= 0, value };
+  }
+
+  function resolveStockMoveUnitPrice(row, sku, direction = getStockMoveDirection()) {
+    const label = direction === "out" ? "출고 단가" : "입고 단가";
+    const parsed = parseStockMoveUnitPriceInput(row?.unitPriceRaw);
+    if (parsed.hasValue) {
+      if (!parsed.valid) {
+        return { ok: false, unitPrice: 0, source: "invalid", manual: true, message: `${sku} ${label}를 숫자로 입력해주세요.` };
+      }
+      return { ok: true, unitPrice: parsed.value, source: "manual", manual: true };
+    }
     const fallbackPrice = getSkuCost(sku);
-    if (fallbackPrice > 0) return { ok: true, unitPrice: fallbackPrice, source: "productCost" };
-    return { ok: false, unitPrice: 0, source: "missing", message: `${sku} 출고 단가를 입력하거나 품목 원가를 먼저 등록해주세요.` };
+    if (Number.isFinite(fallbackPrice) && fallbackPrice >= 0) {
+      return { ok: true, unitPrice: fallbackPrice, source: "productCost", manual: false };
+    }
+    return { ok: false, unitPrice: 0, source: "missing", manual: false, message: `${sku} ${label}를 입력하거나 품목 원가를 먼저 등록해주세요.` };
+  }
+
+  function resolveDirectOutboundUnitPrice(row, sku) {
+    return resolveStockMoveUnitPrice(row, sku, "out");
   }
 
   function renderStockMoveRows() {
@@ -3855,8 +3873,27 @@ function refreshActiveOrderAnalysisSummary() {
         boxes: cleanNumber(row.querySelector(".moveBoxes")?.value),
         eaches: cleanNumber(row.querySelector(".moveEaches")?.value)
       };
-      return { sku, input, units: sku ? unitsFromInput(sku, input) : 0, unitPriceRaw: priceValue, unitPrice: priceValue === "" ? null : cleanNumber(priceValue) };
+      const parsedPrice = parseStockMoveUnitPriceInput(priceValue);
+      return {
+        sku,
+        input,
+        units: sku ? unitsFromInput(sku, input) : 0,
+        unitPriceRaw: priceValue,
+        unitPrice: parsedPrice.hasValue && parsedPrice.valid ? parsedPrice.value : null
+      };
     });
+  }
+
+  function calcStockMoveRowsAssetValue(rows = []) {
+    return rows.reduce((sum, row) => {
+      const sku = canonicalSku(row?.sku);
+      const units = cleanNumber(row?.units);
+      if (!sku || units <= 0) return sum;
+      const priceInfo = resolveStockMoveUnitPrice(row, sku, getStockMoveDirection());
+      const unitPrice = priceInfo.ok ? priceInfo.unitPrice : getSkuCost(sku);
+      if (!Number.isFinite(unitPrice) || unitPrice < 0) return sum;
+      return sum + units * unitPrice;
+    }, 0);
   }
 
   function updateMoveBatchSummary() {
@@ -3872,7 +3909,7 @@ function refreshActiveOrderAnalysisSummary() {
     }, { pallets: 0, boxes: 0, eaches: 0, units: 0 });
     const direction = getStockMoveDirection();
     const actionLabel = direction === "out" ? "직접 출고 예정" : "입고 예정";
-    const assetValue = calcMovementAssetValue(rows.map((row) => ({ sku: row.sku, units: row.units })), { includeBoxes: true });
+    const assetValue = calcStockMoveRowsAssetValue(rows);
     summary.innerHTML = `${actionLabel} <strong>${number(rows.length)}개 품목</strong> · 파렛 <strong>${number(inputTotals.pallets)}</strong> · 박스/묶음 <strong>${number(inputTotals.boxes)}</strong> · 낱개 <strong>${number(inputTotals.eaches)}</strong> · 총 환산 <strong>${number(inputTotals.units)}개</strong> · 재고자산 ${direction === "out" ? "차감" : "증가"} 예상 <strong>${money(assetValue)}</strong>`;
   }
 
@@ -4719,34 +4756,28 @@ function refreshActiveOrderAnalysisSummary() {
       return;
     }
 
-    const outboundPriceBySku = new Map();
-    if (isOutbound) {
-      for (const row of rows) {
-        const sku = canonicalSku(row.sku);
-        const priceInfo = resolveDirectOutboundUnitPrice(row, sku);
-        if (!priceInfo.ok) {
-          alert(priceInfo.message);
-          return;
-        }
-        const previous = outboundPriceBySku.get(sku) || { value: 0, manual: false };
-        previous.value += row.units * priceInfo.unitPrice;
-        previous.manual = previous.manual || priceInfo.source === "manual";
-        outboundPriceBySku.set(sku, previous);
+    const movePriceBySku = new Map();
+    for (const row of rows) {
+      const sku = canonicalSku(row.sku);
+      const priceInfo = isOutbound
+        ? resolveDirectOutboundUnitPrice(row, sku)
+        : resolveStockMoveUnitPrice(row, sku, direction);
+      if (isOutbound && !priceInfo.ok) {
+        alert(priceInfo.message);
+        return;
       }
+      const unitPrice = priceInfo.ok ? priceInfo.unitPrice : getSkuCost(sku);
+      const previous = movePriceBySku.get(sku) || { value: 0, manual: false };
+      previous.value += row.units * (Number.isFinite(unitPrice) && unitPrice >= 0 ? unitPrice : 0);
+      previous.manual = previous.manual || priceInfo.source === "manual";
+      movePriceBySku.set(sku, previous);
     }
 
     addBackup(isOutbound ? "직접 출고 적용 전 자동 백업" : "입고 입력 적용 전 자동 백업");
     const bySku = new Map();
-    const changedPrices = [];
     rows.forEach((row) => {
       const sku = canonicalSku(row.sku);
       bySku.set(sku, (bySku.get(sku) || 0) + row.units);
-      if (!isOutbound && row.unitPrice !== null && Number.isFinite(row.unitPrice) && row.unitPrice >= 0) {
-        const beforePrice = getSkuCost(sku);
-        state.productCosts = normalizeProductCosts(state.productCosts);
-        state.productCosts[sku] = row.unitPrice;
-        if (beforePrice !== row.unitPrice) changedPrices.push(`${sku} ${money(beforePrice)} → ${money(row.unitPrice)}`);
-      }
     });
 
     [...bySku.entries()].forEach(([sku, units]) => {
@@ -4756,24 +4787,15 @@ function refreshActiveOrderAnalysisSummary() {
     });
 
     const detailItems = [...bySku.entries()].map(([sku, units]) => {
-      if (!isOutbound) {
-        return {
-          sku,
-          units,
-          direction,
-          source: STOCK_MOVE_SOURCES.manualInbound,
-          orderCount: 0,
-          text: formatMovementDetail(sku, units, direction)
-        };
-      }
-      const priceMeta = outboundPriceBySku.get(sku);
+      const priceMeta = movePriceBySku.get(sku);
       const unitPrice = priceMeta && units > 0 ? Math.round((priceMeta.value / units) * 100) / 100 : getSkuCost(sku);
       const value = priceMeta ? priceMeta.value : calcMovementAssetValue([{ sku, units }]);
+      const source = isOutbound ? STOCK_MOVE_SOURCES.manualOutbound : STOCK_MOVE_SOURCES.manualInbound;
       return {
         sku,
         units,
         direction,
-        source: STOCK_MOVE_SOURCES.manualOutbound,
+        source,
         orderCount: 0,
         unitPrice,
         unitPriceSource: priceMeta?.manual ? "manual" : "productCost",
@@ -4783,7 +4805,8 @@ function refreshActiveOrderAnalysisSummary() {
     });
 
     const totalUnits = detailItems.reduce((sum, item) => sum + item.units, 0);
-    const priceMemo = !isOutbound && changedPrices.length ? ` · 단가 변경 ${number(changedPrices.length)}건` : "";
+    const manualPriceCount = [...movePriceBySku.values()].filter((item) => item.manual).length;
+    const priceMemo = manualPriceCount ? ` · 입력 단가 ${number(manualPriceCount)}건 반영` : "";
     const type = isOutbound ? "직접출고" : "입고묶음";
     const actionText = isOutbound ? "직접 출고" : "일괄 입고";
     const qtyPrefix = isOutbound ? "-" : "+";
@@ -4825,9 +4848,12 @@ function refreshActiveOrderAnalysisSummary() {
 
   function formatMovementDetail(sku, units, direction = "out", options = {}) {
     const action = direction === "in" ? "입고" : "출고";
-    const unitPrice = cleanNumber(options?.unitPrice);
-    const value = cleanNumber(options?.value) || (unitPrice > 0 ? units * unitPrice : 0);
-    const priceText = unitPrice > 0 ? ` · 단가 ${money(unitPrice)} · 금액 ${money(value)}` : "";
+    const rawUnitPrice = options?.unitPrice;
+    const hasUnitPrice = rawUnitPrice !== undefined && rawUnitPrice !== null && rawUnitPrice !== "" && Number.isFinite(Number(rawUnitPrice));
+    const unitPrice = hasUnitPrice ? cleanNumber(rawUnitPrice) : 0;
+    const hasValue = options?.value !== undefined && options?.value !== null && options?.value !== "" && Number.isFinite(Number(options.value));
+    const value = hasValue ? cleanNumber(options.value) : (hasUnitPrice ? units * unitPrice : 0);
+    const priceText = hasUnitPrice ? ` · 단가 ${money(unitPrice)} · 금액 ${money(value)}` : "";
     return `${formatStock(sku, units)} ${action}${priceText}`;
   }
 
@@ -4909,7 +4935,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "purchase-complete-no-collapse-fix-01",
+    cacheVersion: "reborn-inout-inventory-apply-restore-cache-fix-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -7268,7 +7294,7 @@ function openInventoryItemDetail(sku) {
       ? details.map((detail) => `
         <div class="detail-line">
           <strong>${escapeHtml(detail.sku || "품목")}</strong>
-          <span>${escapeHtml(detail.text || formatMovementDetail(detail.sku, detail.units || 0, detail.direction || "out"))}</span>
+          <span>${escapeHtml(detail.text || formatMovementDetail(detail.sku, detail.units || 0, detail.direction || "out", { unitPrice: detail.unitPrice, value: detail.value }))}</span>
         </div>`).join("")
       : `<div class="detail-empty">이전 버전에서 저장된 기록이라 품목별 상세 내역이 없습니다.</div>`;
 
