@@ -615,10 +615,17 @@
   function addBackup(reason, options = {}) {
     const { cloud = true } = options;
     const backup = { at: new Date().toISOString(), reason, state: safeClone(state) };
-    const backups = loadBackups();
-    backups.unshift(backup);
-    localStorage.setItem(BACKUP_KEY, JSON.stringify(backups.slice(0, 30)));
     if (cloud) queueSupabaseBackupSave(backup);
+
+    try {
+      const backups = loadBackups();
+      backups.unshift(backup);
+      localStorage.setItem(BACKUP_KEY, JSON.stringify(backups.slice(0, 30)));
+    } catch (error) {
+      console.warn("backup save skipped", error);
+      // localStorage 백업 용량 초과가 발생해도 취소/반품·입고·출고 같은 핵심 처리 자체를 막지 않습니다.
+      // 기존 백업 데이터는 임의로 삭제하거나 덮어쓰지 않습니다.
+    }
   }
 
   function loadBackups() {
@@ -1108,9 +1115,9 @@
     });
 
     const urlState = getPasswordRecoveryUrlState();
-    if (!urlstate.isRecovery) return;
+    if (!urlState.isRecovery) return;
 
-    if (urlstate.error || urlstate.errorCode) {
+    if (urlState.error || urlState.errorCode) {
       passwordRecoveryMode = false;
       showPasswordRecoveryOverlay(koreanPasswordRecoveryError(urlState), "danger");
       return;
@@ -4935,7 +4942,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-inout-inventory-apply-restore-cache-fix-01",
+    cacheVersion: "reborn-return-adjustment-error-fix-01",
     functionCalled: {
       collect: false,
       stockout: false,
