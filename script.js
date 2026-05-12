@@ -3642,23 +3642,34 @@ function refreshActiveOrderAnalysisSummary() {
     renderProductOptions();
   }
 
+  function runRenderStep(label, task) {
+    try {
+      task();
+    } catch (error) {
+      console.error(`[renderAll:${label}]`, error);
+    }
+  }
+
   function renderAll() {
-    renderProductOptions();
-    renderInventory();
-    renderPalletInputs(false);
-    renderBoxStockInputs(false);
-    renderSummary();
-    renderSkuOrderRankSummary();
-    renderOrderChart();
-    renderHistory();
-    renderBackups();
-    renderPurchaseStatus();
-    renderReturnAdjustmentPanel();
-    renderProductCostEditor();
-    renderAdminActionLogs();
-    ensureStockMoveDefaults();
-    renderInventoryItemOrderTrend();
-    refreshActiveOrderAnalysisSummary();
+    const steps = [
+      ["productOptions", renderProductOptions],
+      ["inventory", renderInventory],
+      ["palletInputs", () => renderPalletInputs(false)],
+      ["boxStockInputs", () => renderBoxStockInputs(false)],
+      ["summary", renderSummary],
+      ["skuOrderRankSummary", renderSkuOrderRankSummary],
+      ["orderChart", renderOrderChart],
+      ["history", renderHistory],
+      ["backups", renderBackups],
+      ["purchaseStatus", renderPurchaseStatus],
+      ["returnAdjustmentPanel", renderReturnAdjustmentPanel],
+      ["productCostEditor", renderProductCostEditor],
+      ["adminActionLogs", renderAdminActionLogs],
+      ["stockMoveDefaults", ensureStockMoveDefaults],
+      ["inventoryItemOrderTrend", renderInventoryItemOrderTrend],
+      ["activeOrderAnalysisSummary", refreshActiveOrderAnalysisSummary]
+    ];
+    steps.forEach(([label, task]) => runRenderStep(label, task));
     updateEditorLock();
   }
 
@@ -4977,7 +4988,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "box-xl-tissue-deduct-fix-01",
+    cacheVersion: "box-xl-order-status-restore-fix-01",
     functionCalled: {
       collect: false,
       stockout: false,
