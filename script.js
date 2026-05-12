@@ -34,9 +34,11 @@
 
   const SYNC_INTERVAL_KEY = "reborn.wms.sync.interval.v1";
 
-  const BOX_PRICES = { large: 480, medium: 380, small: 250 };
-  const BOX_SKU_BY_SIZE = { large: "박스 대", medium: "박스 중", small: "박스 소" };
-  const BOX_LABEL = { large: "대 박스", medium: "중 박스", small: "소 박스", none: "박스 없음" };
+  const BOX_PRICES = { xlarge: 680, large: 480, medium: 380, small: 250 };
+  const BOX_SKU_BY_SIZE = { xlarge: "박스 특대", large: "박스 대", medium: "박스 중", small: "박스 소" };
+  const BOX_LABEL = { xlarge: "특대 박스", large: "대 박스", medium: "중 박스", small: "소 박스", none: "박스 없음" };
+  const BOX_XL_SKU = "박스 특대";
+  const CODI_TISSUE_SKU = "코디 3겹";
   const RETURN_ADJUSTMENT_TYPES = {
     postShipCancel: { label: "출고 후 주문취소", restores: true },
     saleableReturn: { label: "판매 가능 반품", restores: true },
@@ -98,6 +100,7 @@
     { name: "촉촉한 고구마", cost: 770 },
     { name: "촉촉한 밤", cost: 1080 },
     { name: "코디 3겹", cost: 8500 },
+    { name: "박스 특대", cost: BOX_PRICES.xlarge },
     { name: "박스 대", cost: BOX_PRICES.large },
     { name: "박스 중", cost: BOX_PRICES.medium },
     { name: "박스 소", cost: BOX_PRICES.small }
@@ -132,6 +135,7 @@
     "명가 참깨": { group: "명가", boxesPerPallet: 45, unitsPerBox: 16, structure: "1파렛=45완박스 / 1완박스=16개", cost: 4200, safetyStock: { pallets: 2 } },
     "명가 흑당": { group: "명가", boxesPerPallet: 45, unitsPerBox: 16, structure: "1파렛=45완박스 / 1완박스=16개", cost: 4200, safetyStock: { pallets: 2 } },
     "코디 3겹": { group: "휴지", boxesPerPallet: 48, unitsPerBox: 1, structure: "1파렛=48개 / 박스 사용 없음", cost: 8500, safetyStock: { pallets: 6 } },
+    "박스 특대": { group: "포장박스", boxesPerPallet: 30, unitsPerBox: 20, structure: "1파렛=30묶음 / 1묶음=20장 / 1파렛=600장", cost: BOX_PRICES.xlarge, isBox: true, safetyStock: { units: 2400, pallets: 4 } },
     "박스 대": { group: "포장박스", boxesPerPallet: 48, unitsPerBox: 15, structure: "1파렛=48묶음 / 1묶음=15장", cost: BOX_PRICES.large, isBox: true, safetyStock: { pallets: 3 } },
     "박스 중": { group: "포장박스", boxesPerPallet: 56, unitsPerBox: 20, structure: "1파렛=56묶음 / 1묶음=20장", cost: BOX_PRICES.medium, isBox: true, safetyStock: { pallets: 3 } },
     "박스 소": { group: "포장박스", boxesPerPallet: 90, unitsPerBox: 20, structure: "1파렛=90묶음 / 1묶음=20장", cost: BOX_PRICES.small, isBox: true, safetyStock: { pallets: 2 } }
@@ -165,6 +169,7 @@
     "명가 흑당": { pallets: 2, boxes: 32, eaches: 0, original: "2파렛 32박스" },
     "허니눈꽃 쌀과자 920g": { pallets: 2, boxes: 18, eaches: 0, original: "2파렛 18박스" },
     "코디 3겹": { pallets: 23, boxes: 13, eaches: 0, original: "23파렛 13개" },
+    "박스 특대": { pallets: 0, boxes: 0, eaches: 0, original: "0" },
     "박스 대": { pallets: 1, boxes: 62, eaches: 0, original: "1파렛 62묶음" },
     "박스 중": { pallets: 3, boxes: 16, eaches: 0, original: "3파렛 16묶음" },
     "박스 소": { pallets: 5, boxes: 11, eaches: 0, original: "5파렛 11묶음" }
@@ -274,6 +279,15 @@
     const def = INVENTORY_DEFS[sku];
     const value = Number(def?.cost);
     return Number.isFinite(value) ? value : 0;
+  }
+
+  function isCodiTissueSku(sku) {
+    return canonicalSku(sku) === CODI_TISSUE_SKU;
+  }
+
+  function codiTissueBoxXlUnits(sku, units) {
+    if (!isCodiTissueSku(sku)) return 0;
+    return Math.max(0, cleanNumber(units));
   }
 
   function normalizeProductCosts(input = {}) {
@@ -3469,9 +3483,10 @@ function refreshActiveOrderAnalysisSummary() {
     const typeLabel = info.label;
     const at = new Date(`${date}T12:00:00`).toISOString();
     state.stock[sku] = state.stock[sku] || { units: 0 };
+    let adjustmentDetails = [];
     if (info.restores) {
       state.stock[sku].units = cleanNumber(state.stock[sku].units) + units;
-      pushHistory("취소/반품", `${typeLabel} · ${sku}${memo ? ` · ${memo}` : ""}`, `재고 복구 ${formatStock(sku, units)}`, [{
+      adjustmentDetails = [{
         sku,
         units,
         direction: "in",
@@ -3479,8 +3494,25 @@ function refreshActiveOrderAnalysisSummary() {
         adjustmentType: typeKey,
         affectsNetOutbound: true,
         text: `${sku} ${formatStock(sku, units)} 복구`
-      }], { at, source: "returnAdjustment" });
+      }];
+      const boxXlRestoreUnits = codiTissueBoxXlUnits(sku, units);
+      if (boxXlRestoreUnits > 0 && INVENTORY_DEFS[BOX_XL_SKU]) {
+        state.stock[BOX_XL_SKU] = state.stock[BOX_XL_SKU] || { units: 0 };
+        state.stock[BOX_XL_SKU].units = cleanNumber(state.stock[BOX_XL_SKU].units) + boxXlRestoreUnits;
+        adjustmentDetails.push({
+          sku: BOX_XL_SKU,
+          units: boxXlRestoreUnits,
+          direction: "in",
+          source: "returnAdjustment",
+          adjustmentType: typeKey,
+          autoBoxFor: CODI_TISSUE_SKU,
+          affectsNetOutbound: true,
+          text: `${BOX_XL_SKU} ${formatStock(BOX_XL_SKU, boxXlRestoreUnits)} 복구`
+        });
+      }
+      pushHistory("취소/반품", `${typeLabel} · ${sku}${memo ? ` · ${memo}` : ""}`, `재고 복구 ${formatStock(sku, units)}`, adjustmentDetails, { at, source: "returnAdjustment" });
     } else {
+      adjustmentDetails = [{ sku, units, direction: "hold", source: "returnAdjustment", adjustmentType: typeKey }];
       pushHistory("취소/반품", `${typeLabel} · ${sku}${memo ? ` · ${memo}` : ""}`, `재고 미복구 ${formatStock(sku, units)}`, [], { at, source: "returnAdjustment" });
     }
 
@@ -3490,7 +3522,7 @@ function refreshActiveOrderAnalysisSummary() {
       unit: returnAdjustmentUnitLabel(sku, unit),
       memo: typeLabel + (memo ? " · " + memo : ""),
       source: "returnAdjustment",
-      details: [{ sku, units, direction: info.restores ? "in" : "hold", source: "returnAdjustment", adjustmentType: typeKey }]
+      details: adjustmentDetails
     });
     saveState("취소/반품 처리가 적용되었습니다.");
     const qtyInput = $("returnAdjustmentQty");
@@ -4749,6 +4781,18 @@ function refreshActiveOrderAnalysisSummary() {
       }
     });
 
+    if (isOutbound && INVENTORY_DEFS[BOX_XL_SKU]) {
+      const codiUnits = cleanNumber(bySku.get(CODI_TISSUE_SKU));
+      const manualBoxXlUnits = cleanNumber(bySku.get(BOX_XL_SKU));
+      const autoBoxXlUnits = Math.max(0, codiTissueBoxXlUnits(CODI_TISSUE_SKU, codiUnits) - manualBoxXlUnits);
+      if (autoBoxXlUnits > 0) {
+        bySku.set(BOX_XL_SKU, manualBoxXlUnits + autoBoxXlUnits);
+        const boxPriceMeta = outboundPriceBySku.get(BOX_XL_SKU) || { value: 0, manual: false };
+        boxPriceMeta.value += autoBoxXlUnits * getSkuCost(BOX_XL_SKU);
+        outboundPriceBySku.set(BOX_XL_SKU, boxPriceMeta);
+      }
+    }
+
     [...bySku.entries()].forEach(([sku, units]) => {
       if (!state.stock[sku]) state.stock[sku] = { units: 0 };
       const current = Number(state.stock[sku].units) || 0;
@@ -4778,6 +4822,7 @@ function refreshActiveOrderAnalysisSummary() {
         unitPrice,
         unitPriceSource: priceMeta?.manual ? "manual" : "productCost",
         value,
+        autoBoxFor: sku === BOX_XL_SKU && codiTissueBoxXlUnits(CODI_TISSUE_SKU, cleanNumber(bySku.get(CODI_TISSUE_SKU))) > 0 ? CODI_TISSUE_SKU : "",
         text: formatMovementDetail(sku, units, direction, { unitPrice, value })
       };
     });
@@ -4909,7 +4954,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-cache-stable-fix-01",
+    cacheVersion: "reborn-box-xl-full-fix-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -7401,6 +7446,10 @@ function openInventoryItemDetail(sku) {
         if (boxResult.size && boxResult.size !== "none") {
           const boxSku = BOX_SKU_BY_SIZE[boxResult.size];
           boxUsages.set(boxSku, (boxUsages.get(boxSku) || 0) + 1);
+        }
+        const boxXlUnits = codiTissueBoxXlUnits(sku, units);
+        if (boxXlUnits > 0) {
+          boxUsages.set(BOX_XL_SKU, (boxUsages.get(BOX_XL_SKU) || 0) + boxXlUnits);
         }
       });
     });
