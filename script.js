@@ -34,9 +34,9 @@
 
   const SYNC_INTERVAL_KEY = "reborn.wms.sync.interval.v1";
 
-  const BOX_PRICES = { xlarge: 680, large: 480, medium: 380, small: 250 };
-  const BOX_SKU_BY_SIZE = { xlarge: "박스 특대", large: "박스 대", medium: "박스 중", small: "박스 소" };
-  const BOX_LABEL = { xlarge: "특대 박스", large: "대 박스", medium: "중 박스", small: "소 박스", none: "박스 없음" };
+  const BOX_PRICES = { large: 480, medium: 380, small: 250 };
+  const BOX_SKU_BY_SIZE = { large: "박스 대", medium: "박스 중", small: "박스 소" };
+  const BOX_LABEL = { large: "대 박스", medium: "중 박스", small: "소 박스", none: "박스 없음" };
   const RETURN_ADJUSTMENT_TYPES = {
     postShipCancel: { label: "출고 후 주문취소", restores: true },
     saleableReturn: { label: "판매 가능 반품", restores: true },
@@ -58,10 +58,6 @@
   function canonicalSku(sku) {
     const key = String(sku || "").trim();
     return SKU_ALIASES[key] || key;
-  }
-
-  function isTissueXlBoxSku(sku) {
-    return canonicalSku(sku) === "코디 3겹";
   }
 
   function replaceLegacySkuText(value) {
@@ -102,7 +98,6 @@
     { name: "촉촉한 고구마", cost: 770 },
     { name: "촉촉한 밤", cost: 1080 },
     { name: "코디 3겹", cost: 8500 },
-    { name: "박스 특대", cost: BOX_PRICES.xlarge },
     { name: "박스 대", cost: BOX_PRICES.large },
     { name: "박스 중", cost: BOX_PRICES.medium },
     { name: "박스 소", cost: BOX_PRICES.small }
@@ -136,8 +131,7 @@
     "감자알칩": { group: "과자", boxesPerPallet: 56, unitsPerBox: 40, structure: "1파렛=56완박스 / 1완박스=40개", cost: 282.5, safetyStock: { pallets: 3 } },
     "명가 참깨": { group: "명가", boxesPerPallet: 45, unitsPerBox: 16, structure: "1파렛=45완박스 / 1완박스=16개", cost: 4200, safetyStock: { pallets: 2 } },
     "명가 흑당": { group: "명가", boxesPerPallet: 45, unitsPerBox: 16, structure: "1파렛=45완박스 / 1완박스=16개", cost: 4200, safetyStock: { pallets: 2 } },
-    "코디 3겹": { group: "휴지", boxesPerPallet: 48, unitsPerBox: 1, structure: "1파렛=48개 / 휴지 1개 출고 시 박스 특대 1장 사용", cost: 8500, safetyStock: { pallets: 6 } },
-    "박스 특대": { group: "포장박스", boxesPerPallet: 30, unitsPerBox: 20, structure: "1파렛=30묶음 / 1묶음=20장", cost: BOX_PRICES.xlarge, isBox: true, safetyStock: { pallets: 1 } },
+    "코디 3겹": { group: "휴지", boxesPerPallet: 48, unitsPerBox: 1, structure: "1파렛=48개 / 박스 사용 없음", cost: 8500, safetyStock: { pallets: 6 } },
     "박스 대": { group: "포장박스", boxesPerPallet: 48, unitsPerBox: 15, structure: "1파렛=48묶음 / 1묶음=15장", cost: BOX_PRICES.large, isBox: true, safetyStock: { pallets: 3 } },
     "박스 중": { group: "포장박스", boxesPerPallet: 56, unitsPerBox: 20, structure: "1파렛=56묶음 / 1묶음=20장", cost: BOX_PRICES.medium, isBox: true, safetyStock: { pallets: 3 } },
     "박스 소": { group: "포장박스", boxesPerPallet: 90, unitsPerBox: 20, structure: "1파렛=90묶음 / 1묶음=20장", cost: BOX_PRICES.small, isBox: true, safetyStock: { pallets: 2 } }
@@ -171,7 +165,6 @@
     "명가 흑당": { pallets: 2, boxes: 32, eaches: 0, original: "2파렛 32박스" },
     "허니눈꽃 쌀과자 920g": { pallets: 2, boxes: 18, eaches: 0, original: "2파렛 18박스" },
     "코디 3겹": { pallets: 23, boxes: 13, eaches: 0, original: "23파렛 13개" },
-    "박스 특대": { pallets: 0, boxes: 0, eaches: 0, original: "0" },
     "박스 대": { pallets: 1, boxes: 62, eaches: 0, original: "1파렛 62묶음" },
     "박스 중": { pallets: 3, boxes: 16, eaches: 0, original: "3파렛 16묶음" },
     "박스 소": { pallets: 5, boxes: 11, eaches: 0, original: "5파렛 11묶음" }
@@ -3478,7 +3471,7 @@ function refreshActiveOrderAnalysisSummary() {
     state.stock[sku] = state.stock[sku] || { units: 0 };
     if (info.restores) {
       state.stock[sku].units = cleanNumber(state.stock[sku].units) + units;
-      const restoreDetails = [{
+      pushHistory("취소/반품", `${typeLabel} · ${sku}${memo ? ` · ${memo}` : ""}`, `재고 복구 ${formatStock(sku, units)}`, [{
         sku,
         units,
         direction: "in",
@@ -3486,28 +3479,7 @@ function refreshActiveOrderAnalysisSummary() {
         adjustmentType: typeKey,
         affectsNetOutbound: true,
         text: `${sku} ${formatStock(sku, units)} 복구`
-      }];
-      if (isTissueXlBoxSku(sku)) {
-        const boxResult = getBoxUsage(sku, units);
-        if (boxResult.size && boxResult.size !== "none") {
-          const boxSku = BOX_SKU_BY_SIZE[boxResult.size];
-          const boxUnits = Math.max(1, cleanNumber(boxResult.units) || 1);
-          if (boxSku) {
-            state.stock[boxSku] = state.stock[boxSku] || { units: 0 };
-            state.stock[boxSku].units = cleanNumber(state.stock[boxSku].units) + boxUnits;
-            restoreDetails.push({
-              sku: boxSku,
-              units: boxUnits,
-              direction: "in",
-              source: "returnAdjustment",
-              adjustmentType: typeKey,
-              affectsNetOutbound: false,
-              text: `${boxSku} ${formatStock(boxSku, boxUnits)} 복구`
-            });
-          }
-        }
-      }
-      pushHistory("취소/반품", `${typeLabel} · ${sku}${memo ? ` · ${memo}` : ""}`, `재고 복구 ${formatStock(sku, units)}`, restoreDetails, { at, source: "returnAdjustment" });
+      }], { at, source: "returnAdjustment" });
     } else {
       pushHistory("취소/반품", `${typeLabel} · ${sku}${memo ? ` · ${memo}` : ""}`, `재고 미복구 ${formatStock(sku, units)}`, [], { at, source: "returnAdjustment" });
     }
@@ -3518,12 +3490,7 @@ function refreshActiveOrderAnalysisSummary() {
       unit: returnAdjustmentUnitLabel(sku, unit),
       memo: typeLabel + (memo ? " · " + memo : ""),
       source: "returnAdjustment",
-      details: info.restores && isTissueXlBoxSku(sku)
-        ? [
-            { sku, units, direction: "in", source: "returnAdjustment", adjustmentType: typeKey },
-            { sku: BOX_SKU_BY_SIZE.xlarge, units, direction: "in", source: "returnAdjustment", adjustmentType: typeKey, boxRule: "tissue-xlarge-1to1" }
-          ]
-        : [{ sku, units, direction: info.restores ? "in" : "hold", source: "returnAdjustment", adjustmentType: typeKey }]
+      details: [{ sku, units, direction: info.restores ? "in" : "hold", source: "returnAdjustment", adjustmentType: typeKey }]
     });
     saveState("취소/반품 처리가 적용되었습니다.");
     const qtyInput = $("returnAdjustmentQty");
@@ -3642,34 +3609,23 @@ function refreshActiveOrderAnalysisSummary() {
     renderProductOptions();
   }
 
-  function runRenderStep(label, task) {
-    try {
-      task();
-    } catch (error) {
-      console.error(`[renderAll:${label}]`, error);
-    }
-  }
-
   function renderAll() {
-    const steps = [
-      ["productOptions", renderProductOptions],
-      ["inventory", renderInventory],
-      ["palletInputs", () => renderPalletInputs(false)],
-      ["boxStockInputs", () => renderBoxStockInputs(false)],
-      ["summary", renderSummary],
-      ["skuOrderRankSummary", renderSkuOrderRankSummary],
-      ["orderChart", renderOrderChart],
-      ["history", renderHistory],
-      ["backups", renderBackups],
-      ["purchaseStatus", renderPurchaseStatus],
-      ["returnAdjustmentPanel", renderReturnAdjustmentPanel],
-      ["productCostEditor", renderProductCostEditor],
-      ["adminActionLogs", renderAdminActionLogs],
-      ["stockMoveDefaults", ensureStockMoveDefaults],
-      ["inventoryItemOrderTrend", renderInventoryItemOrderTrend],
-      ["activeOrderAnalysisSummary", refreshActiveOrderAnalysisSummary]
-    ];
-    steps.forEach(([label, task]) => runRenderStep(label, task));
+    renderProductOptions();
+    renderInventory();
+    renderPalletInputs(false);
+    renderBoxStockInputs(false);
+    renderSummary();
+    renderSkuOrderRankSummary();
+    renderOrderChart();
+    renderHistory();
+    renderBackups();
+    renderPurchaseStatus();
+    renderReturnAdjustmentPanel();
+    renderProductCostEditor();
+    renderAdminActionLogs();
+    ensureStockMoveDefaults();
+    renderInventoryItemOrderTrend();
+    refreshActiveOrderAnalysisSummary();
     updateEditorLock();
   }
 
@@ -4799,23 +4755,6 @@ function refreshActiveOrderAnalysisSummary() {
       state.stock[sku].units = isOutbound ? current - units : current + units;
     });
 
-    const manualOutboundBoxUsages = new Map();
-    if (isOutbound) {
-      [...bySku.entries()].forEach(([sku, units]) => {
-        if (!isTissueXlBoxSku(sku)) return;
-        const boxResult = getBoxUsage(sku, units);
-        if (boxResult.size && boxResult.size !== "none") {
-          const boxSku = BOX_SKU_BY_SIZE[boxResult.size];
-          const boxUnits = Math.max(1, cleanNumber(boxResult.units) || 1);
-          if (boxSku) manualOutboundBoxUsages.set(boxSku, (manualOutboundBoxUsages.get(boxSku) || 0) + boxUnits);
-        }
-      });
-      [...manualOutboundBoxUsages.entries()].forEach(([sku, units]) => {
-        if (!state.stock[sku]) state.stock[sku] = { units: 0 };
-        state.stock[sku].units = cleanNumber(state.stock[sku].units) - units;
-      });
-    }
-
     const detailItems = [...bySku.entries()].map(([sku, units]) => {
       if (!isOutbound) {
         return {
@@ -4843,25 +4782,7 @@ function refreshActiveOrderAnalysisSummary() {
       };
     });
 
-    if (manualOutboundBoxUsages.size) {
-      [...manualOutboundBoxUsages.entries()].forEach(([sku, units]) => {
-        const unitPrice = getSkuCost(sku);
-        const value = calcMovementAssetValue([{ sku, units }], { includeBoxes: true });
-        detailItems.push({
-          sku,
-          units,
-          direction,
-          source: STOCK_MOVE_SOURCES.manualOutbound,
-          orderCount: 0,
-          unitPrice,
-          unitPriceSource: "boxRule",
-          value,
-          text: formatMovementDetail(sku, units, direction, { unitPrice, value })
-        });
-      });
-    }
-
-    const totalUnits = [...bySku.values()].reduce((sum, units) => sum + units, 0);
+    const totalUnits = detailItems.reduce((sum, item) => sum + item.units, 0);
     const priceMemo = !isOutbound && changedPrices.length ? ` · 단가 변경 ${number(changedPrices.length)}건` : "";
     const type = isOutbound ? "직접출고" : "입고묶음";
     const actionText = isOutbound ? "직접 출고" : "일괄 입고";
@@ -4988,7 +4909,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "box-xl-order-status-restore-fix-01",
+    cacheVersion: "reborn-cache-stable-fix-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -7479,8 +7400,7 @@ function openInventoryItemDetail(sku) {
         }
         if (boxResult.size && boxResult.size !== "none") {
           const boxSku = BOX_SKU_BY_SIZE[boxResult.size];
-          const boxUnits = Math.max(1, cleanNumber(boxResult.units) || 1);
-          if (boxSku) boxUsages.set(boxSku, (boxUsages.get(boxSku) || 0) + boxUnits);
+          boxUsages.set(boxSku, (boxUsages.get(boxSku) || 0) + 1);
         }
       });
     });
@@ -7634,8 +7554,7 @@ function openInventoryItemDetail(sku) {
   function getBoxUsage(sku, units) {
     sku = canonicalSku(sku);
     const def = INVENTORY_DEFS[sku];
-    if (!def || def.isBox) return { size: "none" };
-    if (isTissueXlBoxSku(sku)) return { size: "xlarge", units: Math.max(0, cleanNumber(units)) };
+    if (!def || def.isBox || sku === "코디 3겹") return { size: "none" };
     const remainder = units % def.unitsPerBox;
     const qty = remainder === 0 ? 0 : remainder;
     if (qty === 0) return { size: "none" };
