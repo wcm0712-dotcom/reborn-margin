@@ -4954,7 +4954,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-box-xl-full-fix-01",
+    cacheVersion: "reborn-cache-auto-repair-01",
     functionCalled: {
       collect: false,
       stockout: false,

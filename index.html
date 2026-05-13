@@ -7,17 +7,85 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <meta name="reborn-app-version" content="reborn-box-xl-full-fix-01" />
+  <meta name="reborn-app-version" content="reborn-cache-auto-repair-01" />
+  <script>
+    (function () {
+      var APP_VERSION = "reborn-cache-auto-repair-01";
+      var VERSION_KEY = "reborn.wms.asset.version.v1";
+      var RELOAD_KEY = "reborn.wms.asset.reload." + APP_VERSION;
+
+      function forceVersionedUrl() {
+        try {
+          var url = new URL(window.location.href);
+          if (url.searchParams.get("v") !== APP_VERSION) {
+            url.searchParams.set("v", APP_VERSION);
+            window.location.replace(url.toString());
+            return true;
+          }
+        } catch (error) {
+          console.warn("[Reborn] version URL check skipped:", error);
+        }
+        return false;
+      }
+
+      if (forceVersionedUrl()) return;
+      window.__REBORN_APP_VERSION__ = APP_VERSION;
+
+      async function repairAppAssetCache() {
+        try {
+          var previousVersion = null;
+          try {
+            previousVersion = window.localStorage ? localStorage.getItem(VERSION_KEY) : null;
+          } catch (storageError) {
+            previousVersion = null;
+          }
+
+          if (previousVersion === APP_VERSION) return;
+
+          if ("serviceWorker" in navigator && navigator.serviceWorker.getRegistrations) {
+            var registrations = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(registrations.map(function (registration) {
+              return registration.unregister();
+            }));
+          }
+
+          if ("caches" in window && caches.keys) {
+            var cacheNames = await caches.keys();
+            await Promise.all(cacheNames.map(function (cacheName) {
+              return caches.delete(cacheName);
+            }));
+          }
+
+          try {
+            if (window.localStorage) localStorage.setItem(VERSION_KEY, APP_VERSION);
+          } catch (storageError) {}
+
+          try {
+            if (!sessionStorage.getItem(RELOAD_KEY)) {
+              sessionStorage.setItem(RELOAD_KEY, "1");
+              var reloadUrl = new URL(window.location.href);
+              reloadUrl.searchParams.set("v", APP_VERSION);
+              window.location.replace(reloadUrl.toString());
+            }
+          } catch (sessionError) {}
+        } catch (error) {
+          console.warn("[Reborn] safe cache repair skipped:", error);
+        }
+      }
+
+      repairAppAssetCache();
+    })();
+  </script>
   <meta name="application-name" content="리본컴퍼니" />
   <meta name="apple-mobile-web-app-title" content="리본WMS" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>리본컴퍼니 관리 시스템</title>
-  <link rel="manifest" href="./manifest.json?v=reborn-box-xl-full-fix-01" />
+  <link rel="manifest" href="./manifest.json?v=reborn-cache-auto-repair-01" />
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="64x64" href="./favicon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
-  <link rel="stylesheet" href="./style.css?v=reborn-box-xl-full-fix-01" />
+  <link rel="stylesheet" href="./style.css?v=reborn-cache-auto-repair-01" />
 </head>
 <body>
   <div id="appLaunchSplash" class="app-launch-splash" aria-hidden="true">
@@ -689,6 +757,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./script.js?v=reborn-box-xl-full-fix-01"></script>
+  <script src="./script.js?v=reborn-cache-auto-repair-01"></script>
 </body>
 </html>
