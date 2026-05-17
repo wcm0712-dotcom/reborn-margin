@@ -38,6 +38,7 @@
   const BOX_SKU_BY_SIZE = { xlarge: "박스 특대", large: "박스 대", medium: "박스 중", small: "박스 소" };
   const BOX_LABEL = { xlarge: "특대 박스", large: "대 박스", medium: "중 박스", small: "소 박스", none: "박스 없음" };
   const BOX_XL_SKU = "박스 특대";
+  const COOKIE_CHOCO_SKU = "쿠키속 초코짱";
   const CODI_TISSUE_SKU = "코디 3겹";
   const RETURN_ADJUSTMENT_TYPES = {
     postShipCancel: { label: "출고 후 주문취소", restores: true },
@@ -99,6 +100,7 @@
     { name: "풋젤리", cost: 580 },
     { name: "촉촉한 고구마", cost: 770 },
     { name: "촉촉한 밤", cost: 1080 },
+    { name: "쿠키속 초코짱", cost: 195 },
     { name: "코디 3겹", cost: 8500 },
     { name: "박스 특대", cost: BOX_PRICES.xlarge },
     { name: "박스 대", cost: BOX_PRICES.large },
@@ -135,6 +137,7 @@
     "명가 참깨": { group: "명가", boxesPerPallet: 45, unitsPerBox: 16, structure: "1파렛=45완박스 / 1완박스=16개", cost: 4200, safetyStock: { pallets: 2 } },
     "명가 흑당": { group: "명가", boxesPerPallet: 45, unitsPerBox: 16, structure: "1파렛=45완박스 / 1완박스=16개", cost: 4200, safetyStock: { pallets: 2 } },
     "코디 3겹": { group: "휴지", boxesPerPallet: 48, unitsPerBox: 1, structure: "1파렛=48개 / 박스 사용 없음", cost: 8500, safetyStock: { pallets: 6 } },
+    [COOKIE_CHOCO_SKU]: { group: "과자", boxesPerPallet: 12, unitsPerBox: 40, structure: "파렛 미정 / 1완박스=12박스 / 1박스=40개 / 1완박스=480개", cost: 195, safetyStock: 0, unitLabels: { pallet: "완박스", box: "박스", each: "개" }, palletUnknown: true },
     "박스 특대": { group: "포장박스", boxesPerPallet: 30, unitsPerBox: 20, structure: "1파렛=30묶음 / 1묶음=20장 / 1파렛=600장", cost: BOX_PRICES.xlarge, isBox: true, safetyStock: { units: 2400, pallets: 4 } },
     "박스 대": { group: "포장박스", boxesPerPallet: 48, unitsPerBox: 15, structure: "1파렛=48묶음 / 1묶음=15장", cost: BOX_PRICES.large, isBox: true, safetyStock: { pallets: 3 } },
     "박스 중": { group: "포장박스", boxesPerPallet: 56, unitsPerBox: 20, structure: "1파렛=56묶음 / 1묶음=20장", cost: BOX_PRICES.medium, isBox: true, safetyStock: { pallets: 3 } },
@@ -240,16 +243,24 @@
     return { pallets: pallets * sign, boxes, eaches };
   }
 
+  function getUnitLabels(sku) {
+    const def = INVENTORY_DEFS[canonicalSku(sku)] || {};
+    const labels = def.unitLabels || {};
+    return {
+      pallet: labels.pallet || "파렛",
+      box: labels.box || (def.isBox ? "묶음" : canonicalSku(sku) === CODI_TISSUE_SKU ? "개" : "완박스"),
+      each: labels.each || (def.isBox ? "장" : canonicalSku(sku) === CODI_TISSUE_SKU ? "개" : "낱개"),
+    };
+  }
+
   function formatStock(sku, units) {
     sku = canonicalSku(sku);
-    const def = INVENTORY_DEFS[sku];
     const n = normalizeUnits(sku, units);
-    const boxWord = def?.isBox ? "묶음" : sku === "코디 3겹" ? "개" : "완박스";
-    const eachWord = def?.isBox ? "장" : sku === "코디 3겹" ? "개" : "낱개";
+    const labels = getUnitLabels(sku);
     const parts = [];
-    if (n.pallets) parts.push(`${n.pallets.toLocaleString("ko-KR")}파렛`);
-    if (n.boxes) parts.push(`${n.boxes.toLocaleString("ko-KR")}${boxWord}`);
-    if (n.eaches) parts.push(`${n.eaches.toLocaleString("ko-KR")}${eachWord}`);
+    if (n.pallets) parts.push(`${n.pallets.toLocaleString("ko-KR")}${labels.pallet}`);
+    if (n.boxes) parts.push(`${n.boxes.toLocaleString("ko-KR")}${labels.box}`);
+    if (n.eaches) parts.push(`${n.eaches.toLocaleString("ko-KR")}${labels.each}`);
     return parts.length ? parts.join(" ") : "0";
   }
   function safetyUnits(sku) {
@@ -288,6 +299,26 @@
   function codiTissueBoxXlUnits(sku, units) {
     if (!isCodiTissueSku(sku)) return 0;
     return Math.max(0, cleanNumber(units));
+  }
+
+  function isCookieChocoSku(sku) {
+    return canonicalSku(sku) === COOKIE_CHOCO_SKU;
+  }
+
+  function getCookieChocoPackagingBoxSize(units) {
+    const qty = cleanNumber(units);
+    if (qty <= 0) return "none";
+    const remainder = qty % 480;
+    if (remainder >= 1 && remainder <= 80) return "small";
+    if (remainder >= 81 && remainder <= 240) return "medium";
+    if (remainder >= 241 && remainder <= 440) return "large";
+    return "none";
+  }
+
+  function getCookieChocoPackagingBoxUsage(sku, units) {
+    if (!isCookieChocoSku(sku)) return null;
+    const size = getCookieChocoPackagingBoxSize(units);
+    return size === "none" ? null : { size, units: 1 };
   }
 
   function normalizeProductCosts(input = {}) {
@@ -3510,6 +3541,22 @@ function refreshActiveOrderAnalysisSummary() {
           text: `${BOX_XL_SKU} ${formatStock(BOX_XL_SKU, boxXlRestoreUnits)} 복구`
         });
       }
+      const cookieReturnBoxUsage = getCookieChocoPackagingBoxUsage(sku, units);
+      if (cookieReturnBoxUsage) {
+        const cookieReturnBoxSku = BOX_SKU_BY_SIZE[cookieReturnBoxUsage.size];
+        state.stock[cookieReturnBoxSku] = state.stock[cookieReturnBoxSku] || { units: 0 };
+        state.stock[cookieReturnBoxSku].units = cleanNumber(state.stock[cookieReturnBoxSku].units) + cookieReturnBoxUsage.units;
+        adjustmentDetails.push({
+          sku: cookieReturnBoxSku,
+          units: cookieReturnBoxUsage.units,
+          direction: "in",
+          source: "returnAdjustment",
+          adjustmentType: typeKey,
+          autoBoxFor: COOKIE_CHOCO_SKU,
+          affectsNetOutbound: true,
+          text: `${cookieReturnBoxSku} ${formatStock(cookieReturnBoxSku, cookieReturnBoxUsage.units)} 복구`
+        });
+      }
       pushHistory("취소/반품", `${typeLabel} · ${sku}${memo ? ` · ${memo}` : ""}`, `재고 복구 ${formatStock(sku, units)}`, adjustmentDetails, { at, source: "returnAdjustment" });
     } else {
       adjustmentDetails = [{ sku, units, direction: "hold", source: "returnAdjustment", adjustmentType: typeKey }];
@@ -3713,7 +3760,7 @@ function refreshActiveOrderAnalysisSummary() {
           </div>
           <div class="box-stock-meta">${escapeHtml(def.structure || "")}</div>
           <div class="box-stock-inputs">
-            <label><span>파렛</span><input type="number" min="0" inputmode="numeric" value="${normalized.pallets}" data-box-field="pallets" /></label>
+            <label><span class="unit-label-pallet">파렛</span><input type="number" min="0" inputmode="numeric" value="${normalized.pallets}" data-box-field="pallets" /></label>
             <label><span>묶음</span><input type="number" min="0" inputmode="numeric" value="${normalized.boxes}" data-box-field="boxes" /></label>
             <label><span>장</span><input type="number" min="0" inputmode="numeric" value="${normalized.eaches}" data-box-field="eaches" /></label>
           </div>
@@ -3817,15 +3864,15 @@ function refreshActiveOrderAnalysisSummary() {
         <select class="moveSku">${skuOptions(selectedSku)}</select>
       </label>
       <label class="field move-qty">
-        <span>파렛</span>
+        <span class="unit-label-pallet">파렛</span>
         <input class="movePallets" type="number" inputmode="numeric" min="0" value="${defaults.pallets || 0}" />
       </label>
       <label class="field move-qty">
-        <span>박스/묶음</span>
+        <span class="unit-label-box">박스/묶음</span>
         <input class="moveBoxes" type="number" inputmode="numeric" min="0" value="${defaults.boxes || 0}" />
       </label>
       <label class="field move-qty">
-        <span>낱개</span>
+        <span class="unit-label-each">낱개</span>
         <input class="moveEaches" type="number" inputmode="numeric" min="0" value="${defaults.eaches || 0}" />
       </label>
       <label class="field move-qty move-price">
@@ -3836,10 +3883,21 @@ function refreshActiveOrderAnalysisSummary() {
     `;
     wrap.appendChild(row);
     enhanceNativeSelects(row);
+    const syncRowUnitLabels = () => {
+      const labels = getUnitLabels(row.querySelector(".moveSku")?.value);
+      const palletLabel = row.querySelector(".unit-label-pallet");
+      const boxLabel = row.querySelector(".unit-label-box");
+      const eachLabel = row.querySelector(".unit-label-each");
+      if (palletLabel) palletLabel.textContent = labels.pallet;
+      if (boxLabel) boxLabel.textContent = labels.box;
+      if (eachLabel) eachLabel.textContent = labels.each;
+    };
+    syncRowUnitLabels();
     row.querySelectorAll("input, select").forEach((el) => {
       el.addEventListener("input", updateMoveBatchSummary);
       el.addEventListener("change", () => {
         if (el.classList.contains("moveSku")) {
+          syncRowUnitLabels();
           const priceInput = row.querySelector(".moveUnitPrice");
           const nextCost = getSkuCost(el.value);
           if (priceInput) {
@@ -4791,6 +4849,19 @@ function refreshActiveOrderAnalysisSummary() {
         boxPriceMeta.value += autoBoxXlUnits * getSkuCost(BOX_XL_SKU);
         outboundPriceBySku.set(BOX_XL_SKU, boxPriceMeta);
       }
+      const cookieUnits = cleanNumber(bySku.get(COOKIE_CHOCO_SKU));
+      const cookieBoxUsage = getCookieChocoPackagingBoxUsage(COOKIE_CHOCO_SKU, cookieUnits);
+      if (cookieBoxUsage) {
+        const cookieBoxSku = BOX_SKU_BY_SIZE[cookieBoxUsage.size];
+        const manualCookieBoxUnits = cleanNumber(bySku.get(cookieBoxSku));
+        const autoCookieBoxUnits = Math.max(0, cookieBoxUsage.units - manualCookieBoxUnits);
+        if (autoCookieBoxUnits > 0) {
+          bySku.set(cookieBoxSku, manualCookieBoxUnits + autoCookieBoxUnits);
+          const cookieBoxPriceMeta = outboundPriceBySku.get(cookieBoxSku) || { value: 0, manual: false };
+          cookieBoxPriceMeta.value += autoCookieBoxUnits * getSkuCost(cookieBoxSku);
+          outboundPriceBySku.set(cookieBoxSku, cookieBoxPriceMeta);
+        }
+      }
     }
 
     [...bySku.entries()].forEach(([sku, units]) => {
@@ -4822,7 +4893,11 @@ function refreshActiveOrderAnalysisSummary() {
         unitPrice,
         unitPriceSource: priceMeta?.manual ? "manual" : "productCost",
         value,
-        autoBoxFor: sku === BOX_XL_SKU && codiTissueBoxXlUnits(CODI_TISSUE_SKU, cleanNumber(bySku.get(CODI_TISSUE_SKU))) > 0 ? CODI_TISSUE_SKU : "",
+        autoBoxFor: sku === BOX_XL_SKU && codiTissueBoxXlUnits(CODI_TISSUE_SKU, cleanNumber(bySku.get(CODI_TISSUE_SKU))) > 0
+          ? CODI_TISSUE_SKU
+          : (getCookieChocoPackagingBoxUsage(COOKIE_CHOCO_SKU, cleanNumber(bySku.get(COOKIE_CHOCO_SKU)))?.size && sku === BOX_SKU_BY_SIZE[getCookieChocoPackagingBoxUsage(COOKIE_CHOCO_SKU, cleanNumber(bySku.get(COOKIE_CHOCO_SKU))).size])
+            ? COOKIE_CHOCO_SKU
+            : "",
         text: formatMovementDetail(sku, units, direction, { unitPrice, value })
       };
     });
@@ -4954,7 +5029,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-cache-auto-repair-01",
+    cacheVersion: "reborn-cookie-choco-margin-fix-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -7525,6 +7600,7 @@ function openInventoryItemDetail(sku) {
     const text = String(name || "");
     const patterns = [
       /(?:x|×|\*)\s*([0-9,]+)\s*개/i,
+      /(?:x|×|\*)\s*([0-9,]+)\b/i,
       /([0-9,]+)\s*개\s*(?:입|묶음|세트)?/i
     ];
     for (const pattern of patterns) {
@@ -7592,6 +7668,7 @@ function openInventoryItemDetail(sku) {
       [/감자알칩/, "감자알칩"],
       [/명가.*참깨/, "명가 참깨"],
       [/명가.*흑당/, "명가 흑당"],
+      [/쿠키속\s*초코짱|쿠키속초코짱|쿠키/i, COOKIE_CHOCO_SKU],
       [/코디|3겹|휴지/, "코디 3겹"]
     ];
 
@@ -7604,6 +7681,9 @@ function openInventoryItemDetail(sku) {
     sku = canonicalSku(sku);
     const def = INVENTORY_DEFS[sku];
     if (!def || def.isBox || sku === "코디 3겹") return { size: "none" };
+    const cookieBoxUsage = getCookieChocoPackagingBoxUsage(sku, units);
+    if (cookieBoxUsage) return cookieBoxUsage;
+    if (isCookieChocoSku(sku)) return { size: "none" };
     const remainder = units % def.unitsPerBox;
     const qty = remainder === 0 ? 0 : remainder;
     if (qty === 0) return { size: "none" };
