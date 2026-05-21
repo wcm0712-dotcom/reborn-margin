@@ -7,73 +7,185 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <meta name="reborn-app-version" content="reborn-cookie-choco-margin-fix-01" />
+  <!-- Cache busting -->
+  <meta name="reborn-app-version" content="reborn-inventory-manual-adjust-fix-01" />
   <script>
     (function () {
-      var APP_VERSION = "reborn-cookie-choco-margin-fix-01";
-      var VERSION_KEY = "reborn.wms.asset.version.v1";
-      var RELOAD_KEY = "reborn.wms.asset.reload." + APP_VERSION;
+      var APP_VERSION = "reborn-inventory-manual-adjust-fix-01";
+      var VERSION_PARAM = "v";
+      var VERSION_STORAGE_KEY = "rebornAppVersion";
+      var REFRESH_FLAG_KEY = "rebornCacheRepairReloaded:" + APP_VERSION;
 
-      function forceVersionedUrl() {
-        try {
-          var url = new URL(window.location.href);
-          if (url.searchParams.get("v") !== APP_VERSION) {
-            url.searchParams.set("v", APP_VERSION);
-            window.location.replace(url.toString());
-            return true;
-          }
-        } catch (error) {
-          console.warn("[Reborn] version URL check skipped:", error);
-        }
-        return false;
-      }
-
-      if (forceVersionedUrl()) return;
       window.__REBORN_APP_VERSION__ = APP_VERSION;
 
-      async function repairAppAssetCache() {
+      function sameOriginServiceWorker(registration) {
         try {
-          var previousVersion = null;
-          try {
-            previousVersion = window.localStorage ? localStorage.getItem(VERSION_KEY) : null;
-          } catch (storageError) {
-            previousVersion = null;
-          }
-
-          if (previousVersion === APP_VERSION) return;
-
-          if ("serviceWorker" in navigator && navigator.serviceWorker.getRegistrations) {
-            var registrations = await navigator.serviceWorker.getRegistrations();
-            await Promise.all(registrations.map(function (registration) {
-              return registration.unregister();
-            }));
-          }
-
-          if ("caches" in window && caches.keys) {
-            var cacheNames = await caches.keys();
-            await Promise.all(cacheNames.map(function (cacheName) {
-              return caches.delete(cacheName);
-            }));
-          }
-
-          try {
-            if (window.localStorage) localStorage.setItem(VERSION_KEY, APP_VERSION);
-          } catch (storageError) {}
-
-          try {
-            if (!sessionStorage.getItem(RELOAD_KEY)) {
-              sessionStorage.setItem(RELOAD_KEY, "1");
-              var reloadUrl = new URL(window.location.href);
-              reloadUrl.searchParams.set("v", APP_VERSION);
-              window.location.replace(reloadUrl.toString());
-            }
-          } catch (sessionError) {}
+          return new URL(registration.scope).origin === window.location.origin;
         } catch (error) {
-          console.warn("[Reborn] safe cache repair skipped:", error);
+          return false;
         }
       }
 
-      repairAppAssetCache();
+      async function deleteOldAppFileCaches() {
+        if (!("caches" in window)) return [];
+        var names = await caches.keys();
+        var deleted = [];
+
+        for (var i = 0; i < names.length; i += 1) {
+          var name = String(names[i] || "");
+
+          // Cache Storage is only used for app shell/static files here.
+          // Keep the current version cache if it exists, remove older/unversioned app-file caches.
+          if (name.indexOf(APP_VERSION) !== -1) continue;
+
+          try {
+            var ok = await caches.delete(name);
+            if (ok) deleted.push(name);
+          } catch (error) {
+            console.warn("[Reborn cache] cache delete skipped:", name, error);
+          }
+        }
+
+        return deleted;
+      }
+
+      async function unregisterOldServiceWorkers() {
+        if (!("serviceWorker" in navigator) || !navigator.serviceWorker.getRegistrations) return [];
+
+        var registrations = await navigator.serviceWorker.getRegistrations();
+        var removed = [];
+
+        for (var i = 0; i < registrations.length; i += 1) {
+          var registration = registrations[i];
+          if (!sameOriginServiceWorker(registration)) continue;
+
+          try {
+            var ok = await registration.unregister();
+            if (ok) removed.push(registration.scope);
+          } catch (error) {
+            console.warn("[Reborn cache] service worker unregister skipped:", error);
+          }
+        }
+
+        return removed;
+      }
+
+      async function repairAppFileCache(reason) {
+        try {
+          var deletedCaches = await deleteOldAppFileCaches();
+          var removedWorkers = await unregisterOldServiceWorkers();
+          console.info("[Reborn cache] app-file cache repair complete", {
+            version: APP_VERSION,
+            reason: reason || "manual",
+            deletedCaches: deletedCaches,
+            removedServiceWorkers: removedWorkers
+          });
+          return { deletedCaches: deletedCaches, removedServiceWorkers: removedWorkers };
+        } catch (error) {
+          console.warn("[Reborn cache] app-file cache repair failed:", error);
+          return { error: error };
+        }
+      }
+
+      window.rebornSafeCacheRepair = async function rebornSafeCacheRepair(reason) {
+        await repairAppFileCache(reason || "manual-console");
+        window.location.reload();
+      };
+
+      function updateUrlVersionIfNeeded() {
+        var url = new URL(window.location.href);
+        if (url.searchParams.get(VERSION_PARAM) === APP_VERSION) return false;
+
+        url.searchParams.set(VERSION_PARAM, APP_VERSION);
+        window.location.replace(url.toString());
+        return true;
+      }
+
+      function readStoredVersion() {
+        try {
+          return window.localStorage.getItem(VERSION_STORAGE_KEY);
+        } catch (error) {
+          return null;
+        }
+      }
+
+      function writeStoredVersion() {
+        try {
+          window.localStorage.setItem(VERSION_STORAGE_KEY, APP_VERSION);
+        } catch (error) {
+          console.warn("[Reborn cache] version marker write skipped:", error);
+        }
+      }
+
+      function getRefreshFlag() {
+        try {
+          return window.sessionStorage.getItem(REFRESH_FLAG_KEY) === "1";
+        } catch (error) {
+          return false;
+        }
+      }
+
+      function setRefreshFlag() {
+        try {
+          window.sessionStorage.setItem(REFRESH_FLAG_KEY, "1");
+        } catch (error) {
+          // sessionStorage may be unavailable in some privacy modes. Do not block the app.
+        }
+      }
+
+      function clearRefreshFlag() {
+        try {
+          window.sessionStorage.removeItem(REFRESH_FLAG_KEY);
+        } catch (error) {
+          // Do not clear all sessionStorage. Only this one-time cache repair key is touched.
+        }
+      }
+
+      function mountManualRepairButton() {
+        try {
+          var url = new URL(window.location.href);
+          if (url.searchParams.get("cacheRepair") !== "1") return;
+
+          var button = document.createElement("button");
+          button.type = "button";
+          button.textContent = "앱 파일 캐시 복구";
+          button.style.cssText = "position:fixed;right:14px;bottom:14px;z-index:99999;padding:10px 12px;border:0;border-radius:12px;background:#111827;color:#fff;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.18);cursor:pointer;";
+          button.title = "재고/기록 데이터는 삭제하지 않고 앱 파일 캐시만 새로고침합니다.";
+          button.addEventListener("click", async function () {
+            var ok = window.confirm("재고/기록 데이터는 삭제하지 않고 앱 파일 캐시만 새로고침합니다. 진행할까요?");
+            if (!ok) return;
+            await window.rebornSafeCacheRepair("manual-button");
+          });
+          document.body.appendChild(button);
+        } catch (error) {
+          console.warn("[Reborn cache] manual repair button skipped:", error);
+        }
+      }
+
+      if (updateUrlVersionIfNeeded()) return;
+
+      var storedVersion = readStoredVersion();
+      var alreadyTried = getRefreshFlag();
+
+      if (storedVersion !== APP_VERSION && !alreadyTried) {
+        setRefreshFlag();
+        repairAppFileCache("version-change").then(function () {
+          writeStoredVersion();
+          window.location.reload();
+        });
+        return;
+      }
+
+      if (alreadyTried) {
+        clearRefreshFlag();
+      }
+      writeStoredVersion();
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", mountManualRepairButton);
+      } else {
+        mountManualRepairButton();
+      }
     })();
   </script>
   <meta name="application-name" content="리본컴퍼니" />
@@ -81,11 +193,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>리본컴퍼니 관리 시스템</title>
-  <link rel="manifest" href="./manifest.json?v=reborn-cookie-choco-margin-fix-01" />
+  <link rel="manifest" href="./manifest.json?v=reborn-inventory-manual-adjust-fix-01" />
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="64x64" href="./favicon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
-  <link rel="stylesheet" href="./style.css?v=reborn-cookie-choco-margin-fix-01" />
+  <link rel="stylesheet" href="./style.css?v=reborn-inventory-manual-adjust-fix-01" />
 </head>
 <body>
   <div id="appLaunchSplash" class="app-launch-splash" aria-hidden="true">
@@ -757,6 +869,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./script.js?v=reborn-cookie-choco-margin-fix-01"></script>
+  <script src="./script.js?v=reborn-inventory-manual-adjust-fix-01"></script>
 </body>
 </html>

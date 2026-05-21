@@ -2202,6 +2202,7 @@
     setReturnAdjustmentDefaults();
     ensurePurchaseDateInputDefault();
     bindWmsEvents();
+    bindInventoryManualAdjustEvents();
     initPurchaseViewMode();
     renderAll();
     enhanceNativeSelects($("page-wms") || document);
@@ -5029,7 +5030,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-cookie-choco-margin-fix-01",
+    cacheVersion: "reborn-inventory-manual-adjust-fix-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -7279,6 +7280,128 @@ async function copyOutboundTrendDiagnostics() {
   }
 }
 
+function renderInventoryManualAdjustPanel(sku, def, currentUnits) {
+  if (!isEditorSession()) return "";
+  const safeSku = escapeHtml(sku);
+  const unitText = def?.unitLabel ? `${escapeHtml(def.unitLabel)} 기준` : "총 낱개 기준";
+  return `
+      <section class="inventory-adjust-card" data-inventory-adjust-card="${safeSku}">
+        <div class="inventory-adjust-head">
+          <div>
+            <span class="eyebrow">ADMIN ONLY</span>
+            <strong>재고 직접 수정</strong>
+          </div>
+          <button type="button" class="btn small" data-inventory-adjust-open="${safeSku}">재고 수정</button>
+        </div>
+        <p class="inventory-adjust-note">현재 재고 수량만 총 낱개 기준으로 조정합니다. 기존 입고/출고 기록은 삭제되지 않습니다.</p>
+        <div class="inventory-adjust-form" data-inventory-adjust-form hidden>
+          <label class="mini-label" for="inventoryAdjustQty">수정 후 재고 수량</label>
+          <input id="inventoryAdjustQty" type="number" step="1" inputmode="numeric" value="${Number(currentUnits) || 0}" data-inventory-adjust-qty aria-label="${safeSku} 수정 후 재고 수량" />
+          <div class="hint">${unitText} · 현재 ${escapeHtml(number(currentUnits))}개</div>
+          <label class="mini-label" for="inventoryAdjustReason">수정 사유</label>
+          <input id="inventoryAdjustReason" type="text" placeholder="예: 실사 재고 보정, 오출고 보정, 누락 입고 보정, 파손/폐기 반영, 기타" data-inventory-adjust-reason />
+          <div class="inventory-adjust-actions">
+            <button type="button" class="btn primary small" data-inventory-adjust-save="${safeSku}">수정 저장</button>
+            <button type="button" class="btn ghost small" data-inventory-adjust-cancel>취소</button>
+          </div>
+        </div>
+      </section>`;
+}
+
+function saveInventoryManualAdjust(sku) {
+  if (!requireEditor("재고 수량 직접 수정")) return;
+  const def = INVENTORY_DEFS[sku];
+  if (!def) {
+    alert("재고 수정 대상을 찾을 수 없습니다.");
+    return;
+  }
+  const overlay = $("inventoryItemOverlay");
+  const qtyInput = overlay ? overlay.querySelector("[data-inventory-adjust-qty]") : null;
+  const reasonInput = overlay ? overlay.querySelector("[data-inventory-adjust-reason]") : null;
+  const rawQty = qtyInput ? String(qtyInput.value || "").trim() : "";
+  if (!/^-?\d+$/.test(rawQty)) {
+    alert("재고 수량은 정수로 입력해주세요.");
+    if (qtyInput) qtyInput.focus();
+    return;
+  }
+  const nextUnits = Number(rawQty);
+  if (!Number.isSafeInteger(nextUnits) || !Number.isFinite(nextUnits)) {
+    alert("재고 수량을 확인해주세요.");
+    if (qtyInput) qtyInput.focus();
+    return;
+  }
+  const reason = reasonInput ? String(reasonInput.value || "").trim() : "";
+  if (!reason) {
+    alert("재고 수정 사유를 입력해주세요.");
+    if (reasonInput) reasonInput.focus();
+    return;
+  }
+  const prevUnits = Number(state.stock?.[sku]?.units || 0);
+  const diffUnits = nextUnits - prevUnits;
+  const ok = confirm("재고 수량을 직접 수정합니다. 기존 입고/출고 기록은 삭제되지 않고, 현재 재고 수량만 조정됩니다. 계속하시겠습니까?");
+  if (!ok) return;
+
+  state.stock[sku] = { units: nextUnits };
+  addAdminActionLog({
+    actionType: "manual_adjust",
+    itemName: sku,
+    qty: diffUnits,
+    memo: `재고 직접 수정: ${reason}`,
+    details: [
+      {
+        itemName: sku,
+        qty: diffUnits,
+        beforeUnits: prevUnits,
+        afterUnits: nextUnits,
+        reason,
+        adjustType: "manual_adjust",
+      },
+    ],
+  });
+  saveState({ action: "재고 직접 수정", immediate: true, forceSupabase: true });
+  renderAll();
+  openInventoryItemDetail(sku);
+  showToast(`${sku} 재고가 ${number(nextUnits)}개로 수정되었습니다.`);
+}
+
+function bindInventoryManualAdjustEvents() {
+  const overlay = $("inventoryItemOverlay");
+  if (!overlay || overlay.dataset.manualAdjustBound === "1") return;
+  overlay.dataset.manualAdjustBound = "1";
+  overlay.addEventListener("click", (event) => {
+    const openBtn = event.target.closest("[data-inventory-adjust-open]");
+    if (openBtn) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!requireEditor("재고 수량 직접 수정")) return;
+      const card = openBtn.closest("[data-inventory-adjust-card]");
+      const form = card ? card.querySelector("[data-inventory-adjust-form]") : null;
+      const qtyInput = form ? form.querySelector("[data-inventory-adjust-qty]") : null;
+      if (form) form.hidden = false;
+      openBtn.hidden = true;
+      if (qtyInput) qtyInput.focus();
+      return;
+    }
+    const cancelBtn = event.target.closest("[data-inventory-adjust-cancel]");
+    if (cancelBtn) {
+      event.preventDefault();
+      event.stopPropagation();
+      const card = cancelBtn.closest("[data-inventory-adjust-card]");
+      const form = card ? card.querySelector("[data-inventory-adjust-form]") : null;
+      const open = card ? card.querySelector("[data-inventory-adjust-open]") : null;
+      if (form) form.hidden = true;
+      if (open) open.hidden = false;
+      return;
+    }
+    const saveBtn = event.target.closest("[data-inventory-adjust-save]");
+    if (saveBtn) {
+      event.preventDefault();
+      event.stopPropagation();
+      saveInventoryManualAdjust(saveBtn.dataset.inventoryAdjustSave || "");
+    }
+  });
+}
+
 function openInventoryItemDetail(sku) {
     sku = canonicalSku(sku);
     const def = INVENTORY_DEFS[sku];
@@ -7319,6 +7442,7 @@ function openInventoryItemDetail(sku) {
         </div>
       </div>
       ${def.isBox ? `<p class="detail-note inventory-detail-note">박스 재고는 파렛/묶음/장 기준으로 직접 수정할 수 있습니다.</p>` : `<p class="detail-note inventory-detail-note">이 품목의 입고와 직접 출고는 입고/직접 출고 입력에서 여러 줄로 한 번에 적용할 수 있습니다.</p>`}
+      ${renderInventoryManualAdjustPanel(sku, def, units)}
       <section class="sku-stockout-forecast-card empty" id="inventoryItemStockoutForecast">
         <div class="sku-stockout-forecast-main">
           <span>예상 소진일</span>
