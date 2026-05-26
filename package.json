@@ -1,0 +1,9 @@
+{
+  "name": "reborn-margin-wms",
+  "version": "0.0.0-codex-ready",
+  "private": true,
+  "scripts": {
+    "check:js": "node --check script.js",
+    "check:forbidden-clear": "node -e \"const fs=require('fs'); const files=['script.js','index.html','style.css','manifest.json','vercel.json']; const bad=['localStorage.clear','sessionStorage.clear','indexedDB.deleteDatabase']; for(const f of files){if(!fs.existsSync(f)) continue; const t=fs.readFileSync(f,'utf8'); for(const b of bad){if(t.includes(b)){console.error('Forbidden pattern:',b,'in',f); process.exitCode=1;}}} if(!process.exitCode) console.log('No forbidden clear/delete calls found in app files.');\""
+  }
+}

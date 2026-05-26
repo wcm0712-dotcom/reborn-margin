@@ -1,5 +1,6 @@
 (() => {
   "use strict";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-cache-stable-fix-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -5030,7 +5031,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-inventory-manual-adjust-fix-01",
+    cacheVersion: "reborn-cache-stable-fix-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -7342,8 +7343,7 @@ function saveInventoryManualAdjust(sku) {
   if (!ok) return;
 
   state.stock[sku] = { units: nextUnits };
-  addAdminActionLog({
-    actionType: "manual_adjust",
+  addAdminActionLog("manual_adjust", {
     itemName: sku,
     qty: diffUnits,
     memo: `재고 직접 수정: ${reason}`,
