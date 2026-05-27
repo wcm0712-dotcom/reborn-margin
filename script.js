@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-cache-stable-fix-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-site-data-stability-fix-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -385,6 +385,7 @@
     };
   }
 
+  let localStateLoadFailed = false;
   let state = loadState();
   let lastOrderAnalysis = null;
   let stockMoveRowSeq = 0;
@@ -641,9 +642,26 @@
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return createInitialState();
+      localStateLoadFailed = false;
       return normalizeState(JSON.parse(raw));
-    } catch {
+    } catch (error) {
+      localStateLoadFailed = true;
+      console.warn("[Reborn storage] saved state load failed; using temporary initial state without deleting saved data.", error);
       return createInitialState();
+    }
+  }
+
+  function setLocalStorageItem(key, value, context = "") {
+    try {
+      localStorage.setItem(key, value);
+      return true;
+    } catch (error) {
+      console.warn("[Reborn storage] localStorage write failed; data was not cleared.", {
+        key,
+        context,
+        message: error?.message || String(error)
+      });
+      return false;
     }
   }
 
@@ -651,11 +669,15 @@
     const { trackUndo = true, cloud = true } = options;
     if (trackUndo) pushUndoSnapshot(reason);
     state.updatedAt = new Date().toISOString();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    addBackup(reason, { cloud });
+    if (localStateLoadFailed) {
+      console.warn("[Reborn storage] state save skipped because saved state failed to load. Existing browser data was preserved.");
+    } else {
+      setLocalStorageItem(STORAGE_KEY, JSON.stringify(state), reason || "saveState");
+      addBackup(reason, { cloud });
+    }
     renderAll();
     refreshInventoryItemOrderTrendIfOpen();
-    if (cloud) queueSupabaseAppStateSave(reason);
+    if (cloud && !localStateLoadFailed) queueSupabaseAppStateSave(reason);
   }
 
   function addBackup(reason, options = {}) {
@@ -663,7 +685,7 @@
     const backup = { at: new Date().toISOString(), reason, state: safeClone(state) };
     const backups = loadBackups();
     backups.unshift(backup);
-    localStorage.setItem(BACKUP_KEY, JSON.stringify(backups.slice(0, 30)));
+    setLocalStorageItem(BACKUP_KEY, JSON.stringify(backups.slice(0, 30)), reason || "addBackup");
     if (cloud) queueSupabaseBackupSave(backup);
   }
 
@@ -688,7 +710,7 @@
   }
 
   function saveUndoSnapshots(snapshots) {
-    localStorage.setItem(UNDO_KEY, JSON.stringify((snapshots || []).slice(0, 50)));
+    setLocalStorageItem(UNDO_KEY, JSON.stringify((snapshots || []).slice(0, 50)), "saveUndoSnapshots");
   }
 
   function pushUndoSnapshot(reason) {
@@ -719,7 +741,8 @@
     state = normalizeState(snapshot.state);
     addAdminActionLog("데이터 복구/import", { itemName: "이전값 복구", memo: snapshot.reason || "저장 전 상태", source: "restorePreviousState" });
     state.updatedAt = new Date().toISOString();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStateLoadFailed = false;
+    setLocalStorageItem(STORAGE_KEY, JSON.stringify(state), "restorePreviousState");
     addBackup("이전값 복구");
     renderAll();
     alert(`이전값을 불러왔습니다.\n${formatDateTime(snapshot.at)} · ${snapshot.reason || "저장 전 상태"}`);
@@ -1154,9 +1177,9 @@
     });
 
     const urlState = getPasswordRecoveryUrlState();
-    if (!urlstate.isRecovery) return;
+    if (!urlState.isRecovery) return;
 
-    if (urlstate.error || urlstate.errorCode) {
+    if (urlState.error || urlState.errorCode) {
       passwordRecoveryMode = false;
       showPasswordRecoveryOverlay(koreanPasswordRecoveryError(urlState), "danger");
       return;
@@ -1506,7 +1529,8 @@
 
       if (shouldApplyRemote) {
         state = normalizeState(remoteState);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        localStateLoadFailed = false;
+        setLocalStorageItem(STORAGE_KEY, JSON.stringify(state), "syncFromSupabase");
         renderAll();
         setSyncTimes({ lastAt: new Date().toISOString(), remoteAt: remoteAt || state.updatedAt });
         setSyncStatus("ok", "최신 상태", "Supabase의 최신 재고를 불러와 화면에 반영했습니다.");
@@ -1541,7 +1565,7 @@
     clearInterval(supabaseSyncTimer);
     supabaseSyncTimer = null;
     const interval = Number(ms) || 0;
-    try { localStorage.setItem(SYNC_INTERVAL_KEY, String(interval)); } catch { /* ignore */ }
+    setLocalStorageItem(SYNC_INTERVAL_KEY, String(interval), "setAutoSyncInterval");
     if (interval > 0) {
       supabaseSyncTimer = setInterval(() => syncFromSupabase({ silent: true }), interval);
     }
@@ -1815,7 +1839,7 @@
           button.setAttribute("aria-label", collapsed ? "출고 데이터 진단 펼치기" : "출고 데이터 진단 접기");
           button.setAttribute("title", collapsed ? "출고 데이터 진단 펼치기" : "출고 데이터 진단 접기");
         }
-        if (save) localStorage.setItem(`reborn-collapse:${key}`, collapsed ? "1" : "0");
+        if (save) setLocalStorageItem(`reborn-collapse:${key}`, collapsed ? "1" : "0", "setCollapsed");
         if (!collapsed && card.id === "orderChartCard") requestAnimationFrame(renderOrderChart);
       };
 
@@ -1840,7 +1864,7 @@
 
   function savePurchaseViewMode(mode) {
     try {
-      localStorage.setItem(PURCHASE_VIEW_MODE_KEY, mode);
+      setLocalStorageItem(PURCHASE_VIEW_MODE_KEY, mode, "setPurchaseViewMode");
     } catch {
       // UI 설정 저장 실패는 발주 데이터 저장과 분리되어야 합니다.
     }
@@ -2194,7 +2218,7 @@
   function initWms() {
     if (archiveOldOrderStats()) {
       state.updatedAt = new Date().toISOString();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      if (!localStateLoadFailed) setLocalStorageItem(STORAGE_KEY, JSON.stringify(state), "initWms archiveOldOrderStats");
     }
     renderPalletInputs();
     renderBoxStockInputs();
@@ -5031,7 +5055,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-cache-stable-fix-01",
+    cacheVersion: "reborn-site-data-stability-fix-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -7564,7 +7588,7 @@ function openInventoryItemDetail(sku) {
       };
       analysis.orderApplicationSignature = buildOrderApplicationSignature(analysis);
       lastOrderAnalysis = analysis;
-      localStorage.setItem(ORDER_CACHE_KEY, JSON.stringify(analysis));
+      setLocalStorageItem(ORDER_CACHE_KEY, JSON.stringify(analysis), "analyzeOrderFile");
       renderOrderAnalysis(analysis);
       $("applyOrderDeductions").disabled = analysis.deductions.length === 0 && analysis.boxUsages.length === 0;
     } catch (error) {
@@ -7997,7 +8021,7 @@ function openInventoryItemDetail(sku) {
     })());
     if (!analysis) return;
     lastOrderAnalysis = analysis;
-    localStorage.setItem(ORDER_CACHE_KEY, JSON.stringify(analysis));
+    setLocalStorageItem(ORDER_CACHE_KEY, JSON.stringify(analysis), "applyLastOrderDeductions");
     if (analysis.needs?.length && !confirm(`확인 필요 ${analysis.needs.length}건이 있습니다. 확인 필요 항목은 제외하고 차감할까요?`)) return;
 
     const duplicate = findPotentialDuplicateOrderApplication(analysis);
@@ -8132,13 +8156,24 @@ function openInventoryItemDetail(sku) {
     return String(value).replace(/[^a-zA-Z0-9_-]/g, "\\$&");
   }
 
+  function runStartupStep(name, fn) {
+    try {
+      const result = fn();
+      if (result && typeof result.catch === "function") {
+        result.catch((error) => console.error(`[Reborn startup] ${name} failed`, error));
+      }
+    } catch (error) {
+      console.error(`[Reborn startup] ${name} failed`, error);
+    }
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
-    initPasswordRecoveryFlow();
-    initRouting();
-    initMarginCalculator();
-    initWms();
-    initSupabaseSync();
-    initAdminLoginReveal();
-    initAdminAuth();
+    runStartupStep("password recovery", initPasswordRecoveryFlow);
+    runStartupStep("routing", initRouting);
+    runStartupStep("margin calculator", initMarginCalculator);
+    runStartupStep("WMS", initWms);
+    runStartupStep("Supabase sync", initSupabaseSync);
+    runStartupStep("admin login reveal", initAdminLoginReveal);
+    runStartupStep("admin auth", initAdminAuth);
   });
 })();
