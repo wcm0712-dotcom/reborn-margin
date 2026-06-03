@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-site-data-stability-fix-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-monthly-order-count-view-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -4480,6 +4480,39 @@ function refreshActiveOrderAnalysisSummary() {
       .sort((a, b) => Number(b.year) - Number(a.year));
   }
 
+  function getArchivedOrderYearTotals() {
+    return Object.entries(state.orderYearArchives || {})
+      .map(([year, value]) => ({ year, value: cleanNumber(value) }))
+      .filter((item) => item.value > 0)
+      .sort((a, b) => Number(b.year) - Number(a.year));
+  }
+
+  function getCumulativeMonthlySections() {
+    const years = new Map();
+    orderStatRows().forEach((item) => {
+      const year = String(item.at.getFullYear());
+      const month = item.at.getMonth() + 1;
+      if (!years.has(year)) years.set(year, new Map());
+      const months = years.get(year);
+      months.set(month, (months.get(month) || 0) + item.orderRows);
+    });
+
+    return [...years.entries()]
+      .map(([year, months]) => {
+        const rows = [...months.entries()]
+          .map(([month, value]) => ({ month, value: cleanNumber(value) }))
+          .filter((item) => item.value > 0)
+          .sort((a, b) => a.month - b.month);
+        return {
+          year,
+          total: rows.reduce((sum, item) => sum + item.value, 0),
+          months: rows
+        };
+      })
+      .filter((section) => section.total > 0)
+      .sort((a, b) => Number(b.year) - Number(a.year));
+  }
+
   function getCumulativeOrderTotal() {
     return getCumulativeYearTotals().reduce((sum, item) => sum + item.value, 0);
   }
@@ -4488,17 +4521,62 @@ function refreshActiveOrderAnalysisSummary() {
     const overlay = $("cumulativeOverlay");
     const body = $("cumulativeBody");
     if (!overlay || !body) return;
-    const rows = getCumulativeYearTotals();
-    const total = rows.reduce((sum, item) => sum + item.value, 0);
-    const max = Math.max(1, ...rows.map((item) => item.value));
-    setText("cumulativeMeta", `전체 누적 ${number(total)}건 · 연도별 주문건수 합계`);
-    body.innerHTML = rows.length
-      ? rows.map((item) => `
+    const yearRows = getCumulativeYearTotals();
+    const monthSections = getCumulativeMonthlySections();
+    const archivedRows = getArchivedOrderYearTotals();
+    const total = yearRows.reduce((sum, item) => sum + item.value, 0);
+    const monthlyTotal = monthSections.reduce((sum, section) => sum + section.total, 0);
+    const archivedTotal = archivedRows.reduce((sum, item) => sum + item.value, 0);
+    const maxYear = Math.max(1, ...yearRows.map((item) => item.value));
+    const maxMonth = Math.max(1, ...monthSections.flatMap((section) => section.months.map((item) => item.value)));
+    const archivedText = archivedTotal > 0 ? ` · 보관 연도별 ${number(archivedTotal)}건은 월별 세부 확인 필요` : "";
+    setText("cumulativeTitle", "월별 총 주문건수");
+    setText("cumulativeMeta", `전체 누적 ${number(total)}건 · 월별 표시 ${number(monthlyTotal)}건${archivedText}`);
+
+    const monthlyHtml = monthSections.length
+      ? monthSections.map((section) => `
+        <div class="monthly-total-year">
+          <div class="monthly-total-head">
+            <strong>${escapeHtml(section.year)}년</strong>
+            <span>소계 ${number(section.total)}건</span>
+          </div>
+          <div class="monthly-total-list">
+            ${section.months.map((item) => `
+              <div class="month-total-line">
+                <strong>${escapeHtml(section.year)}년 ${number(item.month)}월</strong>
+                <span>${number(item.value)}건</span>
+                <div class="year-total-bar" aria-hidden="true"><i style="width:${Math.max(6, Math.round((item.value / maxMonth) * 100))}%"></i></div>
+              </div>`).join("")}
+          </div>
+        </div>`).join("")
+      : `<div class="detail-empty">월별 주문 데이터가 없습니다.</div>`;
+
+    const yearlyHtml = yearRows.length
+      ? yearRows.map((item) => `
         <div class="year-total-line">
           <strong>${escapeHtml(item.year)}년</strong>
           <span>${number(item.value)}건</span>
-          <div class="year-total-bar" aria-hidden="true"><i style="width:${Math.max(6, Math.round((item.value / max) * 100))}%"></i></div>
+          <div class="year-total-bar" aria-hidden="true"><i style="width:${Math.max(6, Math.round((item.value / maxYear) * 100))}%"></i></div>
         </div>`).join("")
+      : `<div class="detail-empty">아직 누적 판매량으로 표시할 주문 처리 기록이 없습니다.</div>`;
+
+    body.innerHTML = yearRows.length
+      ? `
+        <div class="cumulative-section">
+          <div class="cumulative-section-head">
+            <strong>월별 총 주문건수</strong>
+            <span>엑셀 주문처리 행 기준</span>
+          </div>
+          ${monthlyHtml}
+        </div>
+        ${archivedRows.length ? `<div class="cumulative-note">1년이 지난 주문 기록은 기존 구조상 연도별 합계만 보관되어 월별 세부 데이터는 확인 필요입니다.</div>` : ""}
+        <div class="cumulative-section">
+          <div class="cumulative-section-head">
+            <strong>연도별 합계</strong>
+            <span>전체 누적 ${number(total)}건</span>
+          </div>
+          ${yearlyHtml}
+        </div>`
       : `<div class="detail-empty">아직 누적 판매량으로 표시할 주문 처리 기록이 없습니다.</div>`;
     overlay.hidden = false;
     requestAnimationFrame(() => overlay.classList.add("open"));
@@ -5055,7 +5133,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-site-data-stability-fix-01",
+    cacheVersion: "reborn-monthly-order-count-view-01",
     functionCalled: {
       collect: false,
       stockout: false,

@@ -8,10 +8,10 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <!-- Cache busting -->
-  <meta name="reborn-app-version" content="reborn-site-data-stability-fix-01" />
+  <meta name="reborn-app-version" content="reborn-monthly-order-count-view-01" />
   <script>
     (function () {
-      var APP_VERSION = "reborn-site-data-stability-fix-01";
+      var APP_VERSION = "reborn-monthly-order-count-view-01";
       var VERSION_PARAM = "v";
       var VERSION_STORAGE_KEY = "rebornAppVersion";
       var REFRESH_FLAG_KEY = "rebornCacheRepairReloaded:" + APP_VERSION;
@@ -193,11 +193,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>리본컴퍼니 관리 시스템</title>
-  <link rel="manifest" href="./manifest.json?v=reborn-site-data-stability-fix-01" />
+  <link rel="manifest" href="./manifest.json?v=reborn-monthly-order-count-view-01" />
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="64x64" href="./favicon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
-  <link rel="stylesheet" href="./style.css?v=reborn-site-data-stability-fix-01" />
+  <link rel="stylesheet" href="./style.css?v=reborn-monthly-order-count-view-01" />
 </head>
 <body>
   <div id="appLaunchSplash" class="app-launch-splash" aria-hidden="true">
@@ -470,7 +470,7 @@
               <article class="summary-card"><span>오늘 주문건수</span><strong id="ordersToday">0건</strong><small>엑셀 처리 기준</small></article>
               <article class="summary-card"><span>최근 7일 주문건수</span><strong id="ordersWeek">0건</strong><small>누적 처리 기준</small></article>
               <article class="summary-card"><span>최근 30일 주문건수</span><strong id="ordersMonth">0건</strong><small>누적 처리 기준</small></article>
-              <article id="cumulativeSalesCard" class="summary-card clickable cumulative" role="button" tabindex="0"><span>누적 판매량</span><strong id="cumulativeOrderTotal">0건</strong><small>클릭해서 연도별 보기</small></article>
+              <article id="cumulativeSalesCard" class="summary-card clickable cumulative" role="button" tabindex="0"><span>누적 판매량</span><strong id="cumulativeOrderTotal">0건</strong><small>클릭해서 월별 보기</small></article>
               <article class="summary-card low-stock-summary"><span>안전재고 부족</span><strong id="lowStockCount">0개</strong><small id="lowStockInfo">모든 품목 안전권</small></article>
               <article class="summary-card water"><span>증류수 보충</span><strong id="waterReminder">매월 1일</strong><small>2026년 5월 1일부터</small></article>
             </section>
@@ -822,8 +822,8 @@
     <section class="detail-drawer cumulative-drawer" role="dialog" aria-modal="true" aria-labelledby="cumulativeTitle">
       <button id="closeCumulative" class="detail-close" type="button" aria-label="누적 판매량 닫기">×</button>
       <p class="eyebrow">CUMULATIVE SALES</p>
-      <h2 id="cumulativeTitle">누적 판매량</h2>
-      <p id="cumulativeMeta" class="detail-meta">1년이 지난 기록은 연도별 합계로 확인합니다.</p>
+      <h2 id="cumulativeTitle">월별 총 주문건수</h2>
+      <p id="cumulativeMeta" class="detail-meta">월별 주문건수와 연도별 합계를 함께 확인합니다.</p>
       <div id="cumulativeBody" class="detail-body"></div>
     </section>
   </div>
@@ -869,7 +869,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./script.js?v=reborn-site-data-stability-fix-01"></script>
+  <script src="./script.js?v=reborn-monthly-order-count-view-01"></script>
   <script>
     (function () {
       var expectedVersion = window.__REBORN_APP_VERSION__;

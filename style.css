@@ -763,6 +763,57 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.035); }
 }
 .chart-footer strong { color: var(--text); font-size: 15px; }
 .cumulative-drawer { width: min(780px, 100%); }
+.cumulative-section {
+  display: grid;
+  gap: 12px;
+}
+.cumulative-section-head,
+.monthly-total-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+.cumulative-section-head strong,
+.monthly-total-head strong {
+  font-size: 17px;
+}
+.cumulative-section-head span,
+.monthly-total-head span,
+.cumulative-note {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+.monthly-total-year {
+  display: grid;
+  gap: 10px;
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.035);
+}
+.monthly-total-list {
+  display: grid;
+  gap: 8px;
+}
+.month-total-line {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.55fr) minmax(96px, 0.45fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 11px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.045);
+}
+.month-total-line strong { font-size: 14px; }
+.month-total-line span { color: var(--muted); font-weight: 900; }
+.cumulative-note {
+  padding: 12px 14px;
+  border: 1px dashed var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.035);
+}
 .year-total-line {
   display: grid;
   grid-template-columns: minmax(90px, 0.4fr) minmax(140px, 0.6fr) minmax(0, 1fr);
@@ -800,7 +851,10 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.035); }
   .chart-stage { min-height: 260px; }
   #orderChart { height: 260px; }
   .chart-footer { flex-direction: column; align-items: flex-start; }
-  .year-total-line { grid-template-columns: 1fr; }
+  .year-total-line,
+  .month-total-line { grid-template-columns: 1fr; }
+  .cumulative-section-head,
+  .monthly-total-head { display: grid; }
 }
 
 
