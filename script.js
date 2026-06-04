@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-wms-inventory-labor-tabs-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-labor-purchase-compact-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -15,7 +15,7 @@
   const LABOR_COST_DEFAULTS = Object.freeze({
     workerCount: 4,
     dailyRate: 135000,
-    overtimeWorkerCount: 0,
+    overtimeWorkerCount: 4,
     overtimeHours: 0,
     overtimeRate: 15000,
     memo: ""
@@ -3340,6 +3340,12 @@ function refreshActiveOrderAnalysisSummary() {
       </div>`;
   }
 
+  function formatPurchaseCompletedRecentDate(record) {
+    const date = new Date(record?.createdAt || record?.paymentDate || record?.inboundDate || "");
+    if (Number.isNaN(date.getTime())) return "확인 필요";
+    return dateKey(date);
+  }
+
   function renderPurchaseCompletedRecords() {
     const root = $("purchaseCompletedSection");
     if (!root) return;
@@ -3348,20 +3354,31 @@ function refreshActiveOrderAnalysisSummary() {
       : [];
     state.purchaseCompletedRecords = records;
     const totalAmount = records.reduce((sum, record) => sum + Number(record.paymentAmount || record.amount || 0), 0);
+    const recentDate = records.length
+      ? records
+          .map(formatPurchaseCompletedRecentDate)
+          .filter((value) => value && value !== "확인 필요")
+          .sort()
+          .pop() || "확인 필요"
+      : "-";
     const canEditCompletedRecords = isEditorSession();
     const recordCards = records
       .slice()
       .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
       .map((record) => {
         const productNamesHtml = renderPurchaseCompletedProductNames(record);
+        const completedDate = formatPurchaseCompletedRecentDate(record);
         return `
         <article class="purchase-completed-record-card">
-          ${productNamesHtml}
-          <div class="purchase-completed-record-main">
-            <span class="purchase-completed-record-label">입금금액</span>
-            <strong>${number(record.paymentAmount || record.amount || 0)}원</strong>
+          <div class="purchase-completed-record-head">
+            ${productNamesHtml}
+            <div class="purchase-completed-record-main">
+              <span class="purchase-completed-record-label">금액</span>
+              <strong>${number(record.paymentAmount || record.amount || 0)}원</strong>
+            </div>
           </div>
           <div class="purchase-completed-record-dates">
+            <span><b>처리일</b> ${escapeHtml(completedDate)}</span>
             <span><b>입고날짜</b> ${escapeHtml(record.inboundDate || record.receivedDate || "-")}</span>
             <span><b>입금날짜</b> ${escapeHtml(record.paymentDate || record.paidDate || "-")}</span>
           </div>
@@ -3376,14 +3393,18 @@ function refreshActiveOrderAnalysisSummary() {
       .join("");
 
     root.innerHTML = `
-      <details class="purchase-completed-panel" ${records.length ? "open" : ""}>
+      <details class="purchase-completed-panel">
         <summary class="purchase-completed-summary">
-          <span>처리완료 내역</span>
-          <strong>${number(records.length)}건 · ${number(totalAmount)}원</strong>
+          <span class="purchase-completed-summary-main">
+            <strong>처리완료 내역 ${number(records.length)}건</strong>
+            <small>총 결제금액 ${number(totalAmount)}원 · 최근 처리일 ${escapeHtml(recentDate)}</small>
+          </span>
+          <span class="purchase-completed-summary-side">
+            <span class="purchase-completed-toggle-text"><em class="when-closed">펼치기</em><em class="when-open">접기</em></span>
+          </span>
         </summary>
         <div class="purchase-completed-body">
           ${records.length ? `
-            <p class="purchase-completed-note">Step 7 기준으로 CSV 다운로드는 현재 남아 있는 처리완료 내역만 포함합니다. 삭제된 내역, 발주현황 숨김 상태, 원본 발주 데이터는 건드리지 않습니다.</p>
             <div class="purchase-completed-toolbar">
               <button type="button" class="btn ghost purchase-completed-download" data-purchase-completed-download="true">CSV 다운로드</button>
               ${canEditCompletedRecords ? `
@@ -5485,7 +5506,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-wms-inventory-labor-tabs-01",
+    cacheVersion: "reborn-labor-purchase-compact-01",
     functionCalled: {
       collect: false,
       stockout: false,

@@ -11924,6 +11924,44 @@ body.admin-active #syncCard .admin-auth-form:has(#adminEmail[hidden]) {
   color: #0f172a;
   margin-right: 3px;
 }
+.purchase-completed-record-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(112px, auto);
+  gap: 10px;
+  align-items: start;
+}
+.purchase-completed-record-head .purchase-completed-products {
+  margin-bottom: 0;
+}
+.purchase-completed-record-head .purchase-completed-products-label {
+  display: none;
+}
+.purchase-completed-record-head .purchase-completed-record-main {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  padding-left: 10px;
+  border-left: 1px solid #eef2f7;
+}
+.purchase-completed-toggle-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: #eef2ff;
+  color: #1d4ed8;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+.purchase-completed-toggle-text em {
+  font-style: normal;
+}
+.purchase-completed-panel[open] .when-closed,
+.purchase-completed-panel:not([open]) .when-open {
+  display: none;
+}
 @media (max-width: 640px) {
   .purchase-completed-record-grid {
     grid-template-columns: 1fr;
@@ -11931,6 +11969,16 @@ body.admin-active #syncCard .admin-auth-form:has(#adminEmail[hidden]) {
   .purchase-completed-panel summary {
     align-items: flex-start;
     gap: 8px;
+  }
+  .purchase-completed-record-head {
+    grid-template-columns: 1fr;
+  }
+  .purchase-completed-record-head .purchase-completed-record-main {
+    justify-items: start;
+    padding-left: 0;
+    padding-top: 8px;
+    border-left: 0;
+    border-top: 1px solid #eef2f7;
   }
 }
 
