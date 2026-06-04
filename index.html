@@ -8,10 +8,10 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <!-- Cache busting -->
-  <meta name="reborn-app-version" content="reborn-monthly-order-count-view-01" />
+  <meta name="reborn-app-version" content="reborn-wms-inventory-labor-tabs-01" />
   <script>
     (function () {
-      var APP_VERSION = "reborn-monthly-order-count-view-01";
+      var APP_VERSION = "reborn-wms-inventory-labor-tabs-01";
       var VERSION_PARAM = "v";
       var VERSION_STORAGE_KEY = "rebornAppVersion";
       var REFRESH_FLAG_KEY = "rebornCacheRepairReloaded:" + APP_VERSION;
@@ -193,11 +193,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>리본컴퍼니 관리 시스템</title>
-  <link rel="manifest" href="./manifest.json?v=reborn-monthly-order-count-view-01" />
+  <link rel="manifest" href="./manifest.json?v=reborn-wms-inventory-labor-tabs-01" />
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="64x64" href="./favicon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
-  <link rel="stylesheet" href="./style.css?v=reborn-monthly-order-count-view-01" />
+  <link rel="stylesheet" href="./style.css?v=reborn-wms-inventory-labor-tabs-01" />
 </head>
 <body>
   <div id="appLaunchSplash" class="app-launch-splash" aria-hidden="true">
@@ -475,8 +475,39 @@
               <article class="summary-card water"><span>증류수 보충</span><strong id="waterReminder">매월 1일</strong><small>2026년 5월 1일부터</small></article>
             </section>
 
+            <div class="wms-view-tabs" role="tablist" aria-label="WMS 보기 선택">
+              <button id="wmsInventoryViewTab" type="button" class="wms-view-tab active" data-wms-main-view="inventory" role="tab" aria-selected="true" aria-controls="inventoryPanelCard">1. 재고</button>
+              <button id="wmsLaborViewTab" type="button" class="wms-view-tab" data-wms-main-view="labor" role="tab" aria-selected="false" aria-controls="laborCostCard">2. 용역비</button>
+            </div>
 
-            <section class="card inventory-card">
+            <section class="card labor-cost-card" id="laborCostCard" aria-label="용역비 달력" hidden>
+              <div class="card-title-row labor-cost-title-row">
+                <div>
+                  <p class="eyebrow">LABOR COST</p>
+                  <h2>용역비 달력</h2>
+                  <p>출근 인원과 잔업시간을 날짜별로 기록하고 월 총액을 확인합니다.</p>
+                </div>
+                <div class="labor-calendar-controls" aria-label="용역비 달력 월 이동">
+                  <button id="laborPrevMonth" type="button" class="ghost-btn small">이전 달</button>
+                  <button id="laborTodayMonth" type="button" class="ghost-btn small">이번 달</button>
+                  <button id="laborNextMonth" type="button" class="ghost-btn small">다음 달</button>
+                </div>
+              </div>
+              <div class="labor-month-summary" aria-label="용역비 월 합계">
+                <div><span>표시 월</span><strong id="laborMonthLabel">-</strong></div>
+                <div><span>월 총액</span><strong id="laborMonthTotal">0원</strong></div>
+                <div><span>출근 인원 합계</span><strong id="laborMonthWorkers">0명</strong></div>
+                <div><span>잔업 시간 합계</span><strong id="laborMonthOvertimeHours">0시간</strong></div>
+                <div><span>잔업비 합계</span><strong id="laborMonthOvertimePay">0원</strong></div>
+              </div>
+              <div class="labor-calendar-weekdays" aria-hidden="true">
+                <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+              </div>
+              <div id="laborCalendarGrid" class="labor-calendar-grid"></div>
+            </section>
+
+
+            <section class="card inventory-card" id="inventoryPanelCard">
           <div class="card-title-row">
             <div>
               <h2>재고 현황</h2>
@@ -830,6 +861,52 @@
 
 
 
+  <div id="laborCostOverlay" class="detail-overlay" hidden>
+    <section class="detail-drawer labor-cost-drawer" role="dialog" aria-modal="true" aria-labelledby="laborCostTitle">
+      <button id="closeLaborCost" class="detail-close" type="button" aria-label="용역비 기록 닫기">×</button>
+      <p class="eyebrow">LABOR COST</p>
+      <h2 id="laborCostTitle">용역비 기록</h2>
+      <p id="laborCostMeta" class="detail-meta">출근 인원은 근무시간과 무관하게 기본 일당으로 계산합니다.</p>
+      <div class="labor-cost-form">
+        <label class="field">
+          <span>출근 인원</span>
+          <input id="laborWorkerCount" type="number" min="0" step="1" inputmode="numeric" />
+        </label>
+        <label class="field">
+          <span>1인 기본 일당</span>
+          <input id="laborDailyRate" type="number" min="0" step="1000" inputmode="numeric" />
+        </label>
+        <label class="field">
+          <span>잔업 인원</span>
+          <input id="laborOvertimeWorkerCount" type="number" min="0" step="1" inputmode="numeric" />
+        </label>
+        <label class="field">
+          <span>잔업 시간</span>
+          <input id="laborOvertimeHours" type="number" min="0" step="0.5" inputmode="decimal" />
+        </label>
+        <label class="field">
+          <span>1시간 잔업 단가</span>
+          <input id="laborOvertimeRate" type="number" min="0" step="1000" inputmode="numeric" />
+        </label>
+        <label class="field full">
+          <span>메모</span>
+          <input id="laborMemo" type="text" maxlength="80" placeholder="예: 잔업 1시간, 조퇴 포함" />
+        </label>
+      </div>
+      <div class="labor-cost-preview" aria-label="용역비 계산 미리보기">
+        <div><span>기본 비용</span><strong id="laborBasePayPreview">0원</strong></div>
+        <div><span>잔업 비용</span><strong id="laborOvertimePayPreview">0원</strong></div>
+        <div><span>하루 총액</span><strong id="laborDailyTotalPreview">0원</strong></div>
+      </div>
+      <div class="labor-cost-note">08:00~17:00 및 휴식시간은 참고 기준이며, 실제 계산은 출근 인원과 잔업 기록만 사용합니다.</div>
+      <div class="labor-cost-actions">
+        <button id="saveLaborCost" type="button" class="primary-btn">저장</button>
+        <button id="deleteLaborCost" type="button" class="danger-btn">기록 삭제</button>
+        <button id="cancelLaborCost" type="button" class="ghost-btn">닫기</button>
+      </div>
+    </section>
+  </div>
+
   <div id="inventoryItemOverlay" class="detail-overlay item-detail-overlay" hidden>
     <section class="detail-drawer item-detail-drawer" role="dialog" aria-modal="true" aria-labelledby="inventoryItemTitle">
       <button id="closeInventoryItem" class="detail-close" type="button" aria-label="품목 상세 닫기">×</button>
@@ -869,7 +946,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./script.js?v=reborn-monthly-order-count-view-01"></script>
+  <script src="./script.js?v=reborn-wms-inventory-labor-tabs-01"></script>
   <script>
     (function () {
       var expectedVersion = window.__REBORN_APP_VERSION__;

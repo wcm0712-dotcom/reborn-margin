@@ -1,16 +1,25 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-monthly-order-count-view-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-wms-inventory-labor-tabs-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
   const UNDO_KEY = "reborn.wms.undo.v1";
   const ORDER_CACHE_KEY = "reborn.wms.lastOrderAnalysis.v3";
   const PURCHASE_VIEW_MODE_KEY = "reborn.wms.ui.purchaseViewMode.v1";
+  const LABOR_COST_STORAGE_KEY = "reborn.laborCost.calendar.v1";
   const PURCHASE_VIEW_MODES = ["expanded", "compact", "collapsed"];
   const APPLIED_ORDER_HISTORY_LIMIT = 200;
   const ADMIN_ACTION_LOG_DISPLAY_LIMIT = 80;
   const ADMIN_ACTION_LOG_STORAGE_LIMIT = 2000;
+  const LABOR_COST_DEFAULTS = Object.freeze({
+    workerCount: 4,
+    dailyRate: 135000,
+    overtimeWorkerCount: 0,
+    overtimeHours: 0,
+    overtimeRate: 15000,
+    memo: ""
+  });
   let purchaseViewMode = "expanded";
 
   const SUPABASE_CONFIG = {
@@ -393,6 +402,9 @@
   let chartResizeTimer = null;
   let activeInventoryDetailSku = null;
   let purchaseCompleteDraftKey = "";
+  let laborCostRecords = loadLaborCostRecords();
+  let laborCalendarMonth = getLaborMonthStart(new Date());
+  let activeLaborCostDate = "";
 
   function normalizeMovementDetails(details) {
     if (!Array.isArray(details)) return [];
@@ -697,6 +709,342 @@
     } catch {
       return [];
     }
+  }
+
+  function getLaborMonthStart(date) {
+    const safeDate = date instanceof Date ? date : new Date(date);
+    if (Number.isNaN(safeDate.getTime())) {
+      const now = new Date();
+      return new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+    return new Date(safeDate.getFullYear(), safeDate.getMonth(), 1);
+  }
+
+  function addLaborMonths(date, diff) {
+    const base = getLaborMonthStart(date);
+    return new Date(base.getFullYear(), base.getMonth() + diff, 1);
+  }
+
+  function getLaborRetentionStart(referenceDate = new Date()) {
+    const monthStart = getLaborMonthStart(referenceDate);
+    return new Date(monthStart.getFullYear(), monthStart.getMonth() - 2, 1);
+  }
+
+  function getLaborMonthKey(date) {
+    return dateKey(getLaborMonthStart(date));
+  }
+
+  function isBlankLaborValue(value) {
+    return value === null || value === undefined || String(value).trim() === "";
+  }
+
+  function normalizeLaborInteger(value, fallback = 0) {
+    if (isBlankLaborValue(value)) return fallback;
+    return Math.max(0, Math.floor(cleanNumber(value)));
+  }
+
+  function normalizeLaborMoney(value, fallback = 0) {
+    if (isBlankLaborValue(value)) return fallback;
+    const numeric = cleanNumber(value);
+    return Number.isFinite(numeric) && numeric >= 0 ? numeric : fallback;
+  }
+
+  function normalizeLaborHours(value, fallback = 0) {
+    if (isBlankLaborValue(value)) return fallback;
+    const numeric = cleanNumber(value);
+    if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+    return Math.round(numeric * 2) / 2;
+  }
+
+  function normalizeLaborCostRecord(record = {}) {
+    const workerCount = normalizeLaborInteger(record.workerCount, LABOR_COST_DEFAULTS.workerCount);
+    const dailyRate = normalizeLaborMoney(record.dailyRate, LABOR_COST_DEFAULTS.dailyRate);
+    const overtimeWorkerCount = Math.min(
+      workerCount,
+      normalizeLaborInteger(record.overtimeWorkerCount, LABOR_COST_DEFAULTS.overtimeWorkerCount)
+    );
+    const overtimeHours = normalizeLaborHours(record.overtimeHours, LABOR_COST_DEFAULTS.overtimeHours);
+    const overtimeRate = normalizeLaborMoney(record.overtimeRate, LABOR_COST_DEFAULTS.overtimeRate);
+    return {
+      workerCount,
+      dailyRate,
+      overtimeWorkerCount,
+      overtimeHours,
+      overtimeRate,
+      memo: String(record.memo || "").trim().slice(0, 80)
+    };
+  }
+
+  function calculateLaborBasePay(record) {
+    const item = normalizeLaborCostRecord(record);
+    return item.workerCount * item.dailyRate;
+  }
+
+  function calculateLaborOvertimePay(record) {
+    const item = normalizeLaborCostRecord(record);
+    return item.overtimeWorkerCount * item.overtimeHours * item.overtimeRate;
+  }
+
+  function calculateLaborDailyTotal(record) {
+    return calculateLaborBasePay(record) + calculateLaborOvertimePay(record);
+  }
+
+  function pruneLaborCostRecords(records, referenceDate = new Date()) {
+    const source = records && typeof records === "object" ? records : {};
+    const retentionStartKey = dateKey(getLaborRetentionStart(referenceDate));
+    const pruned = {};
+    let changed = false;
+    Object.entries(source).forEach(([key, value]) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(key) || key < retentionStartKey) {
+        changed = true;
+        return;
+      }
+      pruned[key] = normalizeLaborCostRecord(value);
+      if (JSON.stringify(pruned[key]) !== JSON.stringify(value)) changed = true;
+    });
+    return { records: pruned, changed };
+  }
+
+  function loadLaborCostRecords() {
+    try {
+      const raw = localStorage.getItem(LABOR_COST_STORAGE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      const result = pruneLaborCostRecords(parsed);
+      if (result.changed) {
+        setLocalStorageItem(LABOR_COST_STORAGE_KEY, JSON.stringify(result.records), "loadLaborCostRecords prune");
+      }
+      return result.records;
+    } catch (error) {
+      console.warn("[Reborn labor cost] saved labor records could not be loaded. Existing data was not cleared.", error);
+      return {};
+    }
+  }
+
+  function saveLaborCostRecords() {
+    try {
+      const result = pruneLaborCostRecords(laborCostRecords);
+      laborCostRecords = result.records;
+      return setLocalStorageItem(LABOR_COST_STORAGE_KEY, JSON.stringify(laborCostRecords), "saveLaborCostRecords");
+    } catch (error) {
+      console.warn("[Reborn labor cost] save skipped; existing WMS data was not touched.", error);
+      return false;
+    }
+  }
+
+  function getLaborMonthSummary(monthDate) {
+    const month = getLaborMonthStart(monthDate);
+    const prefix = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}-`;
+    return Object.entries(laborCostRecords).reduce((summary, [key, record]) => {
+      if (!key.startsWith(prefix)) return summary;
+      const item = normalizeLaborCostRecord(record);
+      const basePay = calculateLaborBasePay(item);
+      const overtimePay = calculateLaborOvertimePay(item);
+      summary.totalPay += basePay + overtimePay;
+      summary.workerCount += item.workerCount;
+      summary.overtimeHours += item.overtimeWorkerCount * item.overtimeHours;
+      summary.overtimePay += overtimePay;
+      summary.recordCount += 1;
+      return summary;
+    }, { totalPay: 0, workerCount: 0, overtimeHours: 0, overtimePay: 0, recordCount: 0 });
+  }
+
+  function formatLaborMonthLabel(date) {
+    const month = getLaborMonthStart(date);
+    return `${month.getFullYear()}년 ${month.getMonth() + 1}월`;
+  }
+
+  function formatLaborDateLabel(key) {
+    const match = String(key || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return key || "-";
+    return `${Number(match[1])}년 ${Number(match[2])}월 ${Number(match[3])}일`;
+  }
+
+  function formatLaborHours(value) {
+    const hours = normalizeLaborHours(value);
+    return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
+  }
+
+  function renderLaborCostCalendar() {
+    const grid = $("laborCalendarGrid");
+    if (!grid) return;
+    const month = getLaborMonthStart(laborCalendarMonth);
+    const summary = getLaborMonthSummary(month);
+    const totalDays = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+    const firstWeekday = month.getDay();
+    const today = todayKey();
+    setText("laborMonthLabel", formatLaborMonthLabel(month));
+    setText("laborMonthTotal", money(summary.totalPay));
+    setText("laborMonthWorkers", `${number(summary.workerCount)}명`);
+    setText("laborMonthOvertimeHours", `${formatLaborHours(summary.overtimeHours)}시간`);
+    setText("laborMonthOvertimePay", money(summary.overtimePay));
+    const prevButton = $("laborPrevMonth");
+    if (prevButton) prevButton.disabled = getLaborMonthKey(addLaborMonths(month, -1)) < getLaborMonthKey(getLaborRetentionStart());
+
+    const cells = [];
+    for (let i = 0; i < firstWeekday; i += 1) {
+      cells.push(`<div class="labor-day labor-day-placeholder" aria-hidden="true"></div>`);
+    }
+    for (let day = 1; day <= totalDays; day += 1) {
+      const key = dateKey(new Date(month.getFullYear(), month.getMonth(), day));
+      const record = laborCostRecords[key] ? normalizeLaborCostRecord(laborCostRecords[key]) : null;
+      const classes = ["labor-day"];
+      if (key === today) classes.push("is-today");
+      if (record) classes.push("has-record");
+      else classes.push("is-empty");
+      const detail = record
+        ? `
+          <span class="labor-day-meta">${number(record.workerCount)}명 · 잔업 ${formatLaborHours(record.overtimeHours)}h</span>
+          <strong class="labor-day-total">${money(calculateLaborDailyTotal(record))}</strong>
+          ${record.memo ? `<span class="labor-day-memo">${escapeHtml(record.memo)}</span>` : ""}`
+        : `<span class="labor-day-empty">미기록</span>`;
+      cells.push(`
+        <button type="button" class="${classes.join(" ")}" data-labor-date="${escapeHtml(key)}" aria-label="${escapeHtml(formatLaborDateLabel(key))} 용역비 기록">
+          <span class="labor-day-number">${day}</span>
+          ${detail}
+        </button>`);
+    }
+    grid.innerHTML = cells.join("");
+  }
+
+  function setLaborCostForm(record) {
+    const item = normalizeLaborCostRecord(record);
+    const fields = {
+      laborWorkerCount: item.workerCount,
+      laborDailyRate: item.dailyRate,
+      laborOvertimeWorkerCount: item.overtimeWorkerCount,
+      laborOvertimeHours: item.overtimeHours,
+      laborOvertimeRate: item.overtimeRate,
+      laborMemo: item.memo
+    };
+    Object.entries(fields).forEach(([id, value]) => {
+      const input = $(id);
+      if (input) input.value = value;
+    });
+    updateLaborCostPreview();
+  }
+
+  function readLaborCostFormRecord(options = {}) {
+    const { notify = false } = options;
+    const workerCount = normalizeLaborInteger($("laborWorkerCount")?.value, LABOR_COST_DEFAULTS.workerCount);
+    let overtimeWorkerCount = normalizeLaborInteger($("laborOvertimeWorkerCount")?.value, LABOR_COST_DEFAULTS.overtimeWorkerCount);
+    if (overtimeWorkerCount > workerCount) {
+      overtimeWorkerCount = workerCount;
+      const input = $("laborOvertimeWorkerCount");
+      if (input) input.value = String(overtimeWorkerCount);
+      if (notify) alert("잔업 인원은 출근 인원을 초과할 수 없어 출근 인원 이하로 조정했습니다.");
+    }
+    return normalizeLaborCostRecord({
+      workerCount,
+      dailyRate: $("laborDailyRate")?.value ?? LABOR_COST_DEFAULTS.dailyRate,
+      overtimeWorkerCount,
+      overtimeHours: $("laborOvertimeHours")?.value ?? LABOR_COST_DEFAULTS.overtimeHours,
+      overtimeRate: $("laborOvertimeRate")?.value ?? LABOR_COST_DEFAULTS.overtimeRate,
+      memo: $("laborMemo")?.value || ""
+    });
+  }
+
+  function updateLaborCostPreview() {
+    const record = readLaborCostFormRecord();
+    setText("laborBasePayPreview", money(calculateLaborBasePay(record)));
+    setText("laborOvertimePayPreview", money(calculateLaborOvertimePay(record)));
+    setText("laborDailyTotalPreview", money(calculateLaborDailyTotal(record)));
+  }
+
+  function openLaborCostEditor(key) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(key || ""))) return;
+    activeLaborCostDate = key;
+    const overlay = $("laborCostOverlay");
+    if (!overlay) return;
+    setText("laborCostTitle", `${formatLaborDateLabel(key)} 용역비`);
+    setText("laborCostMeta", laborCostRecords[key] ? "저장된 기록을 수정합니다." : "기본값으로 미리 계산되며, 저장 전까지는 기록되지 않습니다.");
+    setLaborCostForm(laborCostRecords[key] || LABOR_COST_DEFAULTS);
+    const deleteButton = $("deleteLaborCost");
+    if (deleteButton) deleteButton.hidden = !laborCostRecords[key];
+    overlay.hidden = false;
+    requestAnimationFrame(() => overlay.classList.add("open"));
+  }
+
+  function closeLaborCostEditor() {
+    const overlay = $("laborCostOverlay");
+    if (!overlay || overlay.hidden) return;
+    overlay.classList.remove("open");
+    overlay.hidden = true;
+    activeLaborCostDate = "";
+  }
+
+  function saveActiveLaborCostRecord() {
+    if (!activeLaborCostDate) return;
+    if (activeLaborCostDate < dateKey(getLaborRetentionStart())) {
+      alert("용역비 기록은 최근 3개월 범위만 저장합니다.");
+      return;
+    }
+    const record = readLaborCostFormRecord({ notify: true });
+    laborCostRecords[activeLaborCostDate] = record;
+    saveLaborCostRecords();
+    renderLaborCostCalendar();
+    closeLaborCostEditor();
+  }
+
+  function deleteActiveLaborCostRecord() {
+    if (!activeLaborCostDate || !laborCostRecords[activeLaborCostDate]) return;
+    if (!confirm("이 날짜의 용역비 기록만 삭제할까요? WMS 데이터는 삭제되지 않습니다.")) return;
+    delete laborCostRecords[activeLaborCostDate];
+    saveLaborCostRecords();
+    renderLaborCostCalendar();
+    closeLaborCostEditor();
+  }
+
+  function setWmsMainView(view = "inventory") {
+    const activeView = view === "labor" ? "labor" : "inventory";
+    const showLabor = activeView === "labor";
+    const inventoryCard = $("inventoryPanelCard");
+    const laborCard = $("laborCostCard");
+    if (inventoryCard) inventoryCard.hidden = showLabor;
+    if (laborCard) laborCard.hidden = !showLabor;
+    document.querySelectorAll("[data-wms-main-view]").forEach((button) => {
+      const isActive = button.dataset.wmsMainView === activeView;
+      button.classList.toggle("active", isActive);
+      button.setAttribute("aria-selected", isActive ? "true" : "false");
+    });
+    if (showLabor) renderLaborCostCalendar();
+  }
+
+  function bindWmsMainViewTabs() {
+    document.querySelectorAll("[data-wms-main-view]").forEach((button) => {
+      button.addEventListener("click", () => setWmsMainView(button.dataset.wmsMainView || "inventory"));
+    });
+    setWmsMainView("inventory");
+  }
+
+  function bindLaborCostEvents() {
+    $("laborPrevMonth")?.addEventListener("click", () => {
+      const nextMonth = addLaborMonths(laborCalendarMonth, -1);
+      if (getLaborMonthKey(nextMonth) < getLaborMonthKey(getLaborRetentionStart())) return;
+      laborCalendarMonth = nextMonth;
+      renderLaborCostCalendar();
+    });
+    $("laborNextMonth")?.addEventListener("click", () => {
+      laborCalendarMonth = addLaborMonths(laborCalendarMonth, 1);
+      renderLaborCostCalendar();
+    });
+    $("laborTodayMonth")?.addEventListener("click", () => {
+      laborCalendarMonth = getLaborMonthStart(new Date());
+      renderLaborCostCalendar();
+    });
+    $("laborCalendarGrid")?.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-labor-date]");
+      if (!button) return;
+      openLaborCostEditor(button.dataset.laborDate);
+    });
+    $("laborCostOverlay")?.addEventListener("click", (event) => {
+      if (event.target.id === "laborCostOverlay") closeLaborCostEditor();
+    });
+    $("closeLaborCost")?.addEventListener("click", closeLaborCostEditor);
+    $("cancelLaborCost")?.addEventListener("click", closeLaborCostEditor);
+    $("saveLaborCost")?.addEventListener("click", saveActiveLaborCostRecord);
+    $("deleteLaborCost")?.addEventListener("click", deleteActiveLaborCostRecord);
+    $("laborCostOverlay")?.querySelector(".labor-cost-form")?.addEventListener("input", updateLaborCostPreview);
   }
 
   function loadUndoSnapshots() {
@@ -2227,6 +2575,8 @@
     setReturnAdjustmentDefaults();
     ensurePurchaseDateInputDefault();
     bindWmsEvents();
+    bindLaborCostEvents();
+    bindWmsMainViewTabs();
     bindInventoryManualAdjustEvents();
     initPurchaseViewMode();
     renderAll();
@@ -3730,6 +4080,7 @@ function refreshActiveOrderAnalysisSummary() {
     renderAdminActionLogs();
     ensureStockMoveDefaults();
     renderInventoryItemOrderTrend();
+    renderLaborCostCalendar();
     refreshActiveOrderAnalysisSummary();
     updateEditorLock();
   }
@@ -4845,6 +5196,7 @@ function refreshActiveOrderAnalysisSummary() {
         closeHistoryDetail();
         closeCumulativeSales();
         closeInventoryItemDetail();
+        closeLaborCostEditor();
       }
     });
     $("copyOutboundDiagnosticsBtn")?.addEventListener("click", copyOutboundTrendDiagnostics);
@@ -5133,7 +5485,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-monthly-order-count-view-01",
+    cacheVersion: "reborn-wms-inventory-labor-tabs-01",
     functionCalled: {
       collect: false,
       stockout: false,

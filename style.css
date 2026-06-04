@@ -857,6 +857,276 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.035); }
   .monthly-total-head { display: grid; }
 }
 
+.wms-view-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.035);
+}
+.wms-view-tab {
+  min-width: 108px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 10px 14px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: 0.16s ease;
+}
+.wms-view-tab:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.065);
+}
+.wms-view-tab.active {
+  color: white;
+  border-color: transparent;
+  background: linear-gradient(135deg, rgba(255, 94, 158, 0.92), rgba(139, 92, 246, 0.92));
+  box-shadow: 0 10px 24px rgba(18, 25, 43, 0.18);
+}
+.labor-cost-card {
+  margin-bottom: 18px;
+}
+.labor-cost-title-row {
+  align-items: center;
+}
+.labor-calendar-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.labor-calendar-controls .ghost-btn.small {
+  min-height: 38px;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 800;
+}
+.labor-calendar-controls .ghost-btn:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+.labor-month-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0 16px;
+}
+.labor-month-summary > div {
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.045);
+}
+.labor-month-summary span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+.labor-month-summary strong {
+  display: block;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1.25;
+  word-break: keep-all;
+}
+.labor-calendar-weekdays,
+.labor-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+.labor-calendar-weekdays {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-align: center;
+}
+.labor-day {
+  min-height: 118px;
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.035);
+  text-align: left;
+}
+button.labor-day {
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+}
+button.labor-day:hover {
+  border-color: rgba(255, 94, 158, 0.48);
+  background: rgba(255, 255, 255, 0.07);
+  transform: translateY(-1px);
+}
+.labor-day-placeholder {
+  border-style: dashed;
+  opacity: 0.34;
+}
+.labor-day-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  color: var(--soft);
+  font-weight: 900;
+}
+.labor-day.is-today .labor-day-number {
+  color: #111827;
+  background: var(--brand);
+}
+.labor-day.has-record {
+  border-color: rgba(52, 211, 153, 0.34);
+  background: rgba(52, 211, 153, 0.07);
+}
+.labor-day-empty,
+.labor-day-meta,
+.labor-day-memo {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+.labor-day-total {
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.25;
+}
+.labor-day-memo {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.labor-cost-drawer {
+  width: min(720px, 100%);
+}
+.labor-cost-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.labor-cost-preview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+.labor-cost-preview > div {
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.045);
+}
+.labor-cost-preview span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+.labor-cost-preview strong {
+  font-size: 20px;
+  line-height: 1.25;
+}
+.labor-cost-note {
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.55;
+}
+.labor-cost-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+@media (max-width: 1180px) {
+  .labor-month-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .wms-view-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+  .wms-view-tab {
+    min-width: 0;
+    width: 100%;
+  }
+  .labor-cost-title-row {
+    align-items: stretch;
+  }
+  .labor-calendar-controls,
+  .labor-cost-actions {
+    justify-content: stretch;
+  }
+  .labor-calendar-controls .ghost-btn,
+  .labor-cost-actions .primary-btn,
+  .labor-cost-actions .danger-btn,
+  .labor-cost-actions .ghost-btn {
+    flex: 1 1 120px;
+  }
+  .labor-month-summary,
+  .labor-cost-form,
+  .labor-cost-preview {
+    grid-template-columns: 1fr;
+  }
+  .labor-calendar-grid,
+  .labor-calendar-weekdays {
+    gap: 5px;
+  }
+  .labor-day {
+    min-height: 92px;
+    padding: 8px;
+    border-radius: 12px;
+  }
+  .labor-day-number {
+    width: 24px;
+    height: 24px;
+  }
+  .labor-day-meta,
+  .labor-day-empty,
+  .labor-day-memo {
+    font-size: 11px;
+  }
+  .labor-day-total {
+    font-size: 12px;
+  }
+}
+@media (max-width: 420px) {
+  .labor-calendar-grid,
+  .labor-calendar-weekdays {
+    gap: 4px;
+  }
+  .labor-day {
+    min-height: 84px;
+    padding: 6px;
+  }
+  .labor-day-total {
+    word-break: keep-all;
+  }
+}
+
 
 
 .box-stock-grid {
