@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-labor-purchase-compact-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-purchase-history-ui-balance-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -5506,7 +5506,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-labor-purchase-compact-01",
+    cacheVersion: "reborn-purchase-history-ui-balance-01",
     functionCalled: {
       collect: false,
       stockout: false,

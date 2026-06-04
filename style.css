@@ -11879,14 +11879,17 @@ body.admin-active #syncCard .admin-auth-form:has(#adminEmail[hidden]) {
 }
 .purchase-completed-record-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(3, minmax(280px, 1fr));
+  gap: 12px;
 }
 .purchase-completed-record-card {
+  display: grid;
+  align-content: start;
+  gap: 12px;
   border: 1px solid #e5e7eb;
   border-radius: 14px;
   background: #fff;
-  padding: 10px 11px;
+  padding: 14px;
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
 }
 .purchase-completed-record-main {
@@ -11897,8 +11900,9 @@ body.admin-active #syncCard .admin-auth-form:has(#adminEmail[hidden]) {
 }
 .purchase-completed-record-main strong {
   color: #0f172a;
-  font-size: 15px;
-  font-weight: 800;
+  font-size: 18px;
+  font-weight: 950;
+  line-height: 1.18;
   white-space: nowrap;
 }
 .purchase-completed-record-label {
@@ -11910,7 +11914,7 @@ body.admin-active #syncCard .admin-auth-form:has(#adminEmail[hidden]) {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 7px;
+  margin-top: 0;
   color: #334155;
   font-size: 12px;
 }
@@ -11926,8 +11930,8 @@ body.admin-active #syncCard .admin-auth-form:has(#adminEmail[hidden]) {
 }
 .purchase-completed-record-head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(112px, auto);
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(128px, max-content);
+  gap: 14px;
   align-items: start;
 }
 .purchase-completed-record-head .purchase-completed-products {
@@ -11940,7 +11944,8 @@ body.admin-active #syncCard .admin-auth-form:has(#adminEmail[hidden]) {
   display: grid;
   justify-items: end;
   gap: 4px;
-  padding-left: 10px;
+  min-width: 128px;
+  padding-left: 12px;
   border-left: 1px solid #eef2f7;
 }
 .purchase-completed-toggle-text {
@@ -11986,7 +11991,7 @@ body.admin-active #syncCard .admin-auth-form:has(#adminEmail[hidden]) {
 .purchase-completed-record-actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 8px;
+  margin-top: 0;
 }
 .purchase-completed-remove-btn,
 .purchase-completed-clear-btn {
@@ -12003,6 +12008,19 @@ body.admin-active #syncCard .admin-auth-form:has(#adminEmail[hidden]) {
   color: #991b1b;
   border-color: rgba(248, 113, 113, 0.32);
   background: #fff;
+}
+@media (max-width: 1180px) {
+  .purchase-completed-record-grid {
+    grid-template-columns: repeat(2, minmax(280px, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .purchase-completed-record-grid {
+    grid-template-columns: 1fr;
+  }
+  .purchase-completed-record-card {
+    padding: 13px;
+  }
 }
 @media (max-width: 640px) {
   .purchase-completed-record-actions,
@@ -12131,7 +12149,8 @@ body.admin-active #syncCard .admin-auth-form:has(#adminEmail[hidden]) {
 /* purchase complete product name display */
 .purchase-completed-products {
   display: grid;
-  gap: 6px;
+  gap: 7px;
+  min-width: 0;
   margin-bottom: 10px;
 }
 .purchase-completed-products-label {
@@ -12141,33 +12160,39 @@ body.admin-active #syncCard .admin-auth-form:has(#adminEmail[hidden]) {
   letter-spacing: -0.01em;
 }
 .purchase-completed-product-list {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 6px;
+  min-width: 0;
 }
 .purchase-completed-product-chip,
 .purchase-completed-product-more {
-  display: inline-flex;
-  align-items: center;
+  display: grid;
   gap: 5px;
   max-width: 100%;
-  border: 1px solid rgba(99, 102, 241, 0.16);
-  border-radius: 999px;
+  min-width: 0;
+  border: 1px solid rgba(99, 102, 241, 0.14);
+  border-radius: 12px;
   background: #f8fafc;
   color: #1e293b;
-  padding: 5px 8px;
+  padding: 8px 10px;
   font-size: 12px;
-  line-height: 1.25;
+  line-height: 1.32;
 }
 .purchase-completed-product-chip strong {
   min-width: 0;
-  overflow-wrap: anywhere;
-  font-weight: 800;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1.25;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 .purchase-completed-product-chip small {
   color: #64748b;
-  font-weight: 700;
-  white-space: nowrap;
+  font-weight: 800;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 .purchase-completed-product-chip.is-missing {
   border-color: rgba(245, 158, 11, 0.28);
@@ -12187,7 +12212,6 @@ body.admin-active #syncCard .admin-auth-form:has(#adminEmail[hidden]) {
   .purchase-completed-product-more {
     width: 100%;
     border-radius: 12px;
-    justify-content: space-between;
   }
 }
 
