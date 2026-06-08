@@ -8,10 +8,10 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <!-- Cache busting -->
-  <meta name="reborn-app-version" content="reborn-purchase-history-ui-balance-01" />
+  <meta name="reborn-app-version" content="reborn-excel-count-ui-tune-01" />
   <script>
     (function () {
-      var APP_VERSION = "reborn-purchase-history-ui-balance-01";
+      var APP_VERSION = "reborn-excel-count-ui-tune-01";
       var VERSION_PARAM = "v";
       var VERSION_STORAGE_KEY = "rebornAppVersion";
       var REFRESH_FLAG_KEY = "rebornCacheRepairReloaded:" + APP_VERSION;
@@ -193,11 +193,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>리본컴퍼니 관리 시스템</title>
-  <link rel="manifest" href="./manifest.json?v=reborn-purchase-history-ui-balance-01" />
+  <link rel="manifest" href="./manifest.json?v=reborn-excel-count-ui-tune-01" />
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="64x64" href="./favicon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
-  <link rel="stylesheet" href="./style.css?v=reborn-purchase-history-ui-balance-01" />
+  <link rel="stylesheet" href="./style.css?v=reborn-excel-count-ui-tune-01" />
 </head>
 <body>
   <div id="appLaunchSplash" class="app-launch-splash" aria-hidden="true">
@@ -220,6 +220,7 @@
       <nav class="category-nav" aria-label="카테고리">
         <button type="button" class="category-btn active" data-route="margin">마진계산기</button>
         <button type="button" class="category-btn" data-route="wms">WMS재고</button>
+        <button type="button" class="category-btn" data-route="excel-count">엑셀 건수 계산기</button>
       </nav>
     </header>
 
@@ -246,6 +247,11 @@
               <span class="home-entry-kicker">WMS</span>
               <strong>WMS 재고 시스템</strong>
               <em>재고 · 발주 · 입출고 관리</em>
+            </button>
+            <button type="button" class="home-entry-card" data-route="excel-count">
+              <span class="home-entry-kicker">Excel</span>
+              <strong>엑셀 건수 계산기</strong>
+              <em>판매자 · 주문건수 · 배송비 분석</em>
             </button>
           </div>
         </div>
@@ -352,6 +358,170 @@
               <div><span>마진 10% 권장가</span><strong id="targetSalePrice">0원</strong></div>
             </div>
           </section>
+        </div>
+      </section>
+
+
+      <section id="page-excel-count" class="page excel-count-page is-empty" aria-label="엑셀 건수 계산기">
+        <div class="page-head excel-count-head">
+          <p class="eyebrow">ORDER COUNT ANALYZER</p>
+          <h1>엑셀 건수 계산기</h1>
+          <p>엑셀 주문 파일을 업로드하면 판매자별 주문건수, 배송비, 확인 필요 항목을 한 화면에서 정리합니다.</p>
+        </div>
+        <div class="excel-count-app">
+          <div class="workspace-layout">
+                <aside class="side-panel" aria-label="파일 선택과 안내">
+                  <section class="hero">
+                    <div class="upload-card">
+                      <div class="upload-heading">
+                        <span class="upload-kicker">개인용 엑셀 주문 분석기</span>
+                        <strong>엑셀 파일을 선택하면 바로 분석합니다</strong>
+                        <p>판매자별 카테고리, 주문선택사항, 배송비를 한 화면에서 정리합니다.</p>
+                      </div>
+                      <div class="upload-box">
+                        <label class="field-label" for="fileInput">엑셀 파일 선택</label>
+                        <input id="fileInput" type="file" accept=".xlsx,.xls,.xlsm,.csv" aria-describedby="fileInputHelp statusBox" />
+                        <div id="fileInputHelp" class="small" style="margin-top:10px;">파일을 선택하면 첫 번째 시트를 바로 분석합니다.</div>
+                      </div>
+          
+                      <div class="privacy-note">
+                        <b>로컬 처리</b>
+                        <span>선택한 파일은 브라우저 안에서만 읽고, 원본 파일은 수정하지 않습니다.</span>
+                      </div>
+          
+                      <div id="sheetSelectorWrap" class="hidden">
+                        <label class="field-label" for="sheetSelect">분석할 시트 선택</label>
+                        <select id="sheetSelect" class="select" aria-describedby="statusBox"></select>
+                      </div>
+          
+                      <div id="statusBox" class="status" role="status" aria-live="polite">엑셀 파일을 선택하면 자동으로 분석됩니다.</div>
+                    </div>
+          
+                    <div class="hero-card">
+                      <h1>개인용 엑셀 주문 분석기</h1>
+                      <p>H열 주문선택사항을 세고 C열·AA열 기준으로 판매자별 카테고리를 만듭니다.</p>
+                      <details class="compact-help">
+                        <summary>분석 기준 보기</summary>
+                        <div class="rule-list">
+                          <div class="rule"><b>✓</b><span>.xlsx / .xls / .xlsm / .csv 파일을 지원합니다.</span></div>
+                          <div class="rule"><b>✓</b><span>상품명 안의 수량은 곱하지 않고 행 단위 주문 건수만 셉니다.</span></div>
+                          <div class="rule"><b>✓</b><span>H열 문구가 다르면 서로 다른 주문선택사항으로 분리합니다.</span></div>
+                          <div class="rule"><b>✓</b><span>AA열의 lkh5209, live_rock, lkh52009는 “lkh5209 통합판매자”로 묶습니다.</span></div>
+                          <div class="rule"><b>✓</b><span>분석은 브라우저 안에서만 처리되며 원본 엑셀 파일은 수정하지 않습니다.</span></div>
+                        </div>
+                      </details>
+                    </div>
+          
+                    <div class="landing-preview pre-analysis-only" aria-label="분석 전 안내">
+                      <div class="landing-preview-header">
+                        <strong>분석 전 준비 상태</strong>
+                        <span>파일 선택 대기</span>
+                      </div>
+                      <div class="landing-steps">
+                        <div class="step-card">
+                          <span class="step-num">1</span>
+                          <div><strong>엑셀 선택</strong><span>.xlsx, .xls, .xlsm, .csv 지원</span></div>
+                        </div>
+                        <div class="step-card">
+                          <span class="step-num">2</span>
+                          <div><strong>자동 분석</strong><span>첫 번째 시트를 바로 집계</span></div>
+                        </div>
+                        <div class="step-card">
+                          <span class="step-num">3</span>
+                          <div><strong>결과 확인</strong><span>판매자, 옵션, 배송비를 표로 확인</span></div>
+                        </div>
+                      </div>
+                      <div class="placeholder-grid">
+                        <div class="placeholder-card"><span>판매자별 카테고리</span><strong>분석 후 표시</strong></div>
+                        <div class="placeholder-card"><span>주요 요약 숫자</span><strong>자동 집계</strong></div>
+                        <div class="placeholder-card"><span>배송비 분석</span><strong>X열 기준</strong></div>
+                        <div class="placeholder-card"><span>다운로드</span><strong>결과 생성 후</strong></div>
+                      </div>
+                    </div>
+                  </section>
+                </aside>
+          
+                <section id="resultArea" class="main-panel hidden" aria-labelledby="resultsTitle">
+                <h2 id="resultsTitle" class="sr-only">분석 결과</h2>
+                <div class="toolbar">
+                  <label class="sr-only" for="sellerSearch">판매자 검색</label>
+                  <input id="sellerSearch" class="input" type="search" placeholder="판매자 검색 예: 리본컴퍼니, 마루몰" autocomplete="off" />
+                  <label class="sr-only" for="optionSearch">주문선택사항 검색</label>
+                  <input id="optionSearch" class="input" type="search" placeholder="주문선택사항 검색 예: 브이콘, 20개" autocomplete="off" />
+                  <div class="button-row">
+                    <button id="expandAllBtn" type="button">전체 펼치기</button>
+                    <button id="collapseAllBtn" type="button">전체 접기</button>
+                    <button id="resetBtn" type="button" class="danger">초기화</button>
+                  </div>
+                </div>
+          
+                <div id="summaryGrid" class="summary-grid" aria-live="polite"></div>
+          
+                <section>
+                  <div id="fileCheckPanel" class="panel file-check-accordion"></div>
+                </section>
+          
+                <section>
+                  <div class="section-title">
+                    <h2>배송비 분석</h2>
+                    <span>X열 기준 / 0원 제외</span>
+                  </div>
+                  <div class="panel">
+                    <div id="shippingFeePanel"></div>
+                  </div>
+                </section>
+          
+                <section>
+                  <div class="section-title">
+                    <h2>판매자별 카테고리</h2>
+                    <span id="sellerSectionHint">compact / 총 주문건수 순</span>
+                  </div>
+                  <div id="sellerList" class="seller-list"></div>
+                </section>
+          
+                <section>
+                  <div class="section-title">
+                    <h2>전체 주문선택사항별 주문건수</h2>
+                    <span>판매자 구분 없이 H열 기준 전체 집계</span>
+                  </div>
+                  <div class="panel">
+                    <div id="overallOptionTable"></div>
+                  </div>
+                </section>
+          
+                <section>
+                  <div class="section-title">
+                    <h2>확인 필요 목록</h2>
+                    <span>빈 값, 판매자 확인 불가, 열 부족</span>
+                  </div>
+                  <div class="panel">
+                    <div id="needReviewTable"></div>
+                  </div>
+                </section>
+          
+                <section>
+                  <div class="section-title">
+                    <h2>다운로드</h2>
+                    <span>현재 분석 결과 기준</span>
+                  </div>
+                  <div class="panel">
+                    <div class="download-grid">
+                      <button id="downloadXlsxBtn" class="primary" type="button">분석 결과 엑셀 다운로드</button>
+                      <button id="downloadSellerDetailCsvBtn" type="button">판매자별 상세 CSV</button>
+                      <button id="downloadSellerTotalCsvBtn" type="button">판매자별 총주문 CSV</button>
+                      <button id="downloadOverallCsvBtn" type="button">전체 주문선택사항 CSV</button>
+                    </div>
+                  </div>
+                </section>
+          
+                <details class="notice">
+                  <summary>판매자 판정 기준 / .xls 사용 안내 / 오프라인 사용 안내</summary>
+                  <p><strong>판매자 판정:</strong> AA열이 lkh5209, live_rock, lkh52009 중 하나이면 “lkh5209 통합판매자”로 최우선 묶습니다. 그 외에는 C열 값에서 괄호 안 판매자명 예: 쿠팡(마루몰) → 마루몰 을 우선 사용합니다. C열이 비어 있으면 AA열을 사용합니다.</p>
+                  <p><strong>.xls 안내:</strong> 구형 엑셀 파일도 SheetJS로 읽습니다. 다만 일부 오래된 .xls는 한글/날짜/숫자 형식이 깨질 수 있습니다. 읽기 실패 시 엑셀에서 “다른 이름으로 저장 → .xlsx”로 다시 저장한 뒤 업로드해보세요.</p>
+                  <p><strong>오프라인 사용:</strong> 인터넷 없이 쓰려면 <code>xlsx.full.min.js</code> 파일을 이 <code>index.html</code>과 같은 폴더에 저장하면 됩니다. 같은 폴더에 라이브러리가 없으면 CDN을 통해 불러옵니다.</p>
+                </details>
+                </section>
+              </div>
         </div>
       </section>
 
@@ -946,7 +1116,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./script.js?v=reborn-purchase-history-ui-balance-01"></script>
+  <script src="./script.js?v=reborn-excel-count-ui-tune-01"></script>
   <script>
     (function () {
       var expectedVersion = window.__REBORN_APP_VERSION__;

@@ -7203,9 +7203,9 @@ body.route-home .category-nav {
 }
 
 .home-entry-grid {
-  width: min(760px, 100%);
+  width: min(1040px, 100%);
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -12252,5 +12252,813 @@ body.admin-active #syncCard .admin-auth-form:has(#adminEmail[hidden]) {
 @media (max-width: 640px) {
   .inventory-adjust-actions .btn {
     flex: 1 1 120px;
+  }
+}
+
+
+/* Excel count calculator tab: scoped to the new page only. */
+#page-excel-count {
+  --excel-bg: #f6f7fb;
+  --excel-panel: #ffffff;
+  --excel-text: #172033;
+  --excel-muted: #667085;
+  --excel-line: #e5e7eb;
+  --excel-line-strong: #d0d5dd;
+  --excel-primary: #2563eb;
+  --excel-primary-dark: #1d4ed8;
+  --excel-primary-soft: #eff6ff;
+  --excel-good: #047857;
+  --excel-warn: #b45309;
+  --excel-danger: #b91c1c;
+  --excel-shadow: 0 8px 22px rgba(15, 23, 42, 0.07);
+  --excel-radius: 14px;
+}
+
+#page-excel-count .page-head {
+  margin: 30px 0 18px;
+  max-width: 980px;
+}
+
+#page-excel-count .page-head .eyebrow {
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+#page-excel-count .page-head h1 {
+  font-size: clamp(30px, 4.1vw, 46px);
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+  font-weight: 850;
+}
+
+#page-excel-count .page-head > p {
+  max-width: 760px;
+  margin: 12px 0 0;
+  color: #526277;
+  font-size: 15px;
+  line-height: 1.7;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+#page-excel-count *,
+#page-excel-count *::before,
+#page-excel-count *::after {
+  box-sizing: border-box;
+}
+
+#page-excel-count .excel-count-app {
+  width: min(1840px, 100%);
+  margin: 0 auto 36px;
+  color: var(--excel-text);
+  line-height: 1.55;
+}
+
+#page-excel-count.is-empty .excel-count-app {
+  width: min(1120px, 100%);
+}
+
+#page-excel-count .workspace-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 390px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+#page-excel-count.is-empty .workspace-layout {
+  grid-template-columns: 1fr;
+}
+
+#page-excel-count .side-panel {
+  position: sticky;
+  top: 14px;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+#page-excel-count.is-empty .side-panel {
+  position: static;
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+}
+
+#page-excel-count .main-panel {
+  min-width: 0;
+}
+
+#page-excel-count .hero {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  align-items: stretch;
+}
+
+#page-excel-count.is-empty .hero {
+  grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+  gap: 14px;
+}
+
+#page-excel-count .upload-card,
+#page-excel-count .hero-card,
+#page-excel-count .landing-preview,
+#page-excel-count .panel,
+#page-excel-count .summary-card,
+#page-excel-count .seller-card,
+#page-excel-count .notice {
+  border: 1px solid var(--excel-line);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--excel-shadow);
+}
+
+#page-excel-count .upload-card,
+#page-excel-count .hero-card,
+#page-excel-count .landing-preview,
+#page-excel-count .panel {
+  border-radius: var(--excel-radius);
+}
+
+#page-excel-count .upload-card {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+#page-excel-count.is-empty .upload-card {
+  padding: 22px;
+  border-color: rgba(147, 197, 253, 0.72);
+}
+
+#page-excel-count .upload-heading {
+  display: grid;
+  gap: 10px;
+}
+
+#page-excel-count .upload-heading h1,
+#page-excel-count .hero-card h2,
+#page-excel-count .section-title h2 {
+  margin: 0;
+  color: var(--excel-text);
+  letter-spacing: 0;
+}
+
+#page-excel-count .upload-heading strong {
+  color: var(--excel-text);
+  font-size: clamp(22px, 2vw, 28px);
+  line-height: 1.24;
+  font-weight: 820;
+  letter-spacing: -0.02em;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+#page-excel-count .upload-heading p,
+#page-excel-count .hero-card p,
+#page-excel-count .section-title span,
+#page-excel-count .small {
+  margin: 0;
+  color: var(--excel-muted);
+}
+
+#page-excel-count .upload-heading p,
+#page-excel-count .small {
+  font-size: 14px;
+  line-height: 1.65;
+  color: #667085;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+#page-excel-count .upload-kicker,
+#page-excel-count .field-label {
+  color: var(--excel-primary);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+#page-excel-count .upload-box {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px dashed var(--excel-line-strong);
+  border-radius: 12px;
+  background: #f8fbff;
+}
+
+#page-excel-count input[type="file"],
+#page-excel-count .input,
+#page-excel-count .select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--excel-line-strong);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--excel-text);
+  padding: 10px 12px;
+  font: inherit;
+}
+
+#page-excel-count .input:focus,
+#page-excel-count .select:focus,
+#page-excel-count input[type="file"]:focus {
+  outline: none;
+  border-color: rgba(37, 99, 235, 0.72);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+#page-excel-count button {
+  min-height: 40px;
+  border: 1px solid var(--excel-line-strong);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--excel-text);
+  padding: 9px 13px;
+  font: inherit;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+#page-excel-count button:hover,
+#page-excel-count button:focus-visible {
+  border-color: rgba(37, 99, 235, 0.5);
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.10);
+}
+
+#page-excel-count button.primary,
+#page-excel-count .download-grid .primary {
+  border-color: transparent;
+  background: var(--excel-primary);
+  color: #fff;
+}
+
+#page-excel-count button.danger {
+  color: var(--excel-danger);
+  background: #fff7f7;
+  border-color: #fecaca;
+}
+
+#page-excel-count .privacy-note,
+#page-excel-count .status,
+#page-excel-count .warning-item,
+#page-excel-count .empty {
+  border-radius: 12px;
+  border: 1px solid var(--excel-line);
+  background: #f8fafc;
+  color: #475467;
+  padding: 12px 14px;
+  font-size: 14px;
+}
+
+#page-excel-count .status.warn,
+#page-excel-count .warning-item {
+  color: var(--excel-warn);
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+#page-excel-count .status.danger,
+#page-excel-count .warning-item.danger {
+  color: var(--excel-danger);
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+#page-excel-count .warning-item.good,
+#page-excel-count .pill.good {
+  color: var(--excel-good);
+  border-color: #bbf7d0;
+  background: #ecfdf5;
+}
+
+#page-excel-count .hero-card,
+#page-excel-count .landing-preview,
+#page-excel-count .panel,
+#page-excel-count .notice {
+  padding: 14px;
+}
+
+#page-excel-count .hero-card {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+#page-excel-count .hero-card h1 {
+  margin: 0;
+  font-size: clamp(22px, 2.6vw, 34px);
+  line-height: 1.14;
+  letter-spacing: -0.03em;
+  font-weight: 820;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+#page-excel-count .hero-card p {
+  font-size: 14px;
+  line-height: 1.68;
+  color: #5f7085;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+#page-excel-count .compact-help summary,
+#page-excel-count details.notice summary {
+  cursor: pointer;
+  color: var(--excel-text);
+  font-weight: 800;
+  font-size: 14px;
+}
+
+#page-excel-count .rule-list,
+#page-excel-count .landing-steps,
+#page-excel-count .placeholder-grid {
+  display: grid;
+  gap: 8px;
+}
+
+#page-excel-count .rule,
+#page-excel-count .step-card,
+#page-excel-count .placeholder-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+  min-width: 0;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--excel-line);
+  background: #fff;
+}
+
+#page-excel-count .landing-preview {
+  display: none;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+#page-excel-count.is-empty .landing-preview {
+  grid-column: 1 / -1;
+}
+
+#page-excel-count.is-empty .pre-analysis-only {
+  display: grid;
+}
+
+#page-excel-count .landing-preview-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+#page-excel-count .landing-preview-header strong {
+  color: var(--excel-text);
+  font-size: 18px;
+  font-weight: 820;
+  line-height: 1.25;
+}
+
+#page-excel-count .landing-preview-header span {
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+#page-excel-count .landing-steps {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+#page-excel-count .placeholder-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+#page-excel-count .step-card,
+#page-excel-count .placeholder-card,
+#page-excel-count .rule {
+  align-content: start;
+  min-height: 100%;
+}
+
+#page-excel-count .step-card > div,
+#page-excel-count .placeholder-card,
+#page-excel-count .rule span {
+  min-width: 0;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+#page-excel-count .step-card strong,
+#page-excel-count .placeholder-card strong {
+  display: block;
+  color: var(--excel-text);
+  font-size: 14px;
+  line-height: 1.35;
+  font-weight: 800;
+}
+
+#page-excel-count .step-card span:not(.step-num),
+#page-excel-count .placeholder-card span,
+#page-excel-count .rule span {
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+#page-excel-count .step-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 800;
+  background: #eef4ff;
+  color: var(--excel-primary);
+}
+
+#page-excel-count .toolbar {
+  position: sticky;
+  top: 10px;
+  z-index: 8;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+#page-excel-count .button-row,
+#page-excel-count .download-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+#page-excel-count .summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+#page-excel-count .summary-card {
+  min-width: 0;
+  border-radius: 14px;
+  padding: 13px;
+}
+
+#page-excel-count .summary-card .label,
+#page-excel-count .check-box .k {
+  color: var(--excel-muted);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+#page-excel-count .summary-card .value,
+#page-excel-count .check-box .v {
+  min-width: 0;
+  color: var(--excel-text);
+  font-size: 18px;
+  font-weight: 850;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+#page-excel-count .summary-card.attention {
+  border-color: #fecaca;
+  background: #fff7f7;
+}
+
+#page-excel-count .section-title {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 18px 0 8px;
+}
+
+#page-excel-count .section-title h2 {
+  font-size: 24px;
+  line-height: 1.18;
+  font-weight: 840;
+}
+
+#page-excel-count .section-title span {
+  font-size: 13px;
+  line-height: 1.45;
+  color: #667085;
+}
+
+#page-excel-count .file-check-accordion {
+  padding: 0;
+  overflow: hidden;
+}
+
+#page-excel-count .file-check-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 14px;
+}
+
+#page-excel-count .file-check-title-row,
+#page-excel-count .file-check-meta,
+#page-excel-count .seller-sub,
+#page-excel-count .seller-count {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
+#page-excel-count .file-check-title {
+  color: var(--excel-text);
+  font-weight: 840;
+  font-size: 17px;
+  line-height: 1.3;
+}
+
+#page-excel-count .file-check-body {
+  display: none;
+  padding: 14px;
+  border-top: 1px solid var(--excel-line);
+}
+
+#page-excel-count .file-check-accordion.open .file-check-body {
+  display: block;
+}
+
+#page-excel-count .check-grid,
+#page-excel-count .preview-grid,
+#page-excel-count .shipping-overview {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+#page-excel-count .check-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+#page-excel-count .preview-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+#page-excel-count .shipping-overview {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+#page-excel-count .check-box {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--excel-line);
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+#page-excel-count .pill,
+#page-excel-count .status-badge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 26px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--excel-line);
+  background: #f8fafc;
+  color: #475467;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: normal;
+}
+
+#page-excel-count .seller-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  align-items: start;
+}
+
+#page-excel-count .seller-column {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  min-width: 0;
+}
+
+#page-excel-count .seller-list > .empty {
+  grid-column: 1 / -1;
+}
+
+#page-excel-count .seller-card {
+  display: block;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 14px;
+  border-color: var(--seller-border, var(--excel-line));
+  background: linear-gradient(90deg, var(--seller-accent, #bfdbfe) 0 4px, transparent 4px), var(--seller-tint, #fff);
+}
+
+#page-excel-count .seller-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: 100%;
+  gap: 8px;
+  align-items: center;
+  padding: 11px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+}
+
+#page-excel-count .seller-name {
+  min-width: 0;
+  color: var(--excel-text);
+  font-size: 14px;
+  font-weight: 820;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#page-excel-count .seller-body {
+  display: none;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--seller-border, var(--excel-line));
+  background: rgba(255, 255, 255, 0.72);
+}
+
+#page-excel-count .seller-card.open .seller-body {
+  display: block;
+}
+
+#page-excel-count .seller-card.open .chevron {
+  transform: rotate(180deg);
+}
+
+#page-excel-count .table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--excel-line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+#page-excel-count table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 460px;
+}
+
+#page-excel-count th,
+#page-excel-count td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--excel-line);
+  color: var(--excel-text);
+  font-size: 13px;
+  text-align: left;
+  vertical-align: top;
+}
+
+#page-excel-count th {
+  background: #f8fafc;
+  color: #475467;
+  font-weight: 950;
+}
+
+#page-excel-count td.count,
+#page-excel-count th.count {
+  text-align: right;
+  white-space: nowrap;
+  font-weight: 950;
+}
+
+#page-excel-count td.option-text {
+  min-width: 220px;
+  overflow-wrap: anywhere;
+}
+
+#page-excel-count .hidden {
+  display: none !important;
+}
+
+#page-excel-count .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 1520px) {
+  #page-excel-count .seller-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 1080px) {
+  #page-excel-count .check-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 980px) {
+  #page-excel-count .page-head {
+    margin: 20px 0 14px;
+  }
+
+  #page-excel-count .page-head h1 {
+    font-size: 28px;
+  }
+
+  #page-excel-count .workspace-layout,
+  #page-excel-count.is-empty .hero,
+  #page-excel-count .hero,
+  #page-excel-count .toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  #page-excel-count .side-panel {
+    position: static;
+  }
+
+  #page-excel-count .button-row {
+    justify-content: flex-start;
+  }
+
+  #page-excel-count .seller-list,
+  #page-excel-count .preview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  #page-excel-count .summary-grid,
+  #page-excel-count .shipping-overview,
+  #page-excel-count .placeholder-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  #page-excel-count .page-head h1 {
+    font-size: 24px;
+    line-height: 1.12;
+  }
+
+  #page-excel-count .page-head > p,
+  #page-excel-count .upload-heading p,
+  #page-excel-count .hero-card p,
+  #page-excel-count .step-card span:not(.step-num),
+  #page-excel-count .placeholder-card span {
+    font-size: 13px;
+  }
+
+  #page-excel-count .upload-heading strong,
+  #page-excel-count .hero-card h1 {
+    font-size: 21px;
+  }
+
+  #page-excel-count .landing-preview-header strong,
+  #page-excel-count .section-title h2 {
+    font-size: 18px;
+  }
+
+  #page-excel-count .excel-count-app {
+    width: 100%;
+  }
+
+  #page-excel-count .landing-steps,
+  #page-excel-count .placeholder-grid,
+  #page-excel-count .summary-grid,
+  #page-excel-count .shipping-overview,
+  #page-excel-count .check-grid {
+    grid-template-columns: 1fr;
+  }
+
+  #page-excel-count .seller-header,
+  #page-excel-count .file-check-header {
+    grid-template-columns: 1fr;
+  }
+
+  #page-excel-count .button-row button,
+  #page-excel-count .download-grid button {
+    flex: 1 1 100%;
   }
 }

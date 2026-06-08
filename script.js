@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-purchase-history-ui-balance-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-excel-count-ui-tune-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -1992,7 +1992,7 @@
   }
 
   function initRouting() {
-    const routes = ["home", "margin", "wms"];
+    const routes = ["home", "margin", "wms", "excel-count"];
     const buttons = [...document.querySelectorAll("[data-route]")];
     const routeTo = (route) => {
       const safeRoute = routes.includes(route) ? route : "home";
@@ -2002,6 +2002,7 @@
       document.body.classList.toggle("route-home", safeRoute === "home");
       document.body.classList.toggle("route-margin", safeRoute === "margin");
       document.body.classList.toggle("route-wms", safeRoute === "wms");
+      document.body.classList.toggle("route-excel-count", safeRoute === "excel-count");
       const hasAuthRedirectParams = isSupabaseAuthRedirectHash(location.hash) || isSupabaseAuthRedirectSearch(location.search);
       if (!hasAuthRedirectParams && location.hash !== `#${safeRoute}`) history.replaceState(null, "", `#${safeRoute}`);
       if (safeRoute === "wms") requestAnimationFrame(renderOrderChart);
@@ -5506,7 +5507,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-purchase-history-ui-balance-01",
+    cacheVersion: "reborn-excel-count-ui-tune-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -8607,6 +8608,1156 @@ function openInventoryItemDetail(sku) {
     return String(value).replace(/[^a-zA-Z0-9_-]/g, "\\$&");
   }
 
+
+  function initExcelCountCalculator() {
+    const root = $("page-excel-count");
+    if (!root || root.dataset.excelCountReady === "1") return;
+    root.dataset.excelCountReady = "1";
+
+    const COL_C = 2;
+    const COL_H = 7;
+    const COL_X = 23;
+    const COL_AA = 26;
+    const SPECIAL_SELLER_IDS = new Set(["lkh5209", "live_rock", "lkh52009"]);
+    const SPECIAL_SELLER_NAME = "lkh5209 통합판매자";
+    const SUPPORTED_FILE_EXTS = new Set(["xlsx", "xls", "xlsm", "csv"]);
+    const SELLER_COLOR_PALETTE = [
+      { accent: "#93c5fd", border: "#bfdbfe", tint: "#f8fbff", hover: "#eff6ff" },
+      { accent: "#86efac", border: "#bbf7d0", tint: "#f6fef9", hover: "#ecfdf5" },
+      { accent: "#fcd34d", border: "#fde68a", tint: "#fffdf2", hover: "#fffbeb" },
+      { accent: "#fca5a5", border: "#fecaca", tint: "#fff8f8", hover: "#fef2f2" },
+      { accent: "#c4b5fd", border: "#ddd6fe", tint: "#fbf9ff", hover: "#f5f3ff" },
+      { accent: "#67e8f9", border: "#a5f3fc", tint: "#f2feff", hover: "#ecfeff" }
+    ];
+
+    const state = {
+      workbook: null,
+      sheetNames: [],
+      activeSheetName: "",
+      fileName: "",
+      fileExt: "",
+      summary: null,
+      sellerGroups: [],
+      sellerTotals: [],
+      sellerOptionRows: [],
+      overallOptionRows: [],
+      needReviewRows: [],
+      shippingFeeSummary: null,
+      shippingFeeRows: [],
+      shippingFeeWarnings: [],
+      expandedSellers: new Set(),
+      fileCheck: null,
+      warnings: [],
+      fileCheckStatus: null,
+      isFileCheckOpen: false
+    };
+
+    const el = {
+      fileInput: root.querySelector("#fileInput"),
+      sheetSelectorWrap: root.querySelector("#sheetSelectorWrap"),
+      sheetSelect: root.querySelector("#sheetSelect"),
+      statusBox: root.querySelector("#statusBox"),
+      resultArea: root.querySelector("#resultArea"),
+      fileCheckPanel: root.querySelector("#fileCheckPanel"),
+      sellerSearch: root.querySelector("#sellerSearch"),
+      optionSearch: root.querySelector("#optionSearch"),
+      expandAllBtn: root.querySelector("#expandAllBtn"),
+      collapseAllBtn: root.querySelector("#collapseAllBtn"),
+      resetBtn: root.querySelector("#resetBtn"),
+      summaryGrid: root.querySelector("#summaryGrid"),
+      sellerList: root.querySelector("#sellerList"),
+      shippingFeePanel: root.querySelector("#shippingFeePanel"),
+      overallOptionTable: root.querySelector("#overallOptionTable"),
+      needReviewTable: root.querySelector("#needReviewTable"),
+      downloadXlsxBtn: root.querySelector("#downloadXlsxBtn"),
+      downloadSellerDetailCsvBtn: root.querySelector("#downloadSellerDetailCsvBtn"),
+      downloadSellerTotalCsvBtn: root.querySelector("#downloadSellerTotalCsvBtn"),
+      downloadOverallCsvBtn: root.querySelector("#downloadOverallCsvBtn")
+    };
+
+    if (!el.fileInput || !el.resultArea || !el.sellerList) {
+      console.warn("[Excel count] required elements are missing; initialization skipped.");
+      return;
+    }
+
+    function clean(value) {
+      if (value === null || value === undefined) return "";
+      return String(value).replace(/\u00a0/g, " ").trim();
+    }
+
+    function lower(value) {
+      return clean(value).toLowerCase();
+    }
+
+    function formatNumber(value) {
+      return Number(value || 0).toLocaleString("ko-KR");
+    }
+
+    function formatCurrency(value) {
+      return `${formatNumber(value)}원`;
+    }
+
+    function cell(row, index) {
+      if (!Array.isArray(row)) return "";
+      return clean(row[index]);
+    }
+
+    function isRowNotEmpty(row) {
+      return Array.isArray(row) && row.some(value => clean(value) !== "");
+    }
+
+    function getFileExt(fileName) {
+      const match = clean(fileName).match(/\.([^.]+)$/);
+      return match ? match[1].toLowerCase() : "알 수 없음";
+    }
+
+    function extractSellerFromC(cValue) {
+      const c = clean(cValue);
+      if (!c) return "";
+      const parenMatch = c.match(/\(([^)]+)\)/);
+      if (parenMatch && clean(parenMatch[1])) return clean(parenMatch[1]);
+      return c;
+    }
+
+    function resolveSeller(cValue, aaValue, hasAAColumn) {
+      const c = clean(cValue);
+      const aa = hasAAColumn ? clean(aaValue) : "";
+      const aaKey = aa.toLowerCase();
+
+      if (aa && SPECIAL_SELLER_IDS.has(aaKey)) {
+        return { seller: SPECIAL_SELLER_NAME, source: "AA열 통합 규칙", reason: "" };
+      }
+
+      if (c) {
+        return { seller: extractSellerFromC(c), source: "C열", reason: "" };
+      }
+
+      if (aa) {
+        return { seller: aa, source: "AA열", reason: "" };
+      }
+
+      return {
+        seller: "",
+        source: "",
+        reason: hasAAColumn
+          ? "C열과 AA열 모두 비어 있음"
+          : "C열과 AA열 모두 비어 있음 / AA열 없음"
+      };
+    }
+
+    function sortByCountThenName(a, b, countKey = "주문건수", nameKey = "주문선택사항") {
+      return (b[countKey] - a[countKey]) || String(a[nameKey] || "").localeCompare(String(b[nameKey] || ""), "ko");
+    }
+
+    function getSellerColorStyle(seller) {
+      const text = clean(seller);
+      let hash = 0;
+      for (let index = 0; index < text.length; index += 1) {
+        hash = (hash * 31 + text.charCodeAt(index)) >>> 0;
+      }
+
+      const color = SELLER_COLOR_PALETTE[hash % SELLER_COLOR_PALETTE.length];
+      return `--seller-accent:${color.accent}; --seller-border:${color.border}; --seller-tint:${color.tint}; --seller-hover:${color.hover};`;
+    }
+
+    function parseShippingFeeValue(value) {
+      const raw = clean(value);
+      if (!raw) return { status: "empty", amount: 0, raw };
+
+      const normalized = raw
+        .replace(/,/g, "")
+        .replace(/원/g, "")
+        .replace(/₩/g, "")
+        .replace(/\s/g, "");
+
+      if (!normalized) return { status: "empty", amount: 0, raw };
+      if (normalized.includes(".")) return { status: "decimal", amount: 0, raw, reason: "소수점 금액" };
+      if (!/^-?\d+$/.test(normalized)) return { status: "invalid", amount: 0, raw, reason: "숫자로 해석 불가" };
+
+      const amount = Number(normalized);
+      if (amount < 0) return { status: "negative", amount, raw, reason: "음수 배송비" };
+      if (amount === 0) return { status: "zero", amount, raw };
+      return { status: "positive", amount, raw };
+    }
+
+    function analyzeShippingFees(dataRows, check) {
+      const amountMap = new Map();
+      const warnings = [];
+      const summary = {
+        chargedCount: 0,
+        totalAmount: 0,
+        distinctAmountCount: 0,
+        zeroCount: 0,
+        emptyCount: 0,
+        warningCount: 0,
+        missingColumn: !check.hasX
+      };
+
+      if (!check.hasX) {
+        warnings.push({
+          "원본 행 번호": "-",
+          "X열 배송비": "열 없음",
+          "사유": "X열 배송비를 찾지 못했습니다."
+        });
+        summary.warningCount = warnings.length;
+        return { summary, rows: [], warnings };
+      }
+
+      dataRows.forEach((row, index) => {
+        const sourceRowNumber = index + 2;
+        const parsed = parseShippingFeeValue(cell(row, COL_X));
+
+        if (parsed.status === "positive") {
+          const current = amountMap.get(parsed.amount) || { amount: parsed.amount, count: 0 };
+          current.count += 1;
+          amountMap.set(parsed.amount, current);
+          summary.chargedCount += 1;
+          summary.totalAmount += parsed.amount;
+          return;
+        }
+
+        if (parsed.status === "zero") {
+          summary.zeroCount += 1;
+          return;
+        }
+
+        if (parsed.status === "empty") {
+          summary.emptyCount += 1;
+          return;
+        }
+
+        warnings.push({
+          "원본 행 번호": sourceRowNumber,
+          "X열 배송비": parsed.raw,
+          "사유": parsed.reason
+        });
+      });
+
+      const rows = Array.from(amountMap.values())
+        .sort((a, b) => a.amount - b.amount)
+        .map(item => ({
+          "배송비 금액": formatCurrency(item.amount),
+          "건수": item.count,
+          "합계 금액": formatCurrency(item.amount * item.count)
+        }));
+
+      summary.distinctAmountCount = rows.length;
+      summary.warningCount = warnings.length;
+
+      return { summary, rows, warnings };
+    }
+
+    function setStatus(message, type = "") {
+      el.statusBox.className = `status ${type}`.trim();
+      el.statusBox.textContent = message;
+    }
+
+    function requireXlsx() {
+      if (!window.XLSX) {
+        throw new Error("엑셀 라이브러리 SheetJS를 불러오지 못했습니다. 인터넷 연결을 확인하거나 xlsx.full.min.js 파일을 index.html과 같은 폴더에 넣어주세요.");
+      }
+    }
+
+    function resetAnalysisOnly() {
+      state.summary = null;
+      state.sellerGroups = [];
+      state.sellerTotals = [];
+      state.sellerOptionRows = [];
+      state.overallOptionRows = [];
+      state.needReviewRows = [];
+      state.shippingFeeSummary = null;
+      state.shippingFeeRows = [];
+      state.shippingFeeWarnings = [];
+      state.expandedSellers = new Set();
+      state.fileCheck = null;
+      state.warnings = [];
+      state.fileCheckStatus = null;
+      state.isFileCheckOpen = false;
+      root.classList.add("is-empty");
+      el.sellerSearch.value = "";
+      el.optionSearch.value = "";
+      el.resultArea.classList.add("hidden");
+      el.summaryGrid.innerHTML = "";
+      el.sellerList.innerHTML = "";
+      el.shippingFeePanel.innerHTML = "";
+      el.overallOptionTable.innerHTML = "";
+      el.needReviewTable.innerHTML = "";
+      el.fileCheckPanel.innerHTML = "";
+    }
+
+    function resetAll() {
+      state.workbook = null;
+      state.sheetNames = [];
+      state.activeSheetName = "";
+      state.fileName = "";
+      state.fileExt = "";
+      el.fileInput.value = "";
+      el.sheetSelect.innerHTML = "";
+      el.sheetSelectorWrap.classList.add("hidden");
+      resetAnalysisOnly();
+      setStatus("초기화 완료. 새 엑셀 파일을 선택하면 다시 분석됩니다.");
+    }
+
+    function getRowsFromSheet(sheetName) {
+      const sheet = state.workbook.Sheets[sheetName];
+      return XLSX.utils.sheet_to_json(sheet, {
+        header: 1,
+        defval: "",
+        raw: false,
+        blankrows: false
+      });
+    }
+
+    function buildColumnCheck(rows) {
+      const maxColumns = rows.reduce((max, row) => Math.max(max, Array.isArray(row) ? row.length : 0), 0);
+      const dataRows = rows.slice(1).filter(isRowNotEmpty);
+      const firstDataRowIndex = rows.findIndex((row, index) => index > 0 && isRowNotEmpty(row));
+      const firstDataRow = firstDataRowIndex >= 0 ? rows[firstDataRowIndex] : [];
+
+      const hasC = maxColumns > COL_C;
+      const hasH = maxColumns > COL_H;
+      const hasX = maxColumns > COL_X;
+      const hasAA = maxColumns > COL_AA;
+
+      const hNonEmptyCount = dataRows.filter(row => cell(row, COL_H)).length;
+      const hEmptyCount = Math.max(0, dataRows.length - hNonEmptyCount);
+      const hNonEmptyRatio = dataRows.length ? hNonEmptyCount / dataRows.length : 0;
+
+      const warnings = [];
+      const dangerWarnings = [];
+
+      if (!hasC) dangerWarnings.push("C열을 찾지 못했습니다. 판매자 구분이 어려울 수 있습니다.");
+      if (!hasH) dangerWarnings.push("H열 주문선택사항을 찾지 못했습니다. 열 개수 부족 가능성이 큽니다.");
+      if (!hasAA) warnings.push("AA열을 찾지 못했습니다. C열 기준으로 가능한 만큼 분석합니다.");
+      if (dataRows.length === 0) dangerWarnings.push("첫 행 제목 아래에 분석할 데이터 행이 없습니다.");
+      if (hasH && dataRows.length > 0 && (hNonEmptyCount === 0 || hNonEmptyRatio < 0.1)) {
+        dangerWarnings.push("H열 주문선택사항을 찾지 못했을 수 있습니다. H열 값이 거의 비어 있습니다.");
+      }
+      if (state.fileExt === "xls") {
+        warnings.push(".xls는 구형 엑셀 형식입니다. 한글/날짜/숫자가 이상하면 엑셀에서 .xlsx로 다시 저장 후 업로드해보세요.");
+      }
+
+      return {
+        maxColumns,
+        dataRowCount: dataRows.length,
+        firstDataRowNumber: firstDataRowIndex >= 0 ? firstDataRowIndex + 1 : "",
+        preview: {
+          "C열": hasC ? cell(firstDataRow, COL_C) : "열 없음",
+          "H열": hasH ? cell(firstDataRow, COL_H) : "열 없음",
+          "X열": hasX ? cell(firstDataRow, COL_X) : "열 없음",
+          "AA열": hasAA ? cell(firstDataRow, COL_AA) : "열 없음"
+        },
+        hasC,
+        hasH,
+        hasX,
+        hasAA,
+        hNonEmptyCount,
+        hEmptyCount,
+        hNonEmptyRatio,
+        warnings,
+        dangerWarnings
+      };
+    }
+
+    function analyzeRows(rows) {
+      const check = buildColumnCheck(rows);
+      const dataRows = rows.slice(1).filter(isRowNotEmpty);
+      const validRows = [];
+      const needReviewRows = [];
+      const shippingFeeAnalysis = analyzeShippingFees(dataRows, check);
+
+      dataRows.forEach((row, index) => {
+        const sourceRowNumber = index + 2;
+        const cValue = check.hasC ? cell(row, COL_C) : "";
+        const hValue = check.hasH ? cell(row, COL_H) : "";
+        const aaValue = check.hasAA ? cell(row, COL_AA) : "";
+        const reasons = [];
+
+        if (!check.hasC || !check.hasH) {
+          reasons.push("열 개수 부족");
+        }
+
+        if (!check.hasAA) {
+          reasons.push("AA열 없음");
+        }
+
+        if (!hValue) {
+          reasons.push("H열 주문선택사항 비어 있음");
+        }
+
+        const sellerResult = resolveSeller(cValue, aaValue, check.hasAA);
+        if (!sellerResult.seller) {
+          reasons.push(sellerResult.reason || "판매자 확인 불가");
+        }
+
+        const shouldReview =
+          !hValue ||
+          !sellerResult.seller ||
+          !check.hasH ||
+          !check.hasC;
+
+        if (shouldReview) {
+          needReviewRows.push({
+            "원본 행 번호": sourceRowNumber,
+            "C열 값": cValue,
+            "AA열 값": check.hasAA ? aaValue : "AA열 없음",
+            "H열 주문선택사항": hValue,
+            "사유": unique(reasons).join(" / ")
+          });
+          return;
+        }
+
+        validRows.push({
+          rowNumber: sourceRowNumber,
+          seller: sellerResult.seller,
+          sellerSource: sellerResult.source,
+          option: hValue,
+          cValue,
+          aaValue
+        });
+      });
+
+      const sellerMap = new Map();
+      const optionMap = new Map();
+
+      validRows.forEach(item => {
+        if (!sellerMap.has(item.seller)) {
+          sellerMap.set(item.seller, { seller: item.seller, total: 0, optionMap: new Map() });
+        }
+
+        const sellerGroup = sellerMap.get(item.seller);
+        sellerGroup.total += 1;
+        sellerGroup.optionMap.set(item.option, (sellerGroup.optionMap.get(item.option) || 0) + 1);
+        optionMap.set(item.option, (optionMap.get(item.option) || 0) + 1);
+      });
+
+      const sellerGroups = Array.from(sellerMap.values()).map(group => {
+        const optionRows = Array.from(group.optionMap.entries())
+          .map(([option, count]) => ({
+            "판매자": group.seller,
+            "주문선택사항": option,
+            "주문건수": count
+          }))
+          .sort((a, b) => sortByCountThenName(a, b));
+
+        return {
+          seller: group.seller,
+          total: group.total,
+          uniqueOptionCount: optionRows.length,
+          optionRows
+        };
+      }).sort((a, b) => (b.total - a.total) || a.seller.localeCompare(b.seller, "ko"));
+
+      const sellerTotals = sellerGroups.map(group => ({
+        "판매자": group.seller,
+        "총 주문건수": group.total,
+        "고유 주문선택사항 수": group.uniqueOptionCount
+      }));
+
+      const sellerOptionRows = sellerGroups.flatMap(group => group.optionRows);
+
+      const overallOptionRows = Array.from(optionMap.entries())
+        .map(([option, count]) => ({
+          "주문선택사항": option,
+          "전체 주문건수": count
+        }))
+        .sort((a, b) => (b["전체 주문건수"] - a["전체 주문건수"]) || a["주문선택사항"].localeCompare(b["주문선택사항"], "ko"));
+
+      const sellerTotalSum = sellerTotals.reduce((sum, row) => sum + row["총 주문건수"], 0);
+      const overallOptionSum = overallOptionRows.reduce((sum, row) => sum + row["전체 주문건수"], 0);
+
+      const summary = {
+        "전체 데이터 행 수": dataRows.length,
+        "분석된 주문 수": validRows.length,
+        "판매자 수": sellerGroups.length,
+        "고유 주문선택사항 수": overallOptionRows.length,
+        "확인 필요 건수": needReviewRows.length,
+        "판매자별 총 주문건수 합계": sellerTotalSum,
+        "전체 주문선택사항별 주문건수 합계": overallOptionSum,
+        "검증 결과": sellerTotalSum === validRows.length && overallOptionSum === validRows.length ? "정상" : "불일치"
+      };
+
+      return {
+        summary,
+        sellerGroups,
+        sellerTotals,
+        sellerOptionRows,
+        overallOptionRows,
+        needReviewRows,
+        shippingFeeSummary: shippingFeeAnalysis.summary,
+        shippingFeeRows: shippingFeeAnalysis.rows,
+        shippingFeeWarnings: shippingFeeAnalysis.warnings,
+        fileCheck: check,
+        warnings: [...check.warnings, ...check.dangerWarnings.map(text => `위험: ${text}`)]
+      };
+    }
+
+    function unique(values) {
+      return [...new Set(values.filter(Boolean))];
+    }
+
+    async function handleFile(file) {
+      if (!file) return;
+      resetAnalysisOnly();
+      state.workbook = null;
+      state.sheetNames = [];
+      state.activeSheetName = "";
+      state.fileName = file.name;
+      state.fileExt = getFileExt(file.name);
+      el.sheetSelect.innerHTML = "";
+      el.sheetSelectorWrap.classList.add("hidden");
+
+      if (!SUPPORTED_FILE_EXTS.has(state.fileExt)) {
+        throw new Error("지원하지 않는 파일 형식입니다. .xlsx, .xls, .xlsm, .csv 파일만 선택해주세요.");
+      }
+
+      requireXlsx();
+      setStatus(`파일 읽는 중: ${file.name}`);
+
+      try {
+        const buffer = await file.arrayBuffer();
+        state.workbook = XLSX.read(buffer, {
+          type: "array",
+          raw: false,
+          cellDates: false,
+          WTF: false,
+          codepage: 949
+        });
+      } catch (error) {
+        console.error(error);
+        const extra = state.fileExt === "xls"
+          ? " .xls 파일은 구형 형식이라 일부 파일에서 깨질 수 있습니다. 엑셀에서 .xlsx로 다시 저장 후 업로드해보세요."
+          : "";
+        throw new Error(`파일 읽기 오류가 발생했습니다.${extra}`);
+      }
+
+      state.sheetNames = state.workbook.SheetNames || [];
+      if (state.sheetNames.length === 0) {
+        throw new Error("엑셀 파일 안에서 분석할 시트를 찾지 못했습니다.");
+      }
+
+      populateSheetSelector();
+      analyzeActiveSheet(state.sheetNames[0]);
+    }
+
+    function populateSheetSelector() {
+      el.sheetSelect.innerHTML = state.sheetNames
+        .map(name => `<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`)
+        .join("");
+
+      if (state.sheetNames.length > 1) {
+        el.sheetSelectorWrap.classList.remove("hidden");
+      } else {
+        el.sheetSelectorWrap.classList.add("hidden");
+      }
+    }
+
+    function analyzeActiveSheet(sheetName) {
+      requireXlsx();
+
+      if (!state.workbook || !sheetName) {
+        throw new Error("분석할 엑셀 파일 또는 시트를 찾지 못했습니다.");
+      }
+
+      resetAnalysisOnly();
+
+      state.activeSheetName = sheetName;
+      el.sheetSelect.value = sheetName;
+
+      let rows;
+      try {
+        rows = getRowsFromSheet(sheetName);
+      } catch (error) {
+        console.error(error);
+        throw new Error("시트 데이터를 읽는 중 오류가 발생했습니다.");
+      }
+
+      if (!rows || rows.length < 2) {
+        throw new Error("분석할 데이터가 없습니다. 첫 행은 제목, 두 번째 행부터 주문 데이터여야 합니다.");
+      }
+
+      const analyzed = analyzeRows(rows);
+      Object.assign(state, analyzed);
+      state.expandedSellers = new Set();
+      state.fileCheckStatus = getFileCheckStatus();
+      state.isFileCheckOpen = state.fileCheckStatus.level !== "normal";
+
+      renderAll();
+      el.resultArea.classList.remove("hidden");
+      root.classList.remove("is-empty");
+
+      const validationOk = state.summary["검증 결과"] === "정상";
+      const hasDanger = state.fileCheck.dangerWarnings.length > 0;
+
+      if (validationOk && !hasDanger) {
+        setStatus(`분석 완료: ${state.fileName} / 시트: ${state.activeSheetName} / 분석된 주문 ${formatNumber(state.summary["분석된 주문 수"])}건`, "good");
+      } else if (validationOk && hasDanger) {
+        setStatus(`분석은 완료됐지만 열 검증 경고가 있습니다. C/H/AA열 미리보기를 확인해주세요.`, "warn");
+      } else {
+        setStatus("분석은 완료됐지만 총합 검증이 일치하지 않습니다. 결과를 확인해주세요.", "danger");
+      }
+    }
+
+    function renderAll() {
+      renderFileCheck();
+      renderSummary();
+      renderShippingFeeAnalysis();
+      renderSellerCards();
+      renderOverallOptionTable();
+      renderNeedReviewTable();
+    }
+
+    function getFileCheckStatus() {
+      const s = state.summary;
+      const c = state.fileCheck;
+
+      if (!s || !c) {
+        return { level: "normal", label: "정상", description: "분석 전", badgeClass: "normal" };
+      }
+
+      const isTotalMismatch = s["검증 결과"] !== "정상";
+      const isDanger =
+        !c.hasC ||
+        !c.hasH ||
+        c.dangerWarnings.length > 0 ||
+        isTotalMismatch ||
+        s["분석된 주문 수"] === 0;
+
+      if (isDanger) {
+        let description = "검증 확인 필요";
+        if (!c.hasH || c.hNonEmptyRatio < 0.1) description = "H열 주문선택사항 확인 필요";
+        else if (!c.hasC) description = "C열 판매자 확인 필요";
+        else if (isTotalMismatch) description = "총합 불일치";
+        else if (s["분석된 주문 수"] === 0) description = "분석된 주문 0건";
+
+        return { level: "danger", label: "위험", description, badgeClass: "danger" };
+      }
+
+      const isWarning =
+        !c.hasAA ||
+        c.warnings.length > 0 ||
+        s["확인 필요 건수"] > 0 ||
+        state.fileExt === "xls";
+
+      if (isWarning) {
+        let description = "주의 필요";
+        if (s["확인 필요 건수"] > 0) description = `확인 필요 ${formatNumber(s["확인 필요 건수"])}건`;
+        else if (!c.hasAA) description = "AA열 없음";
+        else if (state.fileExt === "xls") description = ".xls 구형 형식";
+
+        return { level: "warning", label: "주의", description, badgeClass: "warning" };
+      }
+
+      return { level: "normal", label: "정상", description: "총합 일치", badgeClass: "normal" };
+    }
+
+    function renderFileCheck() {
+      const s = state.summary;
+      const c = state.fileCheck;
+      if (!s || !c) return;
+
+      const status = getFileCheckStatus();
+      state.fileCheckStatus = status;
+
+      const validationClass = s["검증 결과"] === "정상" ? "good" : "danger";
+      const validationText = s["검증 결과"] === "정상" ? "총합 일치" : "총합 불일치";
+
+      const warningHtml = [
+        ...c.dangerWarnings.map(text => `<div class="warning-item danger">⚠ ${escapeHtml(text)}</div>`),
+        ...c.warnings.map(text => `<div class="warning-item">주의: ${escapeHtml(text)}</div>`)
+      ].join("");
+
+      el.fileCheckPanel.className = `panel file-check-accordion ${state.isFileCheckOpen ? "open" : ""}`;
+
+      el.fileCheckPanel.innerHTML = `
+        <div class="file-check-header">
+          <div>
+            <div class="file-check-title-row">
+              <div class="file-check-title">파일 / 열 검증</div>
+              <span class="status-badge ${status.badgeClass}">${escapeHtml(status.label)}</span>
+              <span class="file-check-desc">${escapeHtml(status.description)}</span>
+            </div>
+            <div class="file-check-meta">
+              <span title="${escapeAttr(state.fileName)}">파일: ${escapeHtml(state.fileName)}</span>
+              <span title="${escapeAttr(state.activeSheetName)}">시트: ${escapeHtml(state.activeSheetName)}</span>
+            </div>
+          </div>
+          <button id="fileCheckToggleBtn" class="file-check-toggle" type="button" aria-expanded="${state.isFileCheckOpen ? "true" : "false"}" aria-controls="fileCheckBody">
+            ${state.isFileCheckOpen ? "검증 정보 접기" : "검증 정보 펼치기"}
+          </button>
+        </div>
+
+        <div id="fileCheckBody" class="file-check-body">
+          <div class="check-grid">
+            <div class="check-box"><div class="k">파일명</div><div class="v">${escapeHtml(state.fileName)}</div></div>
+            <div class="check-box"><div class="k">확장자</div><div class="v">.${escapeHtml(state.fileExt)}</div></div>
+            <div class="check-box"><div class="k">분석 시트</div><div class="v">${escapeHtml(state.activeSheetName)}</div></div>
+            <div class="check-box"><div class="k">전체 시트 수</div><div class="v">${formatNumber(state.sheetNames.length)}개</div></div>
+            <div class="check-box"><div class="k">감지된 최대 열 수</div><div class="v">${formatNumber(c.maxColumns)}개</div></div>
+            <div class="check-box"><div class="k">첫 데이터 행</div><div class="v">${c.firstDataRowNumber ? `${formatNumber(c.firstDataRowNumber)}행` : "없음"}</div></div>
+            <div class="check-box"><div class="k">H열 입력 비율</div><div class="v">${Math.round(c.hNonEmptyRatio * 100)}%</div></div>
+            <div class="check-box"><div class="k">총합 검증</div><div class="v"><span class="pill ${validationClass}">${validationText}</span></div></div>
+          </div>
+
+          <div class="preview-grid">
+            <div class="check-box"><div class="k">첫 데이터 행 C열 미리보기</div><div class="v">${escapeHtml(c.preview["C열"] || "빈 값")}</div></div>
+            <div class="check-box"><div class="k">첫 데이터 행 H열 미리보기</div><div class="v">${escapeHtml(c.preview["H열"] || "빈 값")}</div></div>
+            <div class="check-box"><div class="k">첫 데이터 행 X열 배송비</div><div class="v">${escapeHtml(c.preview["X열"] || "빈 값")}</div></div>
+            <div class="check-box"><div class="k">첫 데이터 행 AA열 미리보기</div><div class="v">${escapeHtml(c.preview["AA열"] || "빈 값")}</div></div>
+          </div>
+
+          <div class="check-grid" style="margin-top:12px;">
+            <div class="check-box"><div class="k">분석된 주문 수</div><div class="v">${formatNumber(s["분석된 주문 수"])}건</div></div>
+            <div class="check-box"><div class="k">판매자별 총합</div><div class="v">${formatNumber(s["판매자별 총 주문건수 합계"])}건</div></div>
+            <div class="check-box"><div class="k">전체 주문선택사항 총합</div><div class="v">${formatNumber(s["전체 주문선택사항별 주문건수 합계"])}건</div></div>
+            <div class="check-box"><div class="k">확인 필요</div><div class="v">${formatNumber(s["확인 필요 건수"])}건</div></div>
+          </div>
+
+          <div class="warning-list">
+            ${warningHtml || `<div class="warning-item good">열 검증에서 큰 문제를 찾지 못했습니다.</div>`}
+          </div>
+        </div>
+      `;
+
+      const toggleBtn = root.querySelector("#fileCheckToggleBtn");
+      if (toggleBtn) {
+        toggleBtn.addEventListener("click", () => {
+          state.isFileCheckOpen = !state.isFileCheckOpen;
+          renderFileCheck();
+        });
+      }
+    }
+
+    function renderSummary() {
+      const s = state.summary;
+      if (!s) return;
+
+      const cards = [
+        ["전체 데이터 행 수", s["전체 데이터 행 수"]],
+        ["분석된 주문 수", s["분석된 주문 수"]],
+        ["확인 필요 건수", s["확인 필요 건수"]],
+        ["배송비 부과 건수", state.shippingFeeSummary?.chargedCount || 0],
+        ["배송비 총액", state.shippingFeeSummary?.totalAmount || 0, "원"],
+        ["판매자 수", s["판매자 수"]],
+        ["고유 주문선택사항 수", s["고유 주문선택사항 수"]]
+      ];
+
+      el.summaryGrid.innerHTML = cards.map(([label, value, suffix = ""]) => `
+        <div class="summary-card ${label === "확인 필요 건수" && value > 0 ? "attention" : ""}">
+          <div class="label">${escapeHtml(label)}</div>
+          <div class="value">${formatNumber(value)}${suffix}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderShippingFeeAnalysis() {
+      const summary = state.shippingFeeSummary;
+      if (!summary) return;
+
+      const overviewItems = [
+        ["배송비 부과 건수", `${formatNumber(summary.chargedCount)}건`],
+        ["배송비 총액", formatCurrency(summary.totalAmount)],
+        ["금액 종류", `${formatNumber(summary.distinctAmountCount)}개`],
+        ["경고", `${formatNumber(summary.warningCount)}건`]
+      ];
+
+      const overviewHtml = `
+        <div class="shipping-overview">
+          ${overviewItems.map(([label, value]) => `
+            <div class="check-box">
+              <div class="k">${escapeHtml(label)}</div>
+              <div class="v">${escapeHtml(value)}</div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+
+      const noteHtml = `
+        <p class="shipping-note">
+          X열에서 0보다 큰 정수 금액만 집계합니다. 0원 ${formatNumber(summary.zeroCount)}건, 빈 값 ${formatNumber(summary.emptyCount)}건은 정상 제외했습니다.
+        </p>
+      `;
+
+      const warningHtml = state.shippingFeeWarnings.length > 0
+        ? `
+          <div class="shipping-warning-summary">
+            <div class="warning-item">배송비 집계에서 제외된 확인 필요 값 ${formatNumber(state.shippingFeeWarnings.length)}건이 있습니다.</div>
+            ${renderRows(state.shippingFeeWarnings, ["원본 행 번호", "X열 배송비", "사유"], { label: "배송비 경고 목록" })}
+          </div>
+        `
+        : `<div class="warning-item good">배송비 경고 값이 없습니다.</div>`;
+
+      const rowsHtml = renderRows(state.shippingFeeRows, ["배송비 금액", "건수", "합계 금액"], {
+        countKey: "건수",
+        label: "배송비 금액별 분석"
+      });
+
+      el.shippingFeePanel.innerHTML = `
+        ${overviewHtml}
+        ${noteHtml}
+        ${rowsHtml}
+        ${warningHtml}
+      `;
+    }
+
+    function getFilters() {
+      return {
+        seller: lower(el.sellerSearch.value),
+        option: lower(el.optionSearch.value)
+      };
+    }
+
+    function getSellerColumnCount() {
+      if (window.matchMedia("(max-width: 980px)").matches) return 1;
+      if (window.matchMedia("(max-width: 1520px)").matches) return 2;
+      return 3;
+    }
+
+    function renderSellerCards() {
+      const filters = getFilters();
+
+      const filteredGroups = state.sellerGroups
+        .map(group => {
+          const sellerMatch = !filters.seller || lower(group.seller).includes(filters.seller);
+          const filteredRows = group.optionRows.filter(row => {
+            return !filters.option || lower(row["주문선택사항"]).includes(filters.option);
+          });
+
+          return {
+            ...group,
+            filteredRows,
+            filteredTotal: filteredRows.reduce((sum, row) => sum + row["주문건수"], 0),
+            sellerMatch
+          };
+        })
+        .filter(group => group.sellerMatch && group.filteredRows.length > 0);
+
+      if (filteredGroups.length === 0) {
+        el.sellerList.innerHTML = `<div class="empty">검색 조건에 맞는 판매자 또는 주문선택사항이 없습니다.</div>`;
+        return;
+      }
+
+      const renderSellerCard = group => {
+        const isOpen = state.expandedSellers.has(group.seller);
+        const filterActive = Boolean(filters.option);
+        const colorStyle = getSellerColorStyle(group.seller);
+        const rowsHtml = renderRows(group.filteredRows, ["주문선택사항", "주문건수"], {
+          countKey: "주문건수",
+          label: `${group.seller} 주문선택사항`
+        });
+
+        return `
+          <article class="seller-card ${isOpen ? "open" : ""}" data-seller="${escapeAttr(group.seller)}" style="${colorStyle}">
+            <button class="seller-header" type="button" data-toggle-seller="${escapeAttr(group.seller)}" aria-expanded="${isOpen ? "true" : "false"}" aria-label="${escapeAttr(`${group.seller} 상세 ${isOpen ? "접기" : "펼치기"}`)}">
+              <div>
+                <div class="seller-name">${escapeHtml(group.seller)}</div>
+                <div class="seller-sub">
+                  <span class="pill">총 주문 ${formatNumber(group.total)}건</span>
+                  <span class="pill">고유 옵션 ${formatNumber(group.uniqueOptionCount)}개</span>
+                  ${filterActive ? `<span class="pill">검색 결과 ${formatNumber(group.filteredTotal)}건</span>` : ""}
+                </div>
+              </div>
+              <div class="seller-count">
+                <span>${formatNumber(filterActive ? group.filteredTotal : group.total)}건</span>
+                <span class="chevron">⌄</span>
+              </div>
+            </button>
+            <div class="seller-body">
+              ${rowsHtml}
+            </div>
+          </article>
+        `;
+      };
+
+      const columnCount = Math.min(getSellerColumnCount(), filteredGroups.length);
+      const columns = Array.from({ length: columnCount }, () => []);
+      filteredGroups.forEach((group, index) => {
+        columns[index % columnCount].push(group);
+      });
+
+      el.sellerList.innerHTML = columns.map(columnGroups => `
+        <div class="seller-column">
+          ${columnGroups.map(renderSellerCard).join("")}
+        </div>
+      `).join("");
+
+      root.querySelectorAll("[data-toggle-seller]").forEach(button => {
+        button.addEventListener("click", () => {
+          const seller = button.getAttribute("data-toggle-seller");
+          if (state.expandedSellers.has(seller)) {
+            state.expandedSellers.delete(seller);
+          } else {
+            state.expandedSellers.add(seller);
+          }
+          renderSellerCards();
+        });
+      });
+    }
+
+    function renderOverallOptionTable() {
+      const filters = getFilters();
+      const rows = state.overallOptionRows.filter(row => {
+        return !filters.option || lower(row["주문선택사항"]).includes(filters.option);
+      });
+
+      el.overallOptionTable.innerHTML = renderRows(rows, ["주문선택사항", "전체 주문건수"], { countKey: "전체 주문건수" });
+    }
+
+    function renderNeedReviewTable() {
+      const filters = getFilters();
+      const rows = state.needReviewRows.filter(row => {
+        const optionOk = !filters.option || lower(row["H열 주문선택사항"]).includes(filters.option);
+        const sellerOk = !filters.seller || lower(row["C열 값"]).includes(filters.seller) || lower(row["AA열 값"]).includes(filters.seller);
+        return optionOk && sellerOk;
+      });
+
+      el.needReviewTable.innerHTML = renderRows(rows, ["원본 행 번호", "C열 값", "AA열 값", "H열 주문선택사항", "사유"], { countKey: "" });
+    }
+
+    function renderRows(rows, columns, options = {}) {
+      if (!rows || rows.length === 0) {
+        return `<div class="empty">표시할 데이터가 없습니다.</div>`;
+      }
+
+      const countKey = options.countKey || "";
+
+      return `
+        <div class="table-wrap">
+          <table aria-label="${escapeAttr(options.label || columns.join(" / "))}">
+            <thead>
+              <tr>
+                ${columns.map(col => `<th class="${col === countKey ? "count" : ""}">${escapeHtml(col)}</th>`).join("")}
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.map(row => `
+                <tr>
+                  ${columns.map(col => {
+                    const value = row[col];
+                    const isCount = col === countKey || typeof value === "number";
+                    return `<td class="${isCount ? "count" : "option-text"}">${isCount ? formatNumber(value) : escapeHtml(value)}</td>`;
+                  }).join("")}
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function rowsToWorksheet(rows, headers) {
+      const data = [headers, ...rows.map(row => headers.map(header => row[header] ?? ""))];
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      ws["!cols"] = headers.map(header => {
+        if (header.includes("주문선택사항")) return { wch: 54 };
+        if (header.includes("사유")) return { wch: 36 };
+        if (header.includes("판매자")) return { wch: 22 };
+        if (header.includes("파일") || header.includes("시트")) return { wch: 28 };
+        return { wch: 18 };
+      });
+      return ws;
+    }
+
+    function downloadXlsx() {
+      requireAnalyzed();
+      requireXlsx();
+
+      const wb = XLSX.utils.book_new();
+
+      const summaryRows = [
+        { "항목": "파일명", "값": state.fileName },
+        { "항목": "확장자", "값": state.fileExt },
+        { "항목": "분석 시트", "값": state.activeSheetName },
+        ...Object.entries(state.summary).map(([key, value]) => ({ "항목": key, "값": value }))
+      ];
+
+      const checkRows = [
+        { "항목": "파일명", "값": state.fileName },
+        { "항목": "확장자", "값": state.fileExt },
+        { "항목": "분석 시트", "값": state.activeSheetName },
+        { "항목": "전체 시트 수", "값": state.sheetNames.length },
+        { "항목": "감지된 최대 열 수", "값": state.fileCheck.maxColumns },
+        { "항목": "첫 데이터 행 번호", "값": state.fileCheck.firstDataRowNumber },
+        { "항목": "첫 데이터 행 C열 미리보기", "값": state.fileCheck.preview["C열"] },
+        { "항목": "첫 데이터 행 H열 미리보기", "값": state.fileCheck.preview["H열"] },
+        { "항목": "첫 데이터 행 AA열 미리보기", "값": state.fileCheck.preview["AA열"] },
+        { "항목": "H열 입력 비율", "값": `${Math.round(state.fileCheck.hNonEmptyRatio * 100)}%` },
+        { "항목": "경고", "값": [...state.fileCheck.dangerWarnings, ...state.fileCheck.warnings].join(" / ") || "없음" }
+      ];
+
+      XLSX.utils.book_append_sheet(wb, rowsToWorksheet(summaryRows, ["항목", "값"]), "요약");
+      XLSX.utils.book_append_sheet(wb, rowsToWorksheet(checkRows, ["항목", "값"]), "파일_열검증");
+      XLSX.utils.book_append_sheet(wb, rowsToWorksheet(state.sellerOptionRows, ["판매자", "주문선택사항", "주문건수"]), "판매자별_주문선택사항_주문건수");
+      XLSX.utils.book_append_sheet(wb, rowsToWorksheet(state.sellerTotals, ["판매자", "총 주문건수", "고유 주문선택사항 수"]), "판매자별_총주문건수");
+      XLSX.utils.book_append_sheet(wb, rowsToWorksheet(state.overallOptionRows, ["주문선택사항", "전체 주문건수"]), "주문선택사항별_전체주문건수");
+      XLSX.utils.book_append_sheet(wb, rowsToWorksheet(state.needReviewRows, ["원본 행 번호", "C열 값", "AA열 값", "H열 주문선택사항", "사유"]), "확인필요");
+
+      XLSX.writeFile(wb, buildFileName("주문분석결과", "xlsx"));
+    }
+
+    function csvEscape(value) {
+      const text = value === null || value === undefined ? "" : String(value);
+      return `"${text.replace(/"/g, '""')}"`;
+    }
+
+    function downloadCsv(rows, headers, baseName) {
+      requireAnalyzed();
+
+      const csv = "\ufeff" + [
+        headers.map(csvEscape).join(","),
+        ...rows.map(row => headers.map(header => csvEscape(row[header] ?? "")).join(","))
+      ].join("\r\n");
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = buildFileName(baseName, "csv");
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function buildFileName(baseName, ext) {
+      const now = new Date();
+      const stamp = [
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, "0"),
+        String(now.getDate()).padStart(2, "0"),
+        "_",
+        String(now.getHours()).padStart(2, "0"),
+        String(now.getMinutes()).padStart(2, "0")
+      ].join("");
+
+      const safeOriginalName = state.fileName
+        ? state.fileName.replace(/\.[^.]+$/, "").replace(/[\\/:*?"<>|]/g, "_")
+        : "uploaded";
+
+      return `${safeOriginalName}_${baseName}_${stamp}.${ext}`;
+    }
+
+    function requireAnalyzed() {
+      if (!state.summary) throw new Error("먼저 엑셀 파일을 업로드해서 분석해주세요.");
+    }
+
+    function escapeHtml(value) {
+      return clean(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replace(/`/g, "&#096;");
+    }
+
+    el.fileInput.addEventListener("change", async event => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      try {
+        await handleFile(file);
+      } catch (error) {
+        console.error(error);
+        resetAnalysisOnly();
+        setStatus(error.message || "파일 분석 중 오류가 발생했습니다.", "danger");
+      }
+    });
+
+    el.sheetSelect.addEventListener("change", () => {
+      try {
+        analyzeActiveSheet(el.sheetSelect.value);
+      } catch (error) {
+        console.error(error);
+        setStatus(error.message || "시트 분석 중 오류가 발생했습니다.", "danger");
+      }
+    });
+
+    el.sellerSearch.addEventListener("input", () => {
+      if (!state.summary) return;
+      renderSellerCards();
+      renderNeedReviewTable();
+    });
+
+    el.optionSearch.addEventListener("input", () => {
+      if (!state.summary) return;
+      renderSellerCards();
+      renderOverallOptionTable();
+      renderNeedReviewTable();
+    });
+
+    el.expandAllBtn.addEventListener("click", () => {
+      state.sellerGroups.forEach(group => state.expandedSellers.add(group.seller));
+      renderSellerCards();
+    });
+
+    el.collapseAllBtn.addEventListener("click", () => {
+      state.expandedSellers.clear();
+      renderSellerCards();
+    });
+
+    el.resetBtn.addEventListener("click", resetAll);
+
+    let sellerResizeTimer = null;
+    window.addEventListener("resize", () => {
+      if (!state.summary) return;
+      window.clearTimeout(sellerResizeTimer);
+      sellerResizeTimer = window.setTimeout(renderSellerCards, 120);
+    });
+
+    el.downloadXlsxBtn.addEventListener("click", () => {
+      try { downloadXlsx(); }
+      catch (error) { setStatus(error.message, "danger"); }
+    });
+
+    el.downloadSellerDetailCsvBtn.addEventListener("click", () => {
+      try { downloadCsv(state.sellerOptionRows, ["판매자", "주문선택사항", "주문건수"], "판매자별_주문선택사항_주문건수"); }
+      catch (error) { setStatus(error.message, "danger"); }
+    });
+
+    el.downloadSellerTotalCsvBtn.addEventListener("click", () => {
+      try { downloadCsv(state.sellerTotals, ["판매자", "총 주문건수", "고유 주문선택사항 수"], "판매자별_총주문건수"); }
+      catch (error) { setStatus(error.message, "danger"); }
+    });
+
+    el.downloadOverallCsvBtn.addEventListener("click", () => {
+      try { downloadCsv(state.overallOptionRows, ["주문선택사항", "전체 주문건수"], "주문선택사항별_전체주문건수"); }
+      catch (error) { setStatus(error.message, "danger"); }
+    });
+
+    function updateLibraryAvailability() {
+      if (!window.XLSX) {
+        el.fileInput.disabled = true;
+        const isWaitingForFallback =
+          window.__xlsxFallbackRequested &&
+          !window.__xlsxFallbackFailed &&
+          !window.__xlsxFallbackTimedOut;
+        const message = isWaitingForFallback
+          ? "엑셀 라이브러리 SheetJS를 불러오는 중입니다. 잠시 후 다시 시도해주세요."
+          : "엑셀 라이브러리 SheetJS를 불러오지 못했습니다. 인터넷 연결을 확인하거나 xlsx.full.min.js 파일을 이 HTML과 같은 폴더에 넣어주세요.";
+        setStatus(message, isWaitingForFallback ? "warn" : "danger");
+      } else {
+        const wasDisabled = el.fileInput.disabled;
+        el.fileInput.disabled = false;
+        if (!state.summary && wasDisabled) {
+          setStatus("엑셀 파일을 선택하면 자동으로 분석됩니다.");
+        }
+      }
+    }
+
+    window.addEventListener("xlsx-library-change", updateLibraryAvailability);
+    if (document.readyState === "complete") {
+      updateLibraryAvailability();
+    } else {
+      window.addEventListener("load", updateLibraryAvailability);
+    }
+    window.setTimeout(updateLibraryAvailability, 5000);
+  
+  }
+
   function runStartupStep(name, fn) {
     try {
       const result = fn();
@@ -8623,6 +9774,7 @@ function openInventoryItemDetail(sku) {
     runStartupStep("routing", initRouting);
     runStartupStep("margin calculator", initMarginCalculator);
     runStartupStep("WMS", initWms);
+    runStartupStep("excel count calculator", initExcelCountCalculator);
     runStartupStep("Supabase sync", initSupabaseSync);
     runStartupStep("admin login reveal", initAdminLoginReveal);
     runStartupStep("admin auth", initAdminAuth);
