@@ -12823,6 +12823,130 @@ body.admin-active #syncCard .admin-auth-form:has(#adminEmail[hidden]) {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+#page-excel-count .shipping-site-breakdown {
+  margin-top: 12px;
+  border: 1px solid var(--excel-line);
+  border-radius: 14px;
+  background: #fbfdff;
+  overflow: hidden;
+}
+
+#page-excel-count .shipping-site-breakdown > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 14px;
+  font-weight: 800;
+  color: #1f2a37;
+}
+
+#page-excel-count .shipping-site-breakdown > summary::-webkit-details-marker {
+  display: none;
+}
+
+#page-excel-count .shipping-site-breakdown > summary em {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 700;
+  color: #667085;
+  text-align: right;
+}
+
+#page-excel-count .shipping-site-breakdown-body {
+  padding: 0 14px 14px;
+  border-top: 1px solid var(--excel-line);
+}
+
+#page-excel-count .shipping-site-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+#page-excel-count .shipping-site-card {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--excel-line);
+  border-radius: 14px;
+  background: #fff;
+}
+
+#page-excel-count .shipping-site-card.needs-review {
+  border-color: #f4c48b;
+  background: #fffaf2;
+}
+
+#page-excel-count .shipping-site-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+}
+
+#page-excel-count .shipping-site-name {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.4;
+  color: #1f2937;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+#page-excel-count .shipping-site-total {
+  font-size: 18px;
+  font-weight: 850;
+  line-height: 1.2;
+  color: #111827;
+  white-space: nowrap;
+}
+
+#page-excel-count .shipping-site-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+#page-excel-count .shipping-site-meta .pill.subtle {
+  color: #526277;
+  background: #f8fafc;
+}
+
+#page-excel-count .shipping-site-amounts {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+#page-excel-count .shipping-site-amount {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 6px;
+  border-top: 1px dashed #e5e7eb;
+  font-size: 13px;
+  color: #475467;
+}
+
+#page-excel-count .shipping-site-amount:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+#page-excel-count .shipping-site-amount strong {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 800;
+  color: #111827;
+}
+
 #page-excel-count .check-box {
   min-width: 0;
   padding: 10px;
@@ -13011,7 +13135,8 @@ body.admin-active #syncCard .admin-auth-form:has(#adminEmail[hidden]) {
 
   #page-excel-count .summary-grid,
   #page-excel-count .shipping-overview,
-  #page-excel-count .placeholder-grid {
+  #page-excel-count .placeholder-grid,
+  #page-excel-count .shipping-site-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -13048,8 +13173,26 @@ body.admin-active #syncCard .admin-auth-form:has(#adminEmail[hidden]) {
   #page-excel-count .placeholder-grid,
   #page-excel-count .summary-grid,
   #page-excel-count .shipping-overview,
-  #page-excel-count .check-grid {
+  #page-excel-count .check-grid,
+  #page-excel-count .shipping-site-grid {
     grid-template-columns: 1fr;
+  }
+
+  #page-excel-count .shipping-site-breakdown > summary {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  #page-excel-count .shipping-site-breakdown > summary em {
+    text-align: left;
+  }
+
+  #page-excel-count .shipping-site-head {
+    grid-template-columns: 1fr;
+  }
+
+  #page-excel-count .shipping-site-total {
+    white-space: normal;
   }
 
   #page-excel-count .seller-header,

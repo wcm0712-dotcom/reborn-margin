@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-excel-count-ui-tune-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-green-onion-buckwheat-chip-160g-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -95,6 +95,7 @@
     { name: "싱싱 양파 160g", cost: 1650 },
     { name: "싱싱 양파 100g", cost: 1000 },
     { name: "김 메밀칩 160g", cost: 1650 },
+    { name: "대파 메밀칩 160g", cost: 1625 },
     { name: "푸드킹 양파 160g", cost: 1500 },
     { name: "감자알칩", cost: 282.5 },
     { name: "꾀돌이", cost: 275 },
@@ -140,6 +141,7 @@
     "싱싱 양파 160g": { group: "양파/칩", boxesPerPallet: 36, unitsPerBox: 8, structure: "1파렛=36완박스 / 1완박스=8개", cost: 1650, safetyStock: { pallets: 4 } },
     "싱싱 양파 100g": { group: "양파/칩", boxesPerPallet: 56, unitsPerBox: 10, structure: "1파렛=56완박스 / 1완박스=10개", cost: 1000, safetyStock: { pallets: 2 } },
     "김 메밀칩 160g": { group: "양파/칩", boxesPerPallet: 56, unitsPerBox: 8, structure: "1파렛=56완박스 / 1완박스=8개", cost: 1650 },
+    "대파 메밀칩 160g": { group: "양파/칩", boxesPerPallet: 36, unitsPerBox: 8, structure: "1파렛=36완박스 / 1완박스=8개", cost: 1625 },
     "푸드킹 양파 160g": { group: "양파/칩", boxesPerPallet: 38, unitsPerBox: 10, structure: "1파렛=38완박스 / 1완박스=10개", cost: 1500, safetyStock: { pallets: 2 } },
     "브이콘 50g": { group: "브이콘", boxesPerPallet: 96, unitsPerBox: 40, structure: "1파렛=96완박스 / 1완박스=40개", cost: 412.5, safetyStock: { pallets: 4 } },
     "브이콘 100g": { group: "브이콘", boxesPerPallet: 104, unitsPerBox: 20, structure: "1파렛=104완박스 / 1완박스=20개", cost: 825, safetyStock: { pallets: 1 } },
@@ -5507,7 +5509,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-excel-count-ui-tune-01",
+    cacheVersion: "reborn-green-onion-buckwheat-chip-160g-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -8237,6 +8239,10 @@ function openInventoryItemDetail(sku) {
       ] };
     }
 
+    if (/대파x/.test(text) && !/대파x[0-9,]+(?:개)?/.test(text)) {
+      return { needs: ["대파 x 수량 확인 필요"] };
+    }
+
     const rules = [
       [/foot|풋젤리/, "풋젤리"],
       [/sweetpotato\(50g\)|sweetpotato50g|스위트포테이토|촉촉한고구마/, "촉촉한 고구마"],
@@ -8262,6 +8268,7 @@ function openInventoryItemDetail(sku) {
       [/푸드킹.*양파|푸드킹.*160|푸드킹양파/, "푸드킹 양파 160g"],
       [/싱싱양파.*160|양파.*160/, "싱싱 양파 160g"],
       [/싱싱양파.*100|양파.*100/, "싱싱 양파 100g"],
+      [/대파x[0-9,]+(?:개)?/, "대파 메밀칩 160g"],
       [/김메밀칩|메밀칩/, "김 메밀칩 160g"],
       [/브이콘.*100|v콘.*100|vicon.*100/, "브이콘 100g"],
       [/브이콘|v콘|vicon/, "브이콘 50g"],
@@ -8644,6 +8651,8 @@ function openInventoryItemDetail(sku) {
       needReviewRows: [],
       shippingFeeSummary: null,
       shippingFeeRows: [],
+      shippingFeeSiteRows: [],
+      shippingFeeSiteSummary: null,
       shippingFeeWarnings: [],
       expandedSellers: new Set(),
       fileCheck: null,
@@ -8780,8 +8789,15 @@ function openInventoryItemDetail(sku) {
       return { status: "positive", amount, raw };
     }
 
+    function resolveShippingSiteFromC(cValue, hasCColumn) {
+      if (!hasCColumn) return "확인 필요";
+      const site = extractSellerFromC(cValue);
+      return site || "확인 필요";
+    }
+
     function analyzeShippingFees(dataRows, check) {
       const amountMap = new Map();
+      const siteMap = new Map();
       const warnings = [];
       const summary = {
         chargedCount: 0,
@@ -8792,6 +8808,13 @@ function openInventoryItemDetail(sku) {
         warningCount: 0,
         missingColumn: !check.hasX
       };
+      const siteSummary = {
+        siteCount: 0,
+        chargedCount: 0,
+        totalAmount: 0,
+        matchesChargedCount: true,
+        matchesTotalAmount: true
+      };
 
       if (!check.hasX) {
         warnings.push({
@@ -8800,7 +8823,7 @@ function openInventoryItemDetail(sku) {
           "사유": "X열 배송비를 찾지 못했습니다."
         });
         summary.warningCount = warnings.length;
-        return { summary, rows: [], warnings };
+        return { summary, rows: [], siteRows: [], siteSummary, warnings };
       }
 
       dataRows.forEach((row, index) => {
@@ -8808,9 +8831,17 @@ function openInventoryItemDetail(sku) {
         const parsed = parseShippingFeeValue(cell(row, COL_X));
 
         if (parsed.status === "positive") {
+          const site = resolveShippingSiteFromC(cell(row, COL_C), check.hasC);
           const current = amountMap.get(parsed.amount) || { amount: parsed.amount, count: 0 };
           current.count += 1;
           amountMap.set(parsed.amount, current);
+          if (!siteMap.has(site)) {
+            siteMap.set(site, { site, chargedCount: 0, totalAmount: 0, amountMap: new Map() });
+          }
+          const siteEntry = siteMap.get(site);
+          siteEntry.chargedCount += 1;
+          siteEntry.totalAmount += parsed.amount;
+          siteEntry.amountMap.set(parsed.amount, (siteEntry.amountMap.get(parsed.amount) || 0) + 1);
           summary.chargedCount += 1;
           summary.totalAmount += parsed.amount;
           return;
@@ -8841,10 +8872,35 @@ function openInventoryItemDetail(sku) {
           "합계 금액": formatCurrency(item.amount * item.count)
         }));
 
+      const siteRows = Array.from(siteMap.values())
+        .map(item => {
+          const amountEntries = Array.from(item.amountMap.entries())
+            .sort((a, b) => a[0] - b[0])
+            .map(([amount, count]) => ({
+              amount,
+              count,
+              label: `${formatCurrency(amount)} ${formatNumber(count)}건`
+            }));
+
+          return {
+            site: item.site,
+            chargedCount: item.chargedCount,
+            totalAmount: item.totalAmount,
+            amountEntries,
+            amountBreakdown: amountEntries.map(entry => entry.label).join(", ")
+          };
+        })
+        .sort((a, b) => (b.totalAmount - a.totalAmount) || (b.chargedCount - a.chargedCount) || a.site.localeCompare(b.site, "ko"));
+
       summary.distinctAmountCount = rows.length;
       summary.warningCount = warnings.length;
+      siteSummary.siteCount = siteRows.length;
+      siteSummary.chargedCount = siteRows.reduce((sum, item) => sum + item.chargedCount, 0);
+      siteSummary.totalAmount = siteRows.reduce((sum, item) => sum + item.totalAmount, 0);
+      siteSummary.matchesChargedCount = siteSummary.chargedCount === summary.chargedCount;
+      siteSummary.matchesTotalAmount = siteSummary.totalAmount === summary.totalAmount;
 
-      return { summary, rows, warnings };
+      return { summary, rows, siteRows, siteSummary, warnings };
     }
 
     function setStatus(message, type = "") {
@@ -8867,6 +8923,8 @@ function openInventoryItemDetail(sku) {
       state.needReviewRows = [];
       state.shippingFeeSummary = null;
       state.shippingFeeRows = [];
+      state.shippingFeeSiteRows = [];
+      state.shippingFeeSiteSummary = null;
       state.shippingFeeWarnings = [];
       state.expandedSellers = new Set();
       state.fileCheck = null;
@@ -9086,6 +9144,8 @@ function openInventoryItemDetail(sku) {
         needReviewRows,
         shippingFeeSummary: shippingFeeAnalysis.summary,
         shippingFeeRows: shippingFeeAnalysis.rows,
+        shippingFeeSiteRows: shippingFeeAnalysis.siteRows,
+        shippingFeeSiteSummary: shippingFeeAnalysis.siteSummary,
         shippingFeeWarnings: shippingFeeAnalysis.warnings,
         fileCheck: check,
         warnings: [...check.warnings, ...check.dangerWarnings.map(text => `위험: ${text}`)]
@@ -9392,10 +9452,54 @@ function openInventoryItemDetail(sku) {
         label: "배송비 금액별 분석"
       });
 
+      const siteSummary = state.shippingFeeSiteSummary;
+      const siteRows = state.shippingFeeSiteRows || [];
+      const hasSiteDetail = siteSummary && siteRows.length > 0;
+      const siteCheckClass = siteSummary && siteSummary.matchesChargedCount && siteSummary.matchesTotalAmount ? "good" : "danger";
+      const siteCheckText = siteSummary && siteSummary.matchesChargedCount && siteSummary.matchesTotalAmount
+        ? "상세 합계가 전체 배송비 분석과 일치합니다."
+        : "상세 합계가 전체 배송비 분석과 다를 수 있어 확인이 필요합니다.";
+      const siteDetailHtml = !hasSiteDetail
+        ? `<div class="empty">배송비 상세 데이터가 없습니다.</div>`
+        : `
+          <details class="shipping-site-breakdown">
+            <summary>
+              <span>사이트별 배송비 상세</span>
+              <em>${formatNumber(siteSummary.siteCount)}개 사이트 · ${formatNumber(siteSummary.chargedCount)}건 · ${formatCurrency(siteSummary.totalAmount)}</em>
+            </summary>
+            <div class="shipping-site-breakdown-body">
+              <div class="warning-item ${siteCheckClass}">${siteCheckText}</div>
+              <div class="shipping-site-grid">
+                ${siteRows.map(row => `
+                  <article class="shipping-site-card ${row.site === "확인 필요" ? "needs-review" : ""}">
+                    <div class="shipping-site-head">
+                      <div class="shipping-site-name">${escapeHtml(row.site)}</div>
+                      <div class="shipping-site-total">${formatCurrency(row.totalAmount)}</div>
+                    </div>
+                    <div class="shipping-site-meta">
+                      <span class="pill">${formatNumber(row.chargedCount)}건</span>
+                      <span class="pill subtle">${formatNumber(row.amountEntries.length)}개 금액</span>
+                    </div>
+                    <div class="shipping-site-amounts" aria-label="${escapeAttr(`${row.site} 배송비 금액별 분포`)}">
+                      ${row.amountEntries.map(entry => `
+                        <div class="shipping-site-amount">
+                          <span>${escapeHtml(formatCurrency(entry.amount))}</span>
+                          <strong>${formatNumber(entry.count)}건</strong>
+                        </div>
+                      `).join("")}
+                    </div>
+                  </article>
+                `).join("")}
+              </div>
+            </div>
+          </details>
+        `;
+
       el.shippingFeePanel.innerHTML = `
         ${overviewHtml}
         ${noteHtml}
         ${rowsHtml}
+        ${siteDetailHtml}
         ${warningHtml}
       `;
     }
