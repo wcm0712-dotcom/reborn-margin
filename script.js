@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-green-onion-buckwheat-chip-160g-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-excel-count-layout-refresh-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -5509,7 +5509,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-green-onion-buckwheat-chip-160g-01",
+    cacheVersion: "reborn-excel-count-layout-refresh-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -9240,7 +9240,7 @@ function openInventoryItemDetail(sku) {
       Object.assign(state, analyzed);
       state.expandedSellers = new Set();
       state.fileCheckStatus = getFileCheckStatus();
-      state.isFileCheckOpen = state.fileCheckStatus.level !== "normal";
+      state.isFileCheckOpen = false;
 
       renderAll();
       el.resultArea.classList.remove("hidden");
