@@ -372,6 +372,15 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.035); }
 .backup-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .import-label { position: relative; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; }
 .import-label input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.one-step-undo-status {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(125, 211, 168, 0.2);
+  border-radius: 14px;
+  color: var(--muted);
+  background: rgba(125, 211, 168, 0.06);
+  line-height: 1.5;
+}
 .backup-list { margin: 14px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; color: var(--muted); }
 .backup-list li { padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255, 255, 255, 0.035); }
 
@@ -559,6 +568,86 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.035); }
   font-weight: 900;
 }
 
+.daily-flow-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.daily-flow-item {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.055);
+  text-align: left;
+}
+
+.daily-flow-item:hover,
+.daily-flow-item:focus-visible {
+  border-color: rgba(125, 211, 168, 0.35);
+  background: rgba(125, 211, 168, 0.075);
+}
+
+.daily-flow-date {
+  font-size: 14px;
+  font-weight: 950;
+  letter-spacing: -0.02em;
+}
+
+.daily-flow-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.flow-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.flow-pill.inbound,
+.daily-flow-detail-section.inbound h3 {
+  color: #8ff0b5;
+}
+
+.flow-pill.outbound,
+.daily-flow-detail-section.outbound h3,
+.daily-flow-detail-section.excel h3 {
+  color: #ffb4c9;
+}
+
+.flow-pill.net.positive,
+.daily-flow-summary-grid .positive,
+.daily-flow-product-row .positive {
+  color: #8ff0b5;
+}
+
+.flow-pill.net.negative,
+.daily-flow-summary-grid .negative,
+.daily-flow-product-row .negative {
+  color: #ffb4c9;
+}
+
+.daily-flow-empty {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.045);
+}
+
 .detail-overlay {
   position: fixed;
   inset: 0;
@@ -654,6 +743,115 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.035); }
   background: rgba(255, 255, 255, 0.045);
 }
 
+.history-record-detail,
+.daily-flow-detail {
+  display: grid;
+  gap: 12px;
+}
+
+.history-record-detail h3,
+.daily-flow-detail-heading,
+.daily-flow-detail-section h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 950;
+  letter-spacing: -0.02em;
+}
+
+.daily-flow-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.daily-flow-summary-grid div {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.daily-flow-summary-grid span,
+.daily-flow-product-head,
+.daily-flow-detail-row small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.daily-flow-summary-grid strong {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.daily-flow-product-table,
+.daily-flow-detail-list {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.daily-flow-product-head,
+.daily-flow-product-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.4fr) repeat(4, minmax(78px, 0.75fr));
+  gap: 10px;
+  align-items: center;
+  padding: 11px 13px;
+}
+
+.daily-flow-product-head {
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.daily-flow-product-row + .daily-flow-product-row,
+.daily-flow-detail-row + .daily-flow-detail-row {
+  border-top: 1px solid var(--line);
+}
+
+.daily-flow-product-row strong,
+.daily-flow-detail-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.daily-flow-product-row span,
+.daily-flow-product-row b {
+  color: #fff;
+  font-weight: 900;
+  text-align: right;
+}
+
+.daily-flow-detail-section {
+  display: grid;
+  gap: 8px;
+}
+
+.daily-flow-detail-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(110px, auto);
+  gap: 6px 12px;
+  align-items: center;
+  padding: 12px 13px;
+}
+
+.daily-flow-detail-row span {
+  color: #fff;
+  font-weight: 900;
+  text-align: right;
+}
+
+.daily-flow-detail-row small {
+  grid-column: 1 / -1;
+  line-height: 1.45;
+}
+
 @keyframes overlayFade {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -681,6 +879,25 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.035); }
 
   .detail-line span {
     justify-self: start;
+  }
+
+  .daily-flow-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .daily-flow-product-head {
+    display: none;
+  }
+
+  .daily-flow-product-row,
+  .daily-flow-detail-row {
+    grid-template-columns: 1fr;
+  }
+
+  .daily-flow-product-row span,
+  .daily-flow-product-row b,
+  .daily-flow-detail-row span {
+    text-align: left;
   }
 }
 
@@ -13341,4 +13558,9 @@ body.admin-active #syncCard .admin-auth-form:has(#adminEmail[hidden]) {
   #page-excel-count .download-grid button {
     flex: 1 1 100%;
   }
+}
+
+#page-wms #purchaseStatusCard[data-retired-feature="purchase-return"],
+#page-wms #returnAdjustmentCard[data-retired-feature="purchase-return"] {
+  display: none !important;
 }

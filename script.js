@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-excel-count-layout-refresh-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-hide-purchase-return-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -1063,6 +1063,102 @@
     setLocalStorageItem(UNDO_KEY, JSON.stringify((snapshots || []).slice(0, 50)), "saveUndoSnapshots");
   }
 
+  function undoRecordKey(record) {
+    if (!record || typeof record !== "object") return "";
+    return String(record.id || [record.at, record.type, record.actionType, record.memo, record.qtyText, record.source].filter(Boolean).join("|"));
+  }
+
+  function isInventoryUndoHistoryRecord(record) {
+    const source = String(record?.source || "");
+    const text = `${record?.type || ""} ${record?.memo || ""} ${record?.qtyText || ""}`.toLowerCase();
+    return source === STOCK_MOVE_SOURCES.manualInbound
+      || source === STOCK_MOVE_SOURCES.manualOutbound
+      || source === "excelOrderDeduction"
+      || source === "returnAdjustment"
+      || /입고|출고|주문처리|취소|반품/.test(text);
+  }
+
+  function isInventoryUndoAdminLog(log) {
+    const source = String(log?.source || "");
+    const text = `${log?.actionType || ""} ${log?.memo || ""}`.toLowerCase();
+    return source === STOCK_MOVE_SOURCES.manualInbound
+      || source === STOCK_MOVE_SOURCES.manualOutbound
+      || source === "excelOrderDeduction"
+      || source === "returnAdjustment"
+      || /manual_adjust|재고 직접 수정|입고|출고|엑셀 주문|취소|반품/.test(text);
+  }
+
+  function findNewUndoRecord(currentRecords, previousRecords, predicate) {
+    const previousKeys = new Set((previousRecords || []).map(undoRecordKey).filter(Boolean));
+    return (currentRecords || []).find((record) => predicate(record) && !previousKeys.has(undoRecordKey(record))) || null;
+  }
+
+  function getUndoStockChanges(previousState, currentState) {
+    const previousStock = previousState?.stock || {};
+    const currentStock = currentState?.stock || {};
+    const keys = new Set([...Object.keys(previousStock), ...Object.keys(currentStock)].map(canonicalSku).filter(Boolean));
+    return [...keys].map((sku) => {
+      const beforeUnits = storedStockUnitsForSku(sku, previousStock[sku]);
+      const afterUnits = storedStockUnitsForSku(sku, currentStock[sku]);
+      return { sku, beforeUnits, afterUnits, diffUnits: afterUnits - beforeUnits };
+    }).filter((item) => item.diffUnits !== 0);
+  }
+
+  function isInventoryUndoReason(reason) {
+    const text = String(reason || "");
+    if (/복구|초기값|백업|불러오기|원가|가격|발주|파렛/.test(text)) return false;
+    return /입고|출고|엑셀 주문 차감|취소\/반품|취소|반품|재고 직접 수정/.test(text);
+  }
+
+  function formatUndoStockChange(item) {
+    const sign = item.diffUnits > 0 ? "+" : "-";
+    const units = Math.abs(item.diffUnits);
+    const qty = INVENTORY_DEFS[item.sku] ? formatStock(item.sku, units) : `${number(units)}개`;
+    return `${item.sku} ${sign}${qty}`;
+  }
+
+  function summarizeOneStepUndoCandidate(candidate) {
+    if (!candidate) return "되돌릴 최근 재고 변경 작업이 없습니다.";
+    const record = candidate.historyRecord;
+    const log = candidate.adminLog;
+    const actionLine = record
+      ? `${formatDateTime(record.at)} · ${record.type || "재고 작업"} · ${record.memo || ""} ${record.qtyText || ""}`.trim()
+      : log
+        ? `${formatDateTime(log.at)} · ${log.actionType || "재고 작업"} · ${log.itemName || ""} ${log.qty ? number(log.qty) + (log.unit || "") : ""}`.trim()
+        : `${formatDateTime(candidate.snapshot.at)} · ${candidate.reasonText || "저장 직전 상태"}`;
+    const changes = candidate.stockChanges.slice(0, 4).map(formatUndoStockChange).join(" / ");
+    const more = candidate.stockChanges.length > 4 ? ` 외 ${number(candidate.stockChanges.length - 4)}개` : "";
+    return `${actionLine}${changes ? ` · ${changes}${more}` : ""}`;
+  }
+
+  function getLatestInventoryUndoCandidate() {
+    const snapshots = loadUndoSnapshots();
+    const snapshot = snapshots[0];
+    if (!snapshot?.state) return null;
+    const previousState = normalizeState(snapshot.state);
+    const currentState = normalizeState(state);
+    const stockChanges = getUndoStockChanges(previousState, currentState);
+    if (!stockChanges.length) return null;
+    const historyRecord = findNewUndoRecord(currentState.history, previousState.history, isInventoryUndoHistoryRecord);
+    const adminLog = findNewUndoRecord(currentState.adminActionLogs, previousState.adminActionLogs, isInventoryUndoAdminLog);
+    const reasonText = String(snapshot.reason || "");
+    if (!historyRecord && !adminLog && !isInventoryUndoReason(reasonText)) return null;
+    return { snapshots, snapshot, previousState, stockChanges, historyRecord, adminLog, reasonText };
+  }
+
+  function renderOneStepUndoStatus() {
+    const button = $("undoLatestInventoryChange");
+    const status = $("oneStepUndoStatus");
+    if (!button && !status) return;
+    const candidate = getLatestInventoryUndoCandidate();
+    if (button) button.disabled = !candidate;
+    if (status) {
+      status.textContent = candidate
+        ? `되돌릴 대상: ${summarizeOneStepUndoCandidate(candidate)}`
+        : "되돌릴 최근 재고 변경 작업이 없습니다. 정확한 직전 상태가 확인될 때만 활성화됩니다.";
+    }
+  }
+
   function pushUndoSnapshot(reason) {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -1077,6 +1173,28 @@
     } catch {
       // 복구용 스냅샷 저장 실패는 본 저장 동작을 막지 않습니다.
     }
+  }
+
+  function restoreLatestInventoryChange() {
+    const candidate = getLatestInventoryUndoCandidate();
+    if (!candidate) {
+      alert("되돌릴 최근 작업이 없습니다. 정확한 직전 백업을 찾을 수 없어 되돌릴 수 없습니다.");
+      renderOneStepUndoStatus();
+      return;
+    }
+    const summary = summarizeOneStepUndoCandidate(candidate);
+    if (!confirm(`가장 최근 재고 변경 작업 1건만 되돌립니다.\n\n${summary}\n\n계속할까요?`)) return;
+    addBackup("최근 작업 1단계 되돌리기 전 백업");
+    saveUndoSnapshots(candidate.snapshots.slice(1));
+    state = normalizeState(candidate.previousState);
+    state.updatedAt = new Date().toISOString();
+    localStateLoadFailed = false;
+    setLocalStorageItem(STORAGE_KEY, JSON.stringify(state), "restoreLatestInventoryChange");
+    addBackup("최근 작업 1단계 되돌리기");
+    renderAll();
+    refreshInventoryItemOrderTrendIfOpen();
+    queueSupabaseAppStateSave("최근 작업 1단계 되돌리기");
+    alert(`최근 작업 1단계를 되돌렸습니다.\n${summary}`);
   }
 
   function restorePreviousState() {
@@ -1328,7 +1446,7 @@
     const lockSelectors = [
       "#syncNow", "#retrySupabaseSave", "#syncIntervalSelect",
       "#savePallets", "#saveBoxStock",
-      "#exportBackup", "#restorePreviousWms", "#resetWms",
+      "#exportBackup", "#restorePreviousWms", "#undoLatestInventoryChange", "#resetWms",
       "#orderFile", "#parseOrderFile", "#applyOrderDeductions",
       "#moveMemo", "#quickInboundExample", "#addStockMoveRow", "#clearStockMoveRows", "#applyStockMove",
       "#palletGrid input", "#boxStockGrid input",
@@ -4986,14 +5104,171 @@ function refreshActiveOrderAnalysisSummary() {
     return isEditorSession() ? items : items.filter((item) => !isInternalAdminHistory(item));
   }
 
+  function getHistoryDateKey(record) {
+    const date = new Date(record?.at || "");
+    if (Number.isNaN(date.getTime())) return "";
+    return dateKey(date);
+  }
+
+  function createDailyFlowBucket(dayKey) {
+    return {
+      date: dayKey,
+      records: [],
+      missingRecords: [],
+      totals: { inbound: 0, outbound: 0, excel: 0, returnIn: 0, returnOut: 0 },
+      entries: { inbound: [], outbound: [], excel: [], returnIn: [], returnOut: [], returnHold: [], unknown: [] },
+      products: new Map()
+    };
+  }
+
+  function classifyFlowDetail(record, detail) {
+    const source = String(detail?.source || record?.source || "");
+    const direction = String(detail?.direction || "").toLowerCase();
+    if (source === "returnAdjustment" || isReturnAdjustmentHistory(record)) {
+      if (direction === "in") return "returnIn";
+      if (direction === "out") return "returnOut";
+      if (direction === "hold") return "returnHold";
+      return "unknown";
+    }
+    if (source === "excelOrderDeduction") return "excel";
+    if (source === STOCK_MOVE_SOURCES.manualInbound || direction === "in") return "inbound";
+    if (source === STOCK_MOVE_SOURCES.manualOutbound || direction === "out") return "outbound";
+    return "unknown";
+  }
+
+  function getFlowKindLabel(kind) {
+    return ({
+      inbound: "입고",
+      outbound: "출고",
+      excel: "엑셀 차감",
+      returnIn: "반품/취소 복구",
+      returnOut: "반품/취소 차감",
+      returnHold: "반품/취소 기록",
+      unknown: "상세 데이터 없음"
+    })[kind] || "상세 데이터 없음";
+  }
+
+  function getFlowKindClass(kind) {
+    return ({
+      inbound: "inbound",
+      outbound: "outbound",
+      excel: "excel",
+      returnIn: "return",
+      returnOut: "return",
+      returnHold: "return",
+      unknown: "unknown"
+    })[kind] || "unknown";
+  }
+
+  function getDailyFlowProduct(bucket, sku) {
+    const key = canonicalSku(sku || "");
+    if (!key) return null;
+    if (!bucket.products.has(key)) {
+      bucket.products.set(key, { sku: key, inbound: 0, outbound: 0, excel: 0, returnIn: 0, returnOut: 0 });
+    }
+    return bucket.products.get(key);
+  }
+
+  function addDailyFlowEntry(bucket, record, detail) {
+    const units = Math.max(0, Math.round(cleanNumber(detail?.units)));
+    const sku = canonicalSku(detail?.sku || "");
+    const kind = classifyFlowDetail(record, detail);
+    const entry = {
+      kind,
+      sku,
+      units,
+      at: record?.at || "",
+      type: record?.type || "",
+      memo: record?.memo || "",
+      qtyText: record?.qtyText || "",
+      text: detail?.text || (sku ? formatMovementDetail(sku, units, detail?.direction || "out") : "")
+    };
+    bucket.entries[kind] = bucket.entries[kind] || [];
+    bucket.entries[kind].push(entry);
+
+    if (["inbound", "outbound", "excel", "returnIn", "returnOut"].includes(kind)) {
+      bucket.totals[kind] += units;
+    }
+
+    const product = getDailyFlowProduct(bucket, sku);
+    if (product && ["inbound", "outbound", "excel", "returnIn", "returnOut"].includes(kind)) {
+      product[kind] += units;
+    }
+  }
+
+  function buildDailyFlowBuckets() {
+    const buckets = new Map();
+    getVisibleHistoryItems().forEach((record) => {
+      const dayKey = getHistoryDateKey(record);
+      if (!dayKey) return;
+      if (!buckets.has(dayKey)) buckets.set(dayKey, createDailyFlowBucket(dayKey));
+      const bucket = buckets.get(dayKey);
+      bucket.records.push(record);
+      const details = Array.isArray(record.details) ? record.details.filter(Boolean) : [];
+      if (!details.length) {
+        bucket.missingRecords.push(record);
+        return;
+      }
+      details.forEach((detail) => addDailyFlowEntry(bucket, record, detail));
+    });
+    return Array.from(buckets.values()).sort((a, b) => b.date.localeCompare(a.date));
+  }
+
+  function findDailyFlowBucket(dayKey) {
+    return buildDailyFlowBuckets().find((bucket) => bucket.date === dayKey) || null;
+  }
+
+  function calculateDailyFlowNet(bucket) {
+    if (!bucket) return 0;
+    return bucket.totals.inbound + bucket.totals.returnIn - bucket.totals.outbound - bucket.totals.excel - bucket.totals.returnOut;
+  }
+
+  function formatDailyFlowUnits(sku, units) {
+    const safeUnits = Math.max(0, Math.round(cleanNumber(units)));
+    if (sku && INVENTORY_DEFS[canonicalSku(sku)]) {
+      return `${number(safeUnits)}개 · ${formatStock(sku, safeUnits)}`;
+    }
+    return `${number(safeUnits)}개`;
+  }
+
+  function formatSignedFlowUnits(units) {
+    const value = Math.round(cleanNumber(units));
+    const sign = value > 0 ? "+" : "";
+    return `${sign}${number(value)}개`;
+  }
+
+  function renderDailyFlowList() {
+    const list = $("dailyFlowList");
+    if (!list) return;
+    const buckets = buildDailyFlowBuckets().slice(0, 12);
+    if (!buckets.length) {
+      list.innerHTML = `<div class="daily-flow-empty">날짜별로 표시할 입출고 상세 기록이 없습니다.</div>`;
+      return;
+    }
+    list.innerHTML = buckets.map((bucket) => {
+      const net = calculateDailyFlowNet(bucket);
+      return `
+        <button type="button" class="daily-flow-item" data-flow-date="${escapeHtml(bucket.date)}" aria-label="${escapeHtml(bucket.date)} 입출고 상세 보기">
+          <span class="daily-flow-date">${escapeHtml(bucket.date)}</span>
+          <span class="daily-flow-pills">
+            <b class="flow-pill inbound">입고 ${number(bucket.totals.inbound)}</b>
+            <b class="flow-pill outbound">출고 ${number(bucket.totals.outbound + bucket.totals.excel)}</b>
+            <b class="flow-pill net ${net >= 0 ? "positive" : "negative"}">순변동 ${escapeHtml(formatSignedFlowUnits(net))}</b>
+          </span>
+        </button>`;
+    }).join("");
+  }
+
   function renderHistory() {
     const tbody = $("historyTable");
     if (!tbody) return;
+    renderDailyFlowList();
     const historyItems = getVisibleHistoryItems();
     const rows = historyItems.slice(0, 80).map((item, index) => {
       const key = item.id || `idx-${index}`;
+      const dayKey = getHistoryDateKey(item);
       return `
-        <tr class="history-row" data-history-key="${escapeHtml(key)}">
+        <tr class="history-row" data-history-key="${escapeHtml(key)}" data-flow-date="${escapeHtml(dayKey)}">
           <td>${escapeHtml(formatDateTime(item.at))}</td>
           <td>${escapeHtml(item.type || "기록")}</td>
           <td><button type="button" class="history-detail-trigger" data-history-key="${escapeHtml(key)}">${escapeHtml(item.memo || "상세내용")}</button></td>
@@ -5008,6 +5283,7 @@ function refreshActiveOrderAnalysisSummary() {
     if (!list) return;
     const backups = loadBackups().slice(0, 6);
     list.innerHTML = backups.map((backup) => `<li>${escapeHtml(formatDateTime(backup.at))} · ${escapeHtml(backup.reason || "저장")}</li>`).join("") || `<li>아직 백업이 없습니다.</li>`;
+    renderOneStepUndoStatus();
   }
 
   function bindWmsEvents() {
@@ -5211,6 +5487,11 @@ function refreshActiveOrderAnalysisSummary() {
       if (!trigger) return;
       openHistoryDetail(trigger.dataset.historyKey || trigger.closest(".history-row")?.dataset.historyKey);
     });
+    $("dailyFlowList")?.addEventListener("click", (event) => {
+      const trigger = event.target.closest("[data-flow-date]");
+      if (!trigger) return;
+      openDailyFlowDetail(trigger.dataset.flowDate || "");
+    });
     $("closeHistoryDetail")?.addEventListener("click", closeHistoryDetail);
     $("historyDetailOverlay")?.addEventListener("click", (event) => {
       if (event.target.id === "historyDetailOverlay") closeHistoryDetail();
@@ -5238,6 +5519,10 @@ function refreshActiveOrderAnalysisSummary() {
     $("restorePreviousWms")?.addEventListener("click", () => {
       if (!requireEditor("이전값 복구")) return;
       restorePreviousState();
+    });
+    $("undoLatestInventoryChange")?.addEventListener("click", () => {
+      if (!requireEditor("최근 작업 1단계 되돌리기")) return;
+      restoreLatestInventoryChange();
     });
     $("resetWms")?.addEventListener("click", () => {
       if (!requireEditor("초기값 복구")) return;
@@ -5509,7 +5794,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-excel-count-layout-refresh-01",
+    cacheVersion: "reborn-hide-purchase-return-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -7975,6 +8260,107 @@ function openInventoryItemDetail(sku) {
     activeInventoryDetailSku = null;
   }
 
+  function renderDailyFlowEntryList(bucket, kind) {
+    const entries = bucket?.entries?.[kind] || [];
+    if (!entries.length) return "";
+    return `
+      <section class="daily-flow-detail-section ${getFlowKindClass(kind)}">
+        <h3>${escapeHtml(getFlowKindLabel(kind))}</h3>
+        <div class="daily-flow-detail-list">
+          ${entries.map((entry) => `
+            <div class="daily-flow-detail-row">
+              <strong>${escapeHtml(entry.sku || "상세 데이터 없음")}</strong>
+              <span>${escapeHtml(entry.sku ? formatDailyFlowUnits(entry.sku, entry.units) : (entry.qtyText || "상세 데이터 없음"))}</span>
+              <small>${escapeHtml(formatDateTime(entry.at))}${entry.memo ? " · " + escapeHtml(entry.memo) : ""}</small>
+            </div>
+          `).join("")}
+        </div>
+      </section>`;
+  }
+
+  function renderDailyFlowMissingRecords(bucket) {
+    const records = bucket?.missingRecords || [];
+    if (!records.length) return "";
+    return `
+      <section class="daily-flow-detail-section unknown">
+        <h3>상세 데이터 없음</h3>
+        <div class="daily-flow-detail-list">
+          ${records.map((record) => `
+            <div class="daily-flow-detail-row">
+              <strong>${escapeHtml(record.type || "기록")}</strong>
+              <span>${escapeHtml(record.qtyText || "제품별 상세 없음")}</span>
+              <small>${escapeHtml(formatDateTime(record.at))}${record.memo ? " · " + escapeHtml(record.memo) : ""}</small>
+            </div>
+          `).join("")}
+        </div>
+      </section>`;
+  }
+
+  function renderDailyFlowProductSummary(bucket) {
+    const rows = Array.from(bucket?.products?.values?.() || [])
+      .map((item) => {
+        const net = item.inbound + item.returnIn - item.outbound - item.excel - item.returnOut;
+        return { ...item, net };
+      })
+      .sort((a, b) => Math.abs(b.net) - Math.abs(a.net) || b.inbound + b.outbound + b.excel - (a.inbound + a.outbound + a.excel) || a.sku.localeCompare(b.sku, "ko-KR"));
+
+    if (!rows.length) {
+      return `<div class="detail-empty">제품별 상세 데이터가 없습니다. 기존 기록에 제품별 상세가 없으면 임의로 역산하지 않습니다.</div>`;
+    }
+
+    return `
+      <div class="daily-flow-product-table">
+        <div class="daily-flow-product-head">
+          <span>제품명</span><span>입고</span><span>출고</span><span>엑셀</span><span>순변동</span>
+        </div>
+        ${rows.map((row) => `
+          <div class="daily-flow-product-row">
+            <strong>${escapeHtml(row.sku)}</strong>
+            <span>${escapeHtml(formatDailyFlowUnits(row.sku, row.inbound + row.returnIn))}</span>
+            <span>${escapeHtml(formatDailyFlowUnits(row.sku, row.outbound + row.returnOut))}</span>
+            <span>${escapeHtml(formatDailyFlowUnits(row.sku, row.excel))}</span>
+            <b class="${row.net >= 0 ? "positive" : "negative"}">${escapeHtml(formatSignedFlowUnits(row.net))}</b>
+          </div>
+        `).join("")}
+      </div>`;
+  }
+
+  function renderDailyFlowDetailHtml(bucket, options = {}) {
+    if (!bucket) return `<div class="detail-empty">해당 날짜의 입출고 상세 기록을 찾을 수 없습니다.</div>`;
+    const net = calculateDailyFlowNet(bucket);
+    const title = options.compact ? "같은 날짜 전체 흐름" : "제품별 상세";
+    return `
+      <div class="daily-flow-detail">
+        <div class="daily-flow-summary-grid">
+          <div><span>총 입고</span><strong>${escapeHtml(formatDailyFlowUnits("", bucket.totals.inbound + bucket.totals.returnIn))}</strong></div>
+          <div><span>총 출고</span><strong>${escapeHtml(formatDailyFlowUnits("", bucket.totals.outbound + bucket.totals.returnOut))}</strong></div>
+          <div><span>엑셀 차감</span><strong>${escapeHtml(formatDailyFlowUnits("", bucket.totals.excel))}</strong></div>
+          <div><span>순변동</span><strong class="${net >= 0 ? "positive" : "negative"}">${escapeHtml(formatSignedFlowUnits(net))}</strong></div>
+        </div>
+        <h3 class="daily-flow-detail-heading">${escapeHtml(title)}</h3>
+        ${renderDailyFlowProductSummary(bucket)}
+        ${renderDailyFlowEntryList(bucket, "inbound")}
+        ${renderDailyFlowEntryList(bucket, "outbound")}
+        ${renderDailyFlowEntryList(bucket, "excel")}
+        ${renderDailyFlowEntryList(bucket, "returnIn")}
+        ${renderDailyFlowEntryList(bucket, "returnOut")}
+        ${renderDailyFlowEntryList(bucket, "returnHold")}
+        ${renderDailyFlowMissingRecords(bucket)}
+      </div>`;
+  }
+
+  function openDailyFlowDetail(dayKey) {
+    const bucket = findDailyFlowBucket(dayKey);
+    const overlay = $("historyDetailOverlay");
+    const body = $("historyDetailBody");
+    if (!overlay || !body || !bucket) return;
+    setText("historyDetailTitle", `${bucket.date} 입출고 상세`);
+    setText("historyDetailMeta", `기존 기록 기준 · ${number(bucket.records.length)}건 · 조회 전용`);
+    body.innerHTML = renderDailyFlowDetailHtml(bucket);
+    overlay.hidden = false;
+    requestAnimationFrame(() => overlay.classList.add("open"));
+  }
+
   function openHistoryDetail(key) {
     const item = findHistoryByKey(key);
     if (!item) return;
@@ -7986,13 +8372,21 @@ function openInventoryItemDetail(sku) {
 
     const body = $("historyDetailBody");
     const details = Array.isArray(item.details) ? item.details : [];
-    body.innerHTML = details.length
+    const recordHtml = details.length
       ? details.map((detail) => `
         <div class="detail-line">
           <strong>${escapeHtml(detail.sku || "품목")}</strong>
           <span>${escapeHtml(detail.text || formatMovementDetail(detail.sku, detail.units || 0, detail.direction || "out"))}</span>
         </div>`).join("")
       : `<div class="detail-empty">이전 버전에서 저장된 기록이라 품목별 상세 내역이 없습니다.</div>`;
+    const bucket = findDailyFlowBucket(getHistoryDateKey(item));
+    body.innerHTML = `
+      <section class="history-record-detail">
+        <h3>이 기록의 상세</h3>
+        ${recordHtml}
+      </section>
+      ${bucket ? renderDailyFlowDetailHtml(bucket, { compact: true }) : ""}
+    `;
 
     overlay.hidden = false;
     requestAnimationFrame(() => overlay.classList.add("open"));

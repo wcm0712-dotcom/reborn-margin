@@ -8,10 +8,10 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <!-- Cache busting -->
-  <meta name="reborn-app-version" content="reborn-excel-count-layout-refresh-01" />
+  <meta name="reborn-app-version" content="reborn-hide-purchase-return-01" />
   <script>
     (function () {
-      var APP_VERSION = "reborn-excel-count-layout-refresh-01";
+      var APP_VERSION = "reborn-hide-purchase-return-01";
       var VERSION_PARAM = "v";
       var VERSION_STORAGE_KEY = "rebornAppVersion";
       var REFRESH_FLAG_KEY = "rebornCacheRepairReloaded:" + APP_VERSION;
@@ -193,11 +193,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>리본컴퍼니 관리 시스템</title>
-  <link rel="manifest" href="./manifest.json?v=reborn-excel-count-layout-refresh-01" />
+  <link rel="manifest" href="./manifest.json?v=reborn-hide-purchase-return-01" />
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="64x64" href="./favicon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
-  <link rel="stylesheet" href="./style.css?v=reborn-excel-count-layout-refresh-01" />
+  <link rel="stylesheet" href="./style.css?v=reborn-hide-purchase-return-01" />
 </head>
 <body>
   <div id="appLaunchSplash" class="app-launch-splash" aria-hidden="true">
@@ -246,7 +246,7 @@
             <button type="button" class="home-entry-card" data-route="wms">
               <span class="home-entry-kicker">WMS</span>
               <strong>WMS 재고 시스템</strong>
-              <em>재고 · 발주 · 입출고 관리</em>
+              <em>재고 · 입출고 관리</em>
             </button>
             <button type="button" class="home-entry-card" data-route="excel-count">
               <span class="home-entry-kicker">Excel</span>
@@ -536,7 +536,7 @@
         </div>
 
 
-        <section class="card purchase-status-card" id="purchaseStatusCard">
+        <section class="card purchase-status-card" id="purchaseStatusCard" hidden data-retired-feature="purchase-return">
           <div class="card-title-row purchase-title-row">
             <div class="purchase-title-copy">
               <h2>발주 현황</h2>
@@ -592,7 +592,7 @@
           <div id="purchaseCompletedSection" class="purchase-completed-section"></div>
         </section>
 
-        <section class="card return-adjust-card" id="returnAdjustmentCard" data-admin-only="true" hidden data-collapsible data-collapse-default="closed">
+        <section class="card return-adjust-card" id="returnAdjustmentCard" data-admin-only="true" hidden data-collapsible data-collapse-default="closed" data-retired-feature="purchase-return">
           <div class="card-title-row return-adjust-title-row">
             <div>
               <h2>취소/반품 처리</h2>
@@ -818,7 +818,9 @@
               <input id="importBackup" class="visually-hidden-file backup-import-input" type="file" accept=".json" />
               <button id="resetWms" type="button" class="danger-btn">초기값 복구</button>
               <button id="restorePreviousWms" type="button" class="ghost-btn">이전값 복구</button>
+              <button id="undoLatestInventoryChange" type="button" class="ghost-btn one-step-undo-btn">최근 작업 1단계 되돌리기</button>
             </div>
+            <p id="oneStepUndoStatus" class="one-step-undo-status">가장 최근 재고 변경 작업 1건만 취소합니다.</p>
             <ul id="backupList" class="backup-list"></ul>
           </section>
 
@@ -854,6 +856,7 @@
                 <p>내용을 클릭하면 품목별 상세 내역을 확인할 수 있습니다.</p>
               </div>
             </div>
+            <div id="dailyFlowList" class="daily-flow-list" aria-label="날짜별 입출고 상세"></div>
             <div class="table-wrap history">
               <table>
                 <thead><tr><th>시간</th><th>구분</th><th>내용</th><th>수량</th></tr></thead>
@@ -1116,7 +1119,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./script.js?v=reborn-excel-count-layout-refresh-01"></script>
+  <script src="./script.js?v=reborn-hide-purchase-return-01"></script>
   <script>
     (function () {
       var expectedVersion = window.__REBORN_APP_VERSION__;
