@@ -736,6 +736,26 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.035); }
   font-weight: 900;
 }
 
+.flow-detail-quantity {
+  grid-column: 1 / -1;
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid rgba(47, 213, 120, 0.2);
+  border-radius: 13px;
+  color: #8ff0b5;
+  background: rgba(47, 213, 120, 0.08);
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1.45;
+}
+
+.flow-detail-quantity.is-empty {
+  border-color: var(--line);
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+}
+
 .detail-empty {
   padding: 16px;
   border-radius: 18px;

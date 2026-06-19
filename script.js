@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-hide-purchase-return-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-flow-detail-qty-display-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -5231,6 +5231,45 @@ function refreshActiveOrderAnalysisSummary() {
     return `${number(safeUnits)}개`;
   }
 
+  function hasFlowDetailUnits(units) {
+    const value = cleanNumber(units);
+    return Number.isFinite(value) && value > 0;
+  }
+
+  function getFlowKindQuantityLabel(kind) {
+    return ({
+      inbound: "입고 수량",
+      outbound: "출고 수량",
+      excel: "엑셀 차감 수량",
+      returnIn: "반품/취소 복구 수량",
+      returnOut: "반품/취소 차감 수량",
+      returnHold: "수량",
+      unknown: "수량"
+    })[kind] || "수량";
+  }
+
+  function getMovementDetailQuantityLabel(detail) {
+    const source = String(detail?.source || "");
+    const direction = String(detail?.direction || "").toLowerCase();
+    if (source === "excelOrderDeduction") return "엑셀 차감 수량";
+    if (direction === "in") return "입고 수량";
+    if (direction === "out") return "출고 수량";
+    return "수량";
+  }
+
+  function formatFlowDetailQuantityText(sku, units) {
+    if (!hasFlowDetailUnits(units)) return "수량 상세 없음";
+    return formatDailyFlowUnits(sku || "", units);
+  }
+
+  function renderHistoryDetailQuantity(detail) {
+    const text = hasFlowDetailUnits(detail?.units)
+      ? `${getMovementDetailQuantityLabel(detail)}: ${formatFlowDetailQuantityText(detail?.sku, detail.units)}`
+      : "수량 상세 없음";
+    const className = hasFlowDetailUnits(detail?.units) ? "flow-detail-quantity" : "flow-detail-quantity is-empty";
+    return `<em class="${className}">${escapeHtml(text)}</em>`;
+  }
+
   function formatSignedFlowUnits(units) {
     const value = Math.round(cleanNumber(units));
     const sign = value > 0 ? "+" : "";
@@ -5794,7 +5833,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-hide-purchase-return-01",
+    cacheVersion: "reborn-flow-detail-qty-display-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -8270,7 +8309,7 @@ function openInventoryItemDetail(sku) {
           ${entries.map((entry) => `
             <div class="daily-flow-detail-row">
               <strong>${escapeHtml(entry.sku || "상세 데이터 없음")}</strong>
-              <span>${escapeHtml(entry.sku ? formatDailyFlowUnits(entry.sku, entry.units) : (entry.qtyText || "상세 데이터 없음"))}</span>
+              <span>${escapeHtml(entry.sku && hasFlowDetailUnits(entry.units) ? `${getFlowKindQuantityLabel(kind)}: ${formatDailyFlowUnits(entry.sku, entry.units)}` : "수량 상세 없음")}</span>
               <small>${escapeHtml(formatDateTime(entry.at))}${entry.memo ? " · " + escapeHtml(entry.memo) : ""}</small>
             </div>
           `).join("")}
@@ -8376,7 +8415,8 @@ function openInventoryItemDetail(sku) {
       ? details.map((detail) => `
         <div class="detail-line">
           <strong>${escapeHtml(detail.sku || "품목")}</strong>
-          <span>${escapeHtml(detail.text || formatMovementDetail(detail.sku, detail.units || 0, detail.direction || "out"))}</span>
+          <span>${escapeHtml(detail.text || (hasFlowDetailUnits(detail.units) ? formatMovementDetail(detail.sku, detail.units, detail.direction || "out") : "수량 상세 없음"))}</span>
+          ${renderHistoryDetailQuantity(detail)}
         </div>`).join("")
       : `<div class="detail-empty">이전 버전에서 저장된 기록이라 품목별 상세 내역이 없습니다.</div>`;
     const bucket = findDailyFlowBucket(getHistoryDateKey(item));
