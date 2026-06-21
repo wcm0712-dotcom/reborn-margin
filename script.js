@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-flow-detail-qty-display-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-flow-three-month-history-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -407,6 +407,13 @@
   let laborCostRecords = loadLaborCostRecords();
   let laborCalendarMonth = getLaborMonthStart(new Date());
   let activeLaborCostDate = "";
+  const DAILY_FLOW_PAGE_SIZE = 10;
+  const HISTORY_PAGE_SIZE = 50;
+  const expandedDailyFlowDates = new Set();
+  let dailyFlowVisibleDateCount = DAILY_FLOW_PAGE_SIZE;
+  let historyVisibleRecordCount = HISTORY_PAGE_SIZE;
+  let dailyFlowPeriod = "month";
+  let dailyFlowFilter = "all";
 
   function normalizeMovementDetails(details) {
     if (!Array.isArray(details)) return [];
@@ -5104,16 +5111,78 @@ function refreshActiveOrderAnalysisSummary() {
     return isEditorSession() ? items : items.filter((item) => !isInternalAdminHistory(item));
   }
 
+  function getVisibleHistoryRecordItems() {
+    return getVisibleHistoryItems().map((record, index) => ({
+      record,
+      key: record?.id || `idx-${index}`
+    }));
+  }
+
   function getHistoryDateKey(record) {
     const date = new Date(record?.at || "");
     if (Number.isNaN(date.getTime())) return "";
     return dateKey(date);
   }
 
+  function shiftDateKeyByDays(dayKey, days) {
+    const [year, month, day] = String(dayKey || "").split("-").map(Number);
+    if (![year, month, day].every(Number.isFinite)) return "";
+    const date = new Date(year, month - 1, day, 12, 0, 0, 0);
+    date.setDate(date.getDate() + days);
+    return dateKey(date);
+  }
+
+  function shiftDateKeyByMonths(dayKey, months) {
+    const [year, month, day] = String(dayKey || "").split("-").map(Number);
+    if (![year, month, day].every(Number.isFinite)) return "";
+    const targetMonthIndex = year * 12 + (month - 1) + months;
+    const targetYear = Math.floor(targetMonthIndex / 12);
+    const targetMonth = ((targetMonthIndex % 12) + 12) % 12;
+    const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+    return `${targetYear}-${String(targetMonth + 1).padStart(2, "0")}-${String(Math.min(day, lastDay)).padStart(2, "0")}`;
+  }
+
+  function getDailyFlowPeriodBounds(period = dailyFlowPeriod) {
+    const endKey = todayKey();
+    const startKey = period === "week"
+      ? shiftDateKeyByDays(endKey, -6)
+      : shiftDateKeyByMonths(endKey, period === "quarter" ? -3 : -1);
+    return { startKey, endKey };
+  }
+
+  function isHistoryRecordInDailyFlowPeriod(record) {
+    const dayKey = getHistoryDateKey(record);
+    const { startKey, endKey } = getDailyFlowPeriodBounds();
+    return Boolean(dayKey && startKey && dayKey >= startKey && dayKey <= endKey);
+  }
+
+  function getDailyFlowFilteredRecordItems() {
+    return getVisibleHistoryRecordItems().filter(({ record }) =>
+      isHistoryRecordInDailyFlowPeriod(record) && matchesDailyFlowFilter(record)
+    ).sort((a, b) => new Date(b.record?.at || 0) - new Date(a.record?.at || 0));
+  }
+
+  function getDailyFlowPeriodLabel(period = dailyFlowPeriod) {
+    return ({ week: "최근 7일", month: "최근 1개월", quarter: "최근 3개월" })[period] || "최근 1개월";
+  }
+
+  function renderDailyFlowRangeInfo(filteredRecordItems = getDailyFlowFilteredRecordItems()) {
+    const info = $("dailyFlowRangeInfo");
+    if (!info) return;
+    const dayKeys = getVisibleHistoryItems().map(getHistoryDateKey).filter(Boolean).sort();
+    if (!dayKeys.length) {
+      info.textContent = "저장된 입출고 기록이 없습니다.";
+      return;
+    }
+    const { startKey, endKey } = getDailyFlowPeriodBounds();
+    info.textContent = `저장된 기록 범위: ${dayKeys[0]} ~ ${dayKeys[dayKeys.length - 1]} · ${getDailyFlowPeriodLabel()} ${number(filteredRecordItems.length)}건 · 조회 범위 ${startKey} ~ ${endKey}`;
+  }
+
   function createDailyFlowBucket(dayKey) {
     return {
       date: dayKey,
       records: [],
+      recordItems: [],
       missingRecords: [],
       totals: { inbound: 0, outbound: 0, excel: 0, returnIn: 0, returnOut: 0 },
       entries: { inbound: [], outbound: [], excel: [], returnIn: [], returnOut: [], returnHold: [], unknown: [] },
@@ -5196,14 +5265,17 @@ function refreshActiveOrderAnalysisSummary() {
     }
   }
 
-  function buildDailyFlowBuckets() {
+  function buildDailyFlowBuckets(recordItems = getVisibleHistoryRecordItems()) {
     const buckets = new Map();
-    getVisibleHistoryItems().forEach((record) => {
+    recordItems.forEach((recordItem, historyIndex) => {
+      const record = recordItem?.record || recordItem;
+      const recordKey = recordItem?.key || record?.id || `idx-${historyIndex}`;
       const dayKey = getHistoryDateKey(record);
       if (!dayKey) return;
       if (!buckets.has(dayKey)) buckets.set(dayKey, createDailyFlowBucket(dayKey));
       const bucket = buckets.get(dayKey);
       bucket.records.push(record);
+      bucket.recordItems.push({ record, key: recordKey });
       const details = Array.isArray(record.details) ? record.details.filter(Boolean) : [];
       if (!details.length) {
         bucket.missingRecords.push(record);
@@ -5276,35 +5348,142 @@ function refreshActiveOrderAnalysisSummary() {
     return `${sign}${number(value)}개`;
   }
 
+  function getDailyFlowRecordKinds(record) {
+    const kinds = new Set();
+    const details = Array.isArray(record?.details) ? record.details.filter(Boolean) : [];
+    details.forEach((detail) => kinds.add(classifyFlowDetail(record, detail)));
+    if (!kinds.size) kinds.add("unknown");
+    return kinds;
+  }
+
+  function matchesDailyFlowFilter(record) {
+    if (dailyFlowFilter === "all") return true;
+    return getDailyFlowRecordKinds(record).has(dailyFlowFilter);
+  }
+
+  function getDailyFlowRecordPrimaryKind(record) {
+    const kinds = getDailyFlowRecordKinds(record);
+    return ["inbound", "outbound", "excel", "returnIn", "returnOut", "returnHold", "unknown"]
+      .find((kind) => kinds.has(kind)) || "unknown";
+  }
+
+  function countDailyFlowRecords(bucket, kinds) {
+    const acceptedKinds = new Set(kinds);
+    return (bucket?.recordItems || []).filter(({ record }) =>
+      [...getDailyFlowRecordKinds(record)].some((kind) => acceptedKinds.has(kind))
+    ).length;
+  }
+
+  function formatDailyFlowTime(value) {
+    const date = new Date(value || "");
+    if (Number.isNaN(date.getTime())) return "시간 정보 없음";
+    return date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false });
+  }
+
+  function renderDailyFlowRecordDetail(record, detail) {
+    const kind = classifyFlowDetail(record, detail);
+    const sku = canonicalSku(detail?.sku || "");
+    const quantityText = sku && hasFlowDetailUnits(detail?.units)
+      ? `${getFlowKindQuantityLabel(kind)}: ${formatDailyFlowUnits(sku, detail.units)}`
+      : "수량 상세 없음";
+    return `
+      <span class="daily-flow-record-product">
+        <strong>${escapeHtml(sku || "품목 상세 없음")}</strong>
+        <span class="${hasFlowDetailUnits(detail?.units) ? "" : "is-empty"}">${escapeHtml(quantityText)}</span>
+      </span>`;
+  }
+
+  function renderDailyFlowRecordItem(recordItem) {
+    const record = recordItem?.record;
+    if (!record) return "";
+    const kind = getDailyFlowRecordPrimaryKind(record);
+    const details = Array.isArray(record.details) ? record.details.filter(Boolean) : [];
+    return `
+      <button type="button" class="daily-flow-record ${getFlowKindClass(kind)}" data-history-key="${escapeHtml(recordItem.key)}" aria-label="${escapeHtml(formatDateTime(record.at))} ${escapeHtml(record.type || getFlowKindLabel(kind))} 상세 보기">
+        <span class="daily-flow-record-head">
+          <b>${escapeHtml(formatDailyFlowTime(record.at))}</b>
+          <em>${escapeHtml(record.type || getFlowKindLabel(kind))}</em>
+        </span>
+        <span class="daily-flow-record-products">
+          ${details.length
+            ? details.map((detail) => renderDailyFlowRecordDetail(record, detail)).join("")
+            : `<span class="daily-flow-record-empty">${escapeHtml(record.qtyText || "수량 상세 없음")}</span>`}
+        </span>
+        ${record.memo ? `<small title="${escapeHtml(record.memo)}">${escapeHtml(record.memo)}</small>` : ""}
+        <span class="daily-flow-record-open">상세 보기</span>
+      </button>`;
+  }
+
+  function renderDailyFlowGroup(bucket) {
+    const recordItems = (bucket.recordItems || [])
+      .filter(({ record }) => matchesDailyFlowFilter(record))
+      .sort((a, b) => new Date(b.record?.at || 0) - new Date(a.record?.at || 0));
+    if (!recordItems.length) return "";
+    const isExpanded = expandedDailyFlowDates.has(bucket.date);
+    const bodyId = `daily-flow-body-${bucket.date}`;
+    const net = calculateDailyFlowNet(bucket);
+    const inboundCount = countDailyFlowRecords(bucket, ["inbound", "returnIn"]);
+    const outboundCount = countDailyFlowRecords(bucket, ["outbound", "returnOut"]);
+    const excelCount = countDailyFlowRecords(bucket, ["excel"]);
+    return `
+      <section class="daily-flow-group${isExpanded ? " is-open" : ""}" data-flow-date="${escapeHtml(bucket.date)}">
+        <button type="button" class="daily-flow-group-toggle" data-flow-toggle-date="${escapeHtml(bucket.date)}" aria-expanded="${isExpanded ? "true" : "false"}" aria-controls="${bodyId}">
+          <span class="daily-flow-date-block">
+            <strong>${escapeHtml(bucket.date)}</strong>
+            <small>총 ${number(bucket.records.length)}건</small>
+          </span>
+          <span class="daily-flow-pills">
+            <b class="flow-pill inbound">입고 ${number(inboundCount)}건 · ${number(bucket.totals.inbound + bucket.totals.returnIn)}개</b>
+            <b class="flow-pill outbound">출고 ${number(outboundCount)}건 · ${number(bucket.totals.outbound + bucket.totals.returnOut)}개</b>
+            <b class="flow-pill excel">엑셀 ${number(excelCount)}건 · ${number(bucket.totals.excel)}개</b>
+            <b class="flow-pill net ${net >= 0 ? "positive" : "negative"}">순변동 ${escapeHtml(formatSignedFlowUnits(net))}</b>
+          </span>
+          <span class="daily-flow-chevron" aria-hidden="true">⌄</span>
+        </button>
+        <div id="${bodyId}" class="daily-flow-group-body"${isExpanded ? "" : " hidden"}>
+          <div class="daily-flow-record-list">${recordItems.map(renderDailyFlowRecordItem).join("")}</div>
+          <button type="button" class="daily-flow-date-detail" data-flow-detail-date="${escapeHtml(bucket.date)}">${escapeHtml(bucket.date)} 전체 상세 보기</button>
+        </div>
+      </section>`;
+  }
+
   function renderDailyFlowList() {
     const list = $("dailyFlowList");
     if (!list) return;
-    const buckets = buildDailyFlowBuckets().slice(0, 12);
-    if (!buckets.length) {
-      list.innerHTML = `<div class="daily-flow-empty">날짜별로 표시할 입출고 상세 기록이 없습니다.</div>`;
-      return;
+    const filteredRecordItems = getDailyFlowFilteredRecordItems();
+    const allBuckets = buildDailyFlowBuckets(filteredRecordItems);
+    const buckets = allBuckets.slice(0, dailyFlowVisibleDateCount);
+    if (!allBuckets.length) {
+      list.innerHTML = `<div class="daily-flow-empty">선택한 기간과 종류에 해당하는 입출고 기록이 없습니다.</div>`;
+    } else {
+      list.innerHTML = buckets.map(renderDailyFlowGroup).join("");
     }
-    list.innerHTML = buckets.map((bucket) => {
-      const net = calculateDailyFlowNet(bucket);
-      return `
-        <button type="button" class="daily-flow-item" data-flow-date="${escapeHtml(bucket.date)}" aria-label="${escapeHtml(bucket.date)} 입출고 상세 보기">
-          <span class="daily-flow-date">${escapeHtml(bucket.date)}</span>
-          <span class="daily-flow-pills">
-            <b class="flow-pill inbound">입고 ${number(bucket.totals.inbound)}</b>
-            <b class="flow-pill outbound">출고 ${number(bucket.totals.outbound + bucket.totals.excel)}</b>
-            <b class="flow-pill net ${net >= 0 ? "positive" : "negative"}">순변동 ${escapeHtml(formatSignedFlowUnits(net))}</b>
-          </span>
-        </button>`;
-    }).join("");
+    document.querySelectorAll("[data-flow-period]").forEach((button) => {
+      const selected = button.dataset.flowPeriod === dailyFlowPeriod;
+      button.classList.toggle("active", selected);
+      button.setAttribute("aria-pressed", selected ? "true" : "false");
+    });
+    document.querySelectorAll("[data-flow-filter]").forEach((button) => {
+      const selected = button.dataset.flowFilter === dailyFlowFilter;
+      button.classList.toggle("active", selected);
+      button.setAttribute("aria-pressed", selected ? "true" : "false");
+    });
+    renderDailyFlowRangeInfo(filteredRecordItems);
+    const loadMoreButton = $("dailyFlowLoadMore");
+    if (loadMoreButton) {
+      const remaining = Math.max(0, allBuckets.length - buckets.length);
+      loadMoreButton.hidden = remaining === 0;
+      loadMoreButton.textContent = remaining ? `이전 날짜 더 보기 (${number(remaining)}일)` : "";
+    }
   }
 
   function renderHistory() {
     const tbody = $("historyTable");
     if (!tbody) return;
     renderDailyFlowList();
-    const historyItems = getVisibleHistoryItems();
-    const rows = historyItems.slice(0, 80).map((item, index) => {
-      const key = item.id || `idx-${index}`;
+    const historyRecordItems = getDailyFlowFilteredRecordItems();
+    const visibleRecordItems = historyRecordItems.slice(0, historyVisibleRecordCount);
+    const rows = visibleRecordItems.map(({ record: item, key }) => {
       const dayKey = getHistoryDateKey(item);
       return `
         <tr class="history-row" data-history-key="${escapeHtml(key)}" data-flow-date="${escapeHtml(dayKey)}">
@@ -5314,7 +5493,14 @@ function refreshActiveOrderAnalysisSummary() {
           <td>${escapeHtml(item.qtyText || "")}</td>
         </tr>`;
     }).join("");
-    tbody.innerHTML = rows || `<tr><td colspan="4" class="muted">아직 기록이 없습니다.</td></tr>`;
+    tbody.innerHTML = rows || `<tr><td colspan="4" class="muted">선택한 기간과 종류에 해당하는 원본 기록이 없습니다.</td></tr>`;
+    setText("historyArchiveSummaryCount", `선택 기간 ${number(historyRecordItems.length)}건`);
+    const loadMoreButton = $("historyLoadMore");
+    if (loadMoreButton) {
+      const remaining = Math.max(0, historyRecordItems.length - visibleRecordItems.length);
+      loadMoreButton.hidden = remaining === 0;
+      loadMoreButton.textContent = remaining ? `원본 기록 더 보기 (${number(remaining)}건)` : "";
+    }
   }
 
   function renderBackups() {
@@ -5526,10 +5712,61 @@ function refreshActiveOrderAnalysisSummary() {
       if (!trigger) return;
       openHistoryDetail(trigger.dataset.historyKey || trigger.closest(".history-row")?.dataset.historyKey);
     });
+    document.querySelectorAll("[data-flow-period]").forEach((button) => {
+      button.addEventListener("click", () => {
+        dailyFlowPeriod = ["week", "month", "quarter"].includes(button.dataset.flowPeriod)
+          ? button.dataset.flowPeriod
+          : "month";
+        dailyFlowVisibleDateCount = DAILY_FLOW_PAGE_SIZE;
+        historyVisibleRecordCount = HISTORY_PAGE_SIZE;
+        expandedDailyFlowDates.clear();
+        renderHistory();
+      });
+    });
+    document.querySelectorAll("[data-flow-filter]").forEach((button) => {
+      button.addEventListener("click", () => {
+        dailyFlowFilter = button.dataset.flowFilter || "all";
+        dailyFlowVisibleDateCount = DAILY_FLOW_PAGE_SIZE;
+        historyVisibleRecordCount = HISTORY_PAGE_SIZE;
+        expandedDailyFlowDates.clear();
+        renderHistory();
+      });
+    });
+    $("dailyFlowExpandAll")?.addEventListener("click", () => {
+      buildDailyFlowBuckets(getDailyFlowFilteredRecordItems())
+        .slice(0, dailyFlowVisibleDateCount)
+        .forEach((bucket) => expandedDailyFlowDates.add(bucket.date));
+      renderDailyFlowList();
+    });
+    $("dailyFlowCollapseAll")?.addEventListener("click", () => {
+      expandedDailyFlowDates.clear();
+      renderDailyFlowList();
+    });
+    $("dailyFlowLoadMore")?.addEventListener("click", () => {
+      dailyFlowVisibleDateCount += DAILY_FLOW_PAGE_SIZE;
+      renderDailyFlowList();
+    });
+    $("historyLoadMore")?.addEventListener("click", () => {
+      historyVisibleRecordCount += HISTORY_PAGE_SIZE;
+      renderHistory();
+    });
     $("dailyFlowList")?.addEventListener("click", (event) => {
-      const trigger = event.target.closest("[data-flow-date]");
-      if (!trigger) return;
-      openDailyFlowDetail(trigger.dataset.flowDate || "");
+      const recordTrigger = event.target.closest("[data-history-key]");
+      if (recordTrigger) {
+        openHistoryDetail(recordTrigger.dataset.historyKey || "");
+        return;
+      }
+      const detailTrigger = event.target.closest("[data-flow-detail-date]");
+      if (detailTrigger) {
+        openDailyFlowDetail(detailTrigger.dataset.flowDetailDate || "");
+        return;
+      }
+      const toggle = event.target.closest("[data-flow-toggle-date]");
+      if (!toggle) return;
+      const dayKey = toggle.dataset.flowToggleDate || "";
+      if (expandedDailyFlowDates.has(dayKey)) expandedDailyFlowDates.delete(dayKey);
+      else expandedDailyFlowDates.add(dayKey);
+      renderDailyFlowList();
     });
     $("closeHistoryDetail")?.addEventListener("click", closeHistoryDetail);
     $("historyDetailOverlay")?.addEventListener("click", (event) => {
@@ -5833,7 +6070,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-flow-detail-qty-display-01",
+    cacheVersion: "reborn-flow-three-month-history-01",
     functionCalled: {
       collect: false,
       stockout: false,

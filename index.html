@@ -8,10 +8,10 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <!-- Cache busting -->
-  <meta name="reborn-app-version" content="reborn-flow-detail-qty-display-01" />
+  <meta name="reborn-app-version" content="reborn-flow-three-month-history-01" />
   <script>
     (function () {
-      var APP_VERSION = "reborn-flow-detail-qty-display-01";
+      var APP_VERSION = "reborn-flow-three-month-history-01";
       var VERSION_PARAM = "v";
       var VERSION_STORAGE_KEY = "rebornAppVersion";
       var REFRESH_FLAG_KEY = "rebornCacheRepairReloaded:" + APP_VERSION;
@@ -193,11 +193,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>리본컴퍼니 관리 시스템</title>
-  <link rel="manifest" href="./manifest.json?v=reborn-flow-detail-qty-display-01" />
+  <link rel="manifest" href="./manifest.json?v=reborn-flow-three-month-history-01" />
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="64x64" href="./favicon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
-  <link rel="stylesheet" href="./style.css?v=reborn-flow-detail-qty-display-01" />
+  <link rel="stylesheet" href="./style.css?v=reborn-flow-three-month-history-01" />
 </head>
 <body>
   <div id="appLaunchSplash" class="app-launch-splash" aria-hidden="true">
@@ -853,16 +853,41 @@
             <div class="card-title-row">
               <div>
                 <h2>입출고 흐름</h2>
-                <p>내용을 클릭하면 품목별 상세 내역을 확인할 수 있습니다.</p>
+                <p>날짜를 펼치면 같은 날 처리한 입고·출고 작업과 품목별 수량을 확인할 수 있습니다.</p>
+              </div>
+            </div>
+            <div class="daily-flow-period-row">
+              <div class="daily-flow-periods" role="group" aria-label="입출고 흐름 조회 기간">
+                <button type="button" data-flow-period="week" aria-pressed="false">최근 7일</button>
+                <button type="button" class="active" data-flow-period="month" aria-pressed="true">최근 1개월</button>
+                <button type="button" data-flow-period="quarter" aria-pressed="false">최근 3개월</button>
+              </div>
+              <p id="dailyFlowRangeInfo" class="daily-flow-range-info">저장된 기록 범위를 확인 중입니다.</p>
+            </div>
+            <div class="daily-flow-toolbar">
+              <div class="daily-flow-filters" role="group" aria-label="입출고 흐름 종류 필터">
+                <button type="button" class="active" data-flow-filter="all" aria-pressed="true">전체</button>
+                <button type="button" data-flow-filter="inbound" aria-pressed="false">입고</button>
+                <button type="button" data-flow-filter="outbound" aria-pressed="false">출고</button>
+                <button type="button" data-flow-filter="excel" aria-pressed="false">엑셀 차감</button>
+              </div>
+              <div class="daily-flow-actions">
+                <button type="button" class="secondary small-button" id="dailyFlowExpandAll">전체 펼치기</button>
+                <button type="button" class="secondary small-button" id="dailyFlowCollapseAll">전체 접기</button>
               </div>
             </div>
             <div id="dailyFlowList" class="daily-flow-list" aria-label="날짜별 입출고 상세"></div>
-            <div class="table-wrap history">
-              <table>
-                <thead><tr><th>시간</th><th>구분</th><th>내용</th><th>수량</th></tr></thead>
-                <tbody id="historyTable"></tbody>
-              </table>
-            </div>
+            <button type="button" class="secondary daily-flow-load-more" id="dailyFlowLoadMore" hidden>이전 날짜 더 보기</button>
+            <details class="history-archive">
+              <summary>전체 원본 기록 보기 <span id="historyArchiveSummaryCount">선택 기간 0건</span></summary>
+              <div class="table-wrap history">
+                <table>
+                  <thead><tr><th>시간</th><th>구분</th><th>내용</th><th>수량</th></tr></thead>
+                  <tbody id="historyTable"></tbody>
+                </table>
+              </div>
+              <button type="button" class="secondary history-load-more" id="historyLoadMore" hidden>원본 기록 더 보기</button>
+            </details>
           </section>
             </div>
           </div>
@@ -1119,7 +1144,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./script.js?v=reborn-flow-detail-qty-display-01"></script>
+  <script src="./script.js?v=reborn-flow-three-month-history-01"></script>
   <script>
     (function () {
       var expectedVersion = window.__REBORN_APP_VERSION__;
