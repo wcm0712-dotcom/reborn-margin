@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-flow-three-month-history-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-labor-overtime-flexible-people-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -784,6 +784,14 @@
     };
   }
 
+  function getLaborWorkerSplit(record = {}) {
+    const item = normalizeLaborCostRecord(record);
+    return {
+      overtimeWorkerCount: item.overtimeWorkerCount,
+      regularWorkerCount: Math.max(0, item.workerCount - item.overtimeWorkerCount)
+    };
+  }
+
   function calculateLaborBasePay(record) {
     const item = normalizeLaborCostRecord(record);
     return item.workerCount * item.dailyRate;
@@ -937,10 +945,20 @@
     const { notify = false } = options;
     const workerCount = normalizeLaborInteger($("laborWorkerCount")?.value, LABOR_COST_DEFAULTS.workerCount);
     let overtimeWorkerCount = normalizeLaborInteger($("laborOvertimeWorkerCount")?.value, LABOR_COST_DEFAULTS.overtimeWorkerCount);
+    const overtimeInput = $("laborOvertimeWorkerCount");
+    if (overtimeInput) {
+      overtimeInput.max = String(workerCount);
+      overtimeInput.setCustomValidity("");
+    }
     if (overtimeWorkerCount > workerCount) {
       overtimeWorkerCount = workerCount;
-      const input = $("laborOvertimeWorkerCount");
-      if (input) input.value = String(overtimeWorkerCount);
+      if (overtimeInput) {
+        overtimeInput.setCustomValidity("잔업 인원은 출근 인원을 초과할 수 없습니다.");
+        if (notify) {
+          overtimeInput.value = String(overtimeWorkerCount);
+          overtimeInput.setCustomValidity("");
+        }
+      }
       if (notify) alert("잔업 인원은 출근 인원을 초과할 수 없어 출근 인원 이하로 조정했습니다.");
     }
     return normalizeLaborCostRecord({
@@ -955,9 +973,12 @@
 
   function updateLaborCostPreview() {
     const record = readLaborCostFormRecord();
+    const split = getLaborWorkerSplit(record);
     setText("laborBasePayPreview", money(calculateLaborBasePay(record)));
     setText("laborOvertimePayPreview", money(calculateLaborOvertimePay(record)));
     setText("laborDailyTotalPreview", money(calculateLaborDailyTotal(record)));
+    setText("laborWorkerSplitPreview", `잔업 ${number(split.overtimeWorkerCount)}명 / 일반 ${number(split.regularWorkerCount)}명`);
+    setText("laborOvertimeWorkerHint", `잔업 ${number(split.overtimeWorkerCount)}명 / 일반 ${number(split.regularWorkerCount)}명`);
   }
 
   function openLaborCostEditor(key) {
@@ -6070,7 +6091,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-flow-three-month-history-01",
+    cacheVersion: "reborn-labor-overtime-flexible-people-01",
     functionCalled: {
       collect: false,
       stockout: false,
