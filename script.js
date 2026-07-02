@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-labor-overtime-flexible-people-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-add-enak-smoke-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -92,6 +92,7 @@
     { name: "명가 흑당", cost: 4200 },
     { name: "에낙 치킨", cost: 163.8 },
     { name: "에낙 스파이시", cost: 163.8 },
+    { name: "에낙 스모크", cost: 163.8 },
     { name: "싱싱 양파 160g", cost: 1650 },
     { name: "싱싱 양파 100g", cost: 1000 },
     { name: "김 메밀칩 160g", cost: 1650 },
@@ -133,6 +134,7 @@
     "찹쌀 누룽지 스위트": { group: "찹쌀 누룽지", boxesPerPallet: 42, unitsPerBox: 14, structure: "1파렛=42완박스 / 1완박스=14개", cost: 2200, safetyStock: { pallets: 4 } },
     "에낙 치킨": { group: "에낙", boxesPerPallet: 70, unitsPerBox: 180, structure: "1파렛=70완박스 / 1완박스=6내부박스 / 1내부박스=30개", cost: 163.8, safetyStock: { pallets: 2 } },
     "에낙 스파이시": { group: "에낙", boxesPerPallet: 70, unitsPerBox: 180, structure: "1파렛=70완박스 / 1완박스=6내부박스 / 1내부박스=30개", cost: 163.8, safetyStock: { pallets: 2 } },
+    "에낙 스모크": { group: "에낙", boxesPerPallet: 70, unitsPerBox: 180, structure: "1파렛=70완박스 / 1완박스=6내부박스 / 1내부박스=30개", cost: 163.8, safetyStock: { pallets: 2 } },
     "꾀돌이": { group: "과자", boxesPerPallet: 150, unitsPerBox: 40, structure: "1파렛=150완박스 / 1완박스=40개", cost: 275, safetyStock: { pallets: 2 } },
     "라멘뽀식이": { group: "과자", boxesPerPallet: 72, unitsPerBox: 20, structure: "1파렛=72완박스 / 1완박스=20개", cost: 510, safetyStock: { pallets: 1 } },
     "바베큐맛스낵": { group: "과자", boxesPerPallet: 72, unitsPerBox: 20, structure: "1파렛=72완박스 / 1완박스=20개", cost: 500, safetyStock: { pallets: 1 } },
@@ -6091,7 +6093,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-labor-overtime-flexible-people-01",
+    cacheVersion: "reborn-add-enak-smoke-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -8948,6 +8950,7 @@ function openInventoryItemDetail(sku) {
       [/네모스낵.*치킨/, "네모스낵 치킨맛"],
       [/네모스낵.*불고기/, "네모스낵 불고기맛"],
       [/네모스낵.*매콤|네모스낵.*매운|네모스낵.*스파이시/, "네모스낵 매콤한맛"],
+      [/에낙.*스모크|애낙.*스모크|에낙.*smoke|애낙.*smoke|enak.*smoke/i, "에낙 스모크"],
       [/에낙.*스파|애낙.*스파/, "에낙 스파이시"],
       [/에낙.*치킨|애낙.*치킨/, "에낙 치킨"],
       [/차카니/, "차카니"],
@@ -9006,7 +9009,7 @@ function openInventoryItemDetail(sku) {
       if (qty <= 10) return { size: large };
       return { size: "none" };
     }
-    if (sku === "에낙 치킨" || sku === "에낙 스파이시") {
+    if (sku === "에낙 치킨" || sku === "에낙 스파이시" || sku === "에낙 스모크") {
       if (qty <= 60) return { size: medium };
       if (qty <= 150) return { size: large };
       return { size: "none" };
