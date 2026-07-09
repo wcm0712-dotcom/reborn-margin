@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-labor-cost-shared-sync-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-labor-cost-shared-sync-fix-02";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -395,6 +395,7 @@
       orderStats: [],
       orderYearArchives: {},
       laborCostRecords: {},
+      laborCostSyncMeta: {},
       updatedAt: new Date().toISOString()
     };
   }
@@ -608,6 +609,66 @@
     return pruneLaborCostRecords(records, referenceDate).records;
   }
 
+  function normalizeLaborCostSyncMeta(meta) {
+    if (!meta || typeof meta !== "object") return {};
+    const normalized = {};
+    ["updatedAt", "migratedAt", "deletedAllAt", "source"].forEach((key) => {
+      const value = String(meta[key] || "").trim();
+      if (value) normalized[key] = value;
+    });
+    if (meta.recordCount !== undefined) {
+      normalized.recordCount = normalizeLaborInteger(meta.recordCount, 0);
+    }
+    return normalized;
+  }
+
+  function hasLaborCostSyncMeta(meta) {
+    return Object.keys(normalizeLaborCostSyncMeta(meta)).length > 0;
+  }
+
+  function markLaborCostSyncMeta(source, records, previousMeta = {}) {
+    const now = new Date().toISOString();
+    const recordCount = Object.keys(normalizeLaborCostRecords(records)).length;
+    const meta = {
+      ...normalizeLaborCostSyncMeta(previousMeta),
+      updatedAt: now,
+      source: source || "labor-cost-sync",
+      recordCount
+    };
+    if (recordCount > 0 && !meta.migratedAt) {
+      meta.migratedAt = now;
+    }
+    if (recordCount === 0) {
+      meta.deletedAllAt = now;
+    } else {
+      delete meta.deletedAllAt;
+    }
+    return meta;
+  }
+
+  function getLaborCostShareStatus(record) {
+    const records = hasSharedLaborCostRecords(record) ? normalizeLaborCostRecords(record.laborCostRecords) : {};
+    const hasRecords = Object.keys(records).length > 0;
+    const meta = normalizeLaborCostSyncMeta(record?.laborCostSyncMeta);
+    return {
+      hasField: hasSharedLaborCostRecords(record),
+      hasRecords,
+      hasMeta: hasLaborCostSyncMeta(meta),
+      isAuthoritative: hasRecords || hasLaborCostSyncMeta(meta),
+      records,
+      meta
+    };
+  }
+
+  function shouldUseRemoteLaborCostShare(remoteShare, localShare) {
+    if (!remoteShare?.isAuthoritative) return false;
+    if (!localShare?.isAuthoritative) return true;
+    const remoteTime = toTimeValue(remoteShare.meta.updatedAt || remoteShare.meta.migratedAt || remoteShare.meta.deletedAllAt);
+    const localTime = toTimeValue(localShare.meta.updatedAt || localShare.meta.migratedAt || localShare.meta.deletedAllAt);
+    if (remoteTime || localTime) return remoteTime >= localTime;
+    return remoteShare.hasRecords && !localShare.hasMeta;
+  }
+
   function normalizeState(parsed) {
     const fresh = createInitialState();
     if (!parsed || typeof parsed !== "object") return fresh;
@@ -651,9 +712,8 @@
       ...(Array.isArray(parsed.purchaseCompletedHiddenIds) ? parsed.purchaseCompletedHiddenIds : []),
       ...completedRecordSourceIds
     ]);
-    const laborCostRecords = hasSharedLaborCostRecords(parsed)
-      ? normalizeLaborCostRecords(parsed.laborCostRecords)
-      : fresh.laborCostRecords;
+    const laborShare = getLaborCostShareStatus(parsed);
+    const laborCostRecords = laborShare.hasField ? laborShare.records : fresh.laborCostRecords;
 
     return {
       ...fresh,
@@ -670,7 +730,8 @@
       adminActionLogs: Array.isArray(parsed.adminActionLogs) ? parsed.adminActionLogs.map(normalizeAdminActionLog).filter(Boolean).slice(0, ADMIN_ACTION_LOG_STORAGE_LIMIT) : [],
       orderStats: Array.isArray(parsed.orderStats) ? parsed.orderStats : [],
       orderYearArchives: parsed.orderYearArchives && typeof parsed.orderYearArchives === "object" ? parsed.orderYearArchives : {},
-      laborCostRecords
+      laborCostRecords,
+      laborCostSyncMeta: laborShare.meta
     };
   }
 
@@ -680,15 +741,21 @@
       if (!raw) {
         const initialState = createInitialState();
         const legacyRecords = loadLegacyLaborCostRecords();
-        if (Object.keys(legacyRecords).length) initialState.laborCostRecords = legacyRecords;
+        if (Object.keys(legacyRecords).length) {
+          initialState.laborCostRecords = legacyRecords;
+          initialState.laborCostSyncMeta = markLaborCostSyncMeta("legacy-local", legacyRecords, initialState.laborCostSyncMeta);
+        }
         return initialState;
       }
       localStateLoadFailed = false;
       const parsed = JSON.parse(raw);
       const normalized = normalizeState(parsed);
-      if (!hasSharedLaborCostRecords(parsed)) {
+      if (!getLaborCostShareStatus(parsed).isAuthoritative) {
         const legacyRecords = loadLegacyLaborCostRecords();
-        if (Object.keys(legacyRecords).length) normalized.laborCostRecords = legacyRecords;
+        if (Object.keys(legacyRecords).length) {
+          normalized.laborCostRecords = legacyRecords;
+          normalized.laborCostSyncMeta = markLaborCostSyncMeta("legacy-local", legacyRecords, normalized.laborCostSyncMeta);
+        }
       }
       return normalized;
     } catch (error) {
@@ -717,6 +784,7 @@
     if (trackUndo) pushUndoSnapshot(reason);
     state.updatedAt = new Date().toISOString();
     state.laborCostRecords = normalizeLaborCostRecords(state.laborCostRecords || laborCostRecords || {});
+    state.laborCostSyncMeta = normalizeLaborCostSyncMeta(state.laborCostSyncMeta);
     if (localStateLoadFailed) {
       console.warn("[Reborn storage] state save skipped because saved state failed to load. Existing browser data was preserved.");
     } else {
@@ -871,26 +939,37 @@
 
   function loadLaborCostRecords() {
     const sharedRecords = normalizeLaborCostRecords(state?.laborCostRecords || {});
-    if (hasSharedLaborCostRecords(state)) {
+    if (getLaborCostShareStatus(state).isAuthoritative) {
       persistLocalLaborCostRecords(sharedRecords, "loadLaborCostRecords shared mirror");
       return sharedRecords;
     }
     const legacyRecords = loadLegacyLaborCostRecords();
-    if (Object.keys(legacyRecords).length) state.laborCostRecords = legacyRecords;
+    if (Object.keys(legacyRecords).length) {
+      state.laborCostRecords = legacyRecords;
+      state.laborCostSyncMeta = markLaborCostSyncMeta("legacy-local", legacyRecords, state.laborCostSyncMeta);
+    }
     return legacyRecords;
   }
 
   function syncLaborCostRecordsFromState(context = "syncLaborCostRecordsFromState") {
     laborCostRecords = normalizeLaborCostRecords(state?.laborCostRecords || {});
     state.laborCostRecords = laborCostRecords;
+    state.laborCostSyncMeta = normalizeLaborCostSyncMeta(state.laborCostSyncMeta);
     persistLocalLaborCostRecords(laborCostRecords, context);
     return laborCostRecords;
   }
 
   function applyLaborCostRecordsAfterStateReplace(sourceState, context = "state replace labor sync", fallbackRecords = laborCostRecords) {
-    if (!hasSharedLaborCostRecords(sourceState)) {
+    const share = getLaborCostShareStatus(sourceState);
+    if (!share.isAuthoritative) {
       const fallback = normalizeLaborCostRecords(fallbackRecords || {});
-      if (Object.keys(fallback).length) state.laborCostRecords = fallback;
+      if (Object.keys(fallback).length) {
+        state.laborCostRecords = fallback;
+        state.laborCostSyncMeta = markLaborCostSyncMeta("legacy-local", fallback, state.laborCostSyncMeta);
+      }
+    } else {
+      state.laborCostRecords = share.records;
+      state.laborCostSyncMeta = share.meta;
     }
     return syncLaborCostRecordsFromState(context);
   }
@@ -900,6 +979,7 @@
       const result = pruneLaborCostRecords(laborCostRecords);
       laborCostRecords = result.records;
       state.laborCostRecords = laborCostRecords;
+      state.laborCostSyncMeta = markLaborCostSyncMeta("labor-cost-save", laborCostRecords, state.laborCostSyncMeta);
       persistLocalLaborCostRecords(laborCostRecords, "saveLaborCostRecords");
       saveState("용역비 기록 저장", { trackUndo: false });
       return true;
@@ -1917,16 +1997,19 @@
     return normalized;
   }
 
-  function remoteRowHasSharedLaborCostRecords(row) {
+  function getRemoteLaborCostShareStatus(row) {
     const payload = row?.data;
-    if (!payload || typeof payload !== "object") return false;
+    if (!payload || typeof payload !== "object") return getLaborCostShareStatus(null);
     const candidate = payload.state && typeof payload.state === "object" ? payload.state : payload;
-    return hasSharedLaborCostRecords(candidate);
+    return getLaborCostShareStatus(candidate);
   }
 
   function buildAppStatePayload(reason) {
+    const payload = safeClone(state);
+    payload.laborCostRecords = normalizeLaborCostRecords(state.laborCostRecords || laborCostRecords || {});
+    payload.laborCostSyncMeta = normalizeLaborCostSyncMeta(state.laborCostSyncMeta);
     return {
-      ...safeClone(state),
+      ...payload,
       cloudMeta: {
         reason: reason || "저장",
         savedAt: new Date().toISOString(),
@@ -2076,7 +2159,7 @@
       if (error) throw error;
 
       const remoteState = extractRemoteState(data);
-      const remoteHasSharedLaborCostRecords = remoteRowHasSharedLaborCostRecords(data);
+      const remoteLaborCostShare = getRemoteLaborCostShareStatus(data);
       const remoteAt = data?.updated_at || remoteState?.updatedAt || "";
       const localAt = state?.updatedAt || "";
 
@@ -2095,13 +2178,13 @@
 
       if (shouldApplyRemote) {
         state = normalizeState(remoteState);
-        applyLaborCostRecordsAfterStateReplace(remoteHasSharedLaborCostRecords ? remoteState : null, "syncFromSupabase labor sync");
+        applyLaborCostRecordsAfterStateReplace(remoteLaborCostShare.isAuthoritative ? remoteState : null, "syncFromSupabase labor sync");
         localStateLoadFailed = false;
         setLocalStorageItem(STORAGE_KEY, JSON.stringify(state), "syncFromSupabase");
         renderAll();
         setSyncTimes({ lastAt: new Date().toISOString(), remoteAt: remoteAt || state.updatedAt });
         setSyncStatus("ok", "최신 상태", "Supabase의 최신 재고를 불러와 화면에 반영했습니다.");
-        if (!remoteHasSharedLaborCostRecords && Object.keys(laborCostRecords).length && isEditorSession()) {
+        if (!remoteLaborCostShare.isAuthoritative && Object.keys(laborCostRecords).length && isEditorSession()) {
           setSyncBusy(false);
           await saveSupabaseAppState("용역비 기록 공유 동기화");
           return;
@@ -2109,6 +2192,17 @@
       } else {
         setSyncTimes({ lastAt: new Date().toISOString(), remoteAt: remoteAt || localAt });
         setSyncStatus("ok", "최신 상태", "현재 브라우저 재고가 DB와 같거나 더 최신입니다.");
+        if (shouldUseRemoteLaborCostShare(remoteLaborCostShare, getLaborCostShareStatus(state))) {
+          state.laborCostRecords = remoteLaborCostShare.records;
+          state.laborCostSyncMeta = remoteLaborCostShare.meta;
+          syncLaborCostRecordsFromState("syncFromSupabase remote labor preserve");
+          setLocalStorageItem(STORAGE_KEY, JSON.stringify(state), "syncFromSupabase remote labor preserve");
+        }
+        if (!remoteLaborCostShare.isAuthoritative && Object.keys(laborCostRecords).length && isEditorSession()) {
+          setSyncBusy(false);
+          await saveSupabaseAppState("용역비 기록 공유 동기화");
+          return;
+        }
         if (toTimeValue(localAt) > toTimeValue(remoteAt) && isEditorSession()) {
           setSyncBusy(false);
           await saveSupabaseAppState("로컬 최신 상태 동기화");
@@ -6170,7 +6264,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-labor-cost-shared-sync-01",
+    cacheVersion: "reborn-labor-cost-shared-sync-fix-02",
     functionCalled: {
       collect: false,
       stockout: false,
