@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-add-enak-smoke-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-labor-cost-shared-sync-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -394,6 +394,7 @@
       adminActionLogs: [],
       orderStats: [],
       orderYearArchives: {},
+      laborCostRecords: {},
       updatedAt: new Date().toISOString()
     };
   }
@@ -599,6 +600,14 @@
     };
   }
 
+  function hasSharedLaborCostRecords(record) {
+    return Boolean(record && typeof record === "object" && Object.prototype.hasOwnProperty.call(record, "laborCostRecords"));
+  }
+
+  function normalizeLaborCostRecords(records, referenceDate = new Date()) {
+    return pruneLaborCostRecords(records, referenceDate).records;
+  }
+
   function normalizeState(parsed) {
     const fresh = createInitialState();
     if (!parsed || typeof parsed !== "object") return fresh;
@@ -642,6 +651,9 @@
       ...(Array.isArray(parsed.purchaseCompletedHiddenIds) ? parsed.purchaseCompletedHiddenIds : []),
       ...completedRecordSourceIds
     ]);
+    const laborCostRecords = hasSharedLaborCostRecords(parsed)
+      ? normalizeLaborCostRecords(parsed.laborCostRecords)
+      : fresh.laborCostRecords;
 
     return {
       ...fresh,
@@ -657,16 +669,28 @@
       appliedOrderFiles: Array.isArray(parsed.appliedOrderFiles) ? parsed.appliedOrderFiles.map(normalizeAppliedOrderFile).filter(Boolean).slice(0, APPLIED_ORDER_HISTORY_LIMIT) : [],
       adminActionLogs: Array.isArray(parsed.adminActionLogs) ? parsed.adminActionLogs.map(normalizeAdminActionLog).filter(Boolean).slice(0, ADMIN_ACTION_LOG_STORAGE_LIMIT) : [],
       orderStats: Array.isArray(parsed.orderStats) ? parsed.orderStats : [],
-      orderYearArchives: parsed.orderYearArchives && typeof parsed.orderYearArchives === "object" ? parsed.orderYearArchives : {}
+      orderYearArchives: parsed.orderYearArchives && typeof parsed.orderYearArchives === "object" ? parsed.orderYearArchives : {},
+      laborCostRecords
     };
   }
 
   function loadState() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return createInitialState();
+      if (!raw) {
+        const initialState = createInitialState();
+        const legacyRecords = loadLegacyLaborCostRecords();
+        if (Object.keys(legacyRecords).length) initialState.laborCostRecords = legacyRecords;
+        return initialState;
+      }
       localStateLoadFailed = false;
-      return normalizeState(JSON.parse(raw));
+      const parsed = JSON.parse(raw);
+      const normalized = normalizeState(parsed);
+      if (!hasSharedLaborCostRecords(parsed)) {
+        const legacyRecords = loadLegacyLaborCostRecords();
+        if (Object.keys(legacyRecords).length) normalized.laborCostRecords = legacyRecords;
+      }
+      return normalized;
     } catch (error) {
       localStateLoadFailed = true;
       console.warn("[Reborn storage] saved state load failed; using temporary initial state without deleting saved data.", error);
@@ -692,6 +716,7 @@
     const { trackUndo = true, cloud = true } = options;
     if (trackUndo) pushUndoSnapshot(reason);
     state.updatedAt = new Date().toISOString();
+    state.laborCostRecords = normalizeLaborCostRecords(state.laborCostRecords || laborCostRecords || {});
     if (localStateLoadFailed) {
       console.warn("[Reborn storage] state save skipped because saved state failed to load. Existing browser data was preserved.");
     } else {
@@ -824,14 +849,18 @@
     return { records: pruned, changed };
   }
 
-  function loadLaborCostRecords() {
+  function persistLocalLaborCostRecords(records, context = "laborCostRecords") {
+    return setLocalStorageItem(LABOR_COST_STORAGE_KEY, JSON.stringify(normalizeLaborCostRecords(records)), context);
+  }
+
+  function loadLegacyLaborCostRecords() {
     try {
       const raw = localStorage.getItem(LABOR_COST_STORAGE_KEY);
       if (!raw) return {};
       const parsed = JSON.parse(raw);
       const result = pruneLaborCostRecords(parsed);
       if (result.changed) {
-        setLocalStorageItem(LABOR_COST_STORAGE_KEY, JSON.stringify(result.records), "loadLaborCostRecords prune");
+        setLocalStorageItem(LABOR_COST_STORAGE_KEY, JSON.stringify(result.records), "loadLegacyLaborCostRecords prune");
       }
       return result.records;
     } catch (error) {
@@ -840,11 +869,40 @@
     }
   }
 
+  function loadLaborCostRecords() {
+    const sharedRecords = normalizeLaborCostRecords(state?.laborCostRecords || {});
+    if (hasSharedLaborCostRecords(state)) {
+      persistLocalLaborCostRecords(sharedRecords, "loadLaborCostRecords shared mirror");
+      return sharedRecords;
+    }
+    const legacyRecords = loadLegacyLaborCostRecords();
+    if (Object.keys(legacyRecords).length) state.laborCostRecords = legacyRecords;
+    return legacyRecords;
+  }
+
+  function syncLaborCostRecordsFromState(context = "syncLaborCostRecordsFromState") {
+    laborCostRecords = normalizeLaborCostRecords(state?.laborCostRecords || {});
+    state.laborCostRecords = laborCostRecords;
+    persistLocalLaborCostRecords(laborCostRecords, context);
+    return laborCostRecords;
+  }
+
+  function applyLaborCostRecordsAfterStateReplace(sourceState, context = "state replace labor sync", fallbackRecords = laborCostRecords) {
+    if (!hasSharedLaborCostRecords(sourceState)) {
+      const fallback = normalizeLaborCostRecords(fallbackRecords || {});
+      if (Object.keys(fallback).length) state.laborCostRecords = fallback;
+    }
+    return syncLaborCostRecordsFromState(context);
+  }
+
   function saveLaborCostRecords() {
     try {
       const result = pruneLaborCostRecords(laborCostRecords);
       laborCostRecords = result.records;
-      return setLocalStorageItem(LABOR_COST_STORAGE_KEY, JSON.stringify(laborCostRecords), "saveLaborCostRecords");
+      state.laborCostRecords = laborCostRecords;
+      persistLocalLaborCostRecords(laborCostRecords, "saveLaborCostRecords");
+      saveState("용역비 기록 저장", { trackUndo: false });
+      return true;
     } catch (error) {
       console.warn("[Reborn labor cost] save skipped; existing WMS data was not touched.", error);
       return false;
@@ -1217,6 +1275,7 @@
     addBackup("최근 작업 1단계 되돌리기 전 백업");
     saveUndoSnapshots(candidate.snapshots.slice(1));
     state = normalizeState(candidate.previousState);
+    applyLaborCostRecordsAfterStateReplace(candidate.previousState, "restoreLatestInventoryChange labor sync");
     state.updatedAt = new Date().toISOString();
     localStateLoadFailed = false;
     setLocalStorageItem(STORAGE_KEY, JSON.stringify(state), "restoreLatestInventoryChange");
@@ -1237,6 +1296,7 @@
     saveUndoSnapshots(snapshots);
     addBackup("이전값 복구 전 백업");
     state = normalizeState(snapshot.state);
+    applyLaborCostRecordsAfterStateReplace(snapshot.state, "restorePreviousState labor sync");
     addAdminActionLog("데이터 복구/import", { itemName: "이전값 복구", memo: snapshot.reason || "저장 전 상태", source: "restorePreviousState" });
     state.updatedAt = new Date().toISOString();
     localStateLoadFailed = false;
@@ -1857,6 +1917,13 @@
     return normalized;
   }
 
+  function remoteRowHasSharedLaborCostRecords(row) {
+    const payload = row?.data;
+    if (!payload || typeof payload !== "object") return false;
+    const candidate = payload.state && typeof payload.state === "object" ? payload.state : payload;
+    return hasSharedLaborCostRecords(candidate);
+  }
+
   function buildAppStatePayload(reason) {
     return {
       ...safeClone(state),
@@ -2009,6 +2076,7 @@
       if (error) throw error;
 
       const remoteState = extractRemoteState(data);
+      const remoteHasSharedLaborCostRecords = remoteRowHasSharedLaborCostRecords(data);
       const remoteAt = data?.updated_at || remoteState?.updatedAt || "";
       const localAt = state?.updatedAt || "";
 
@@ -2027,11 +2095,17 @@
 
       if (shouldApplyRemote) {
         state = normalizeState(remoteState);
+        applyLaborCostRecordsAfterStateReplace(remoteHasSharedLaborCostRecords ? remoteState : null, "syncFromSupabase labor sync");
         localStateLoadFailed = false;
         setLocalStorageItem(STORAGE_KEY, JSON.stringify(state), "syncFromSupabase");
         renderAll();
         setSyncTimes({ lastAt: new Date().toISOString(), remoteAt: remoteAt || state.updatedAt });
         setSyncStatus("ok", "최신 상태", "Supabase의 최신 재고를 불러와 화면에 반영했습니다.");
+        if (!remoteHasSharedLaborCostRecords && Object.keys(laborCostRecords).length && isEditorSession()) {
+          setSyncBusy(false);
+          await saveSupabaseAppState("용역비 기록 공유 동기화");
+          return;
+        }
       } else {
         setSyncTimes({ lastAt: new Date().toISOString(), remoteAt: remoteAt || localAt });
         setSyncStatus("ok", "최신 상태", "현재 브라우저 재고가 DB와 같거나 더 최신입니다.");
@@ -5827,7 +5901,10 @@ function refreshActiveOrderAnalysisSummary() {
       if (!requireEditor("초기값 복구")) return;
       if (!confirm("WMS 재고를 초기값으로 복구할까요? 현재 브라우저 저장값은 백업 후 초기화됩니다.")) return;
       addBackup("초기화 전 백업");
+      const currentLaborCostRecords = normalizeLaborCostRecords(laborCostRecords);
       state = createInitialState();
+      state.laborCostRecords = currentLaborCostRecords;
+      syncLaborCostRecordsFromState("resetWms preserve labor sync");
       saveState("초기값 복구");
     });
     document.querySelectorAll(".chart-tab").forEach((tab) => tab.addEventListener("click", () => {
@@ -6093,7 +6170,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-add-enak-smoke-01",
+    cacheVersion: "reborn-labor-cost-shared-sync-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -9250,6 +9327,7 @@ function openInventoryItemDetail(sku) {
       if (!imported.stock || !imported.pallets) throw new Error("invalid backup");
       addBackup("백업 불러오기 전 자동 백업");
       state = normalizeState({ ...createInitialState(), ...imported });
+      applyLaborCostRecordsAfterStateReplace(imported, "importBackup labor sync");
       addAdminActionLog("데이터 복구/import", { itemName: file.name || "백업 파일", memo: "백업 파일 불러오기", source: "importBackup" });
       saveState("백업 파일 불러오기");
       event.target.value = "";
