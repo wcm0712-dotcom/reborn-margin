@@ -3,7 +3,7 @@
   "short_name": "리본WMS",
   "description": "리본컴퍼니 마진계산기 및 WMS 재고 시스템",
   "lang": "ko",
-  "start_url": "./?v=reborn-add-chocotingchok-01#home",
+  "start_url": "./?v=reborn-add-batdureong-medium-box-01#home",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",

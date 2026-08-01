@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-add-chocotingchok-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-add-batdureong-medium-box-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -100,6 +100,8 @@
     { name: "푸드킹 양파 160g", cost: 1500 },
     { name: "감자알칩", cost: 282.5 },
     { name: "초코팅촉", cost: 316.6 },
+    { name: "논두렁", cost: 250 },
+    { name: "밭두렁", cost: 287.5 },
     { name: "꾀돌이", cost: 275 },
     { name: "라멘뽀식이", cost: 510 },
     { name: "바베큐맛스낵", cost: 500 },
@@ -150,6 +152,8 @@
     "브이콘 100g": { group: "브이콘", boxesPerPallet: 104, unitsPerBox: 20, structure: "1파렛=104완박스 / 1완박스=20개", cost: 825, safetyStock: { pallets: 1 } },
     "감자알칩": { group: "과자", boxesPerPallet: 56, unitsPerBox: 40, structure: "1파렛=56완박스 / 1완박스=40개", cost: 282.5, safetyStock: { pallets: 3 } },
     "초코팅촉": { group: "과자", boxesPerPallet: 80, unitsPerBox: 30, structure: "1파렛=80완박스 / 1완박스=30개 / 1파렛=2,400개", cost: 316.6, safetyStock: { pallets: 1 } },
+    "논두렁": { group: "과자", boxesPerPallet: 180, unitsPerBox: 40, structure: "1파렛=180완박스 / 1완박스=40개 / 1파렛=7,200개", cost: 250, safetyStock: { pallets: 1 } },
+    "밭두렁": { group: "과자", boxesPerPallet: 150, unitsPerBox: 40, structure: "1파렛=150완박스 / 1완박스=40개 / 1파렛=6,000개", cost: 287.5, safetyStock: { pallets: 1 } },
     "명가 참깨": { group: "명가", boxesPerPallet: 45, unitsPerBox: 16, structure: "1파렛=45완박스 / 1완박스=16개", cost: 4200, safetyStock: { pallets: 2 } },
     "명가 흑당": { group: "명가", boxesPerPallet: 45, unitsPerBox: 16, structure: "1파렛=45완박스 / 1완박스=16개", cost: 4200, safetyStock: { pallets: 2 } },
     "코디 3겹": { group: "휴지", boxesPerPallet: 48, unitsPerBox: 1, structure: "1파렛=48개 / 박스 사용 없음", cost: 8500, safetyStock: { pallets: 6 } },
@@ -6266,7 +6270,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-add-chocotingchok-01",
+    cacheVersion: "reborn-add-batdureong-medium-box-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -9112,6 +9116,12 @@ function openInventoryItemDetail(sku) {
     if (/^초코팅[촉쵹]\(26g\)x/.test(text) && !/^초코팅[촉쵹]\(26g\)x[0-9,]+(?:개)?$/.test(text)) {
       return { needs: ["초코팅쵹 (26g) x 수량 확인 필요"] };
     }
+    if (/^논x/.test(text) && !/^논x[1-9][0-9,]*(?:개)?$/.test(text)) {
+      return { needs: ["논 x 수량 확인 필요"] };
+    }
+    if (/^밭x/.test(text) && !/^밭x(?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+)(?:개)?$/.test(text)) {
+      return { needs: ["밭 x 수량 확인 필요"] };
+    }
 
     const rules = [
       [/foot|풋젤리/, "풋젤리"],
@@ -9142,6 +9152,8 @@ function openInventoryItemDetail(sku) {
       [/대파x[0-9,]+(?:개)?/, "대파 메밀칩 160g"],
       [/김메밀칩|메밀칩/, "김 메밀칩 160g"],
       [/^초코팅[촉쵹]\(26g\)x[0-9,]+(?:개)?$/, "초코팅촉"],
+      [/^논x[1-9][0-9,]*(?:개)?$/, "논두렁"],
+      [/^밭x(?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+)(?:개)?$/, "밭두렁"],
       [/브이콘.*100|v콘.*100|vicon.*100/, "브이콘 100g"],
       [/브이콘|v콘|vicon/, "브이콘 50g"],
       [/감자알칩/, "감자알칩"],
@@ -9171,6 +9183,10 @@ function openInventoryItemDetail(sku) {
     const medium = "medium";
     const large = "large";
 
+    if (sku === "논두렁" || sku === "밭두렁") {
+      if (qty <= 30) return { size: medium };
+      return { size: "none", needCheck: "논두렁/밭두렁 31~39개 박스 기준 확인 필요" };
+    }
     if (sku === "풋젤리") return { size: qty <= 30 ? small : medium };
     if (sku === "차카니") return { size: "none" };
     if (sku === "보리건빵 30g") {
