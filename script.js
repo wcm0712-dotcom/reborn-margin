@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-add-batdureong-medium-box-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-add-mini-chakani-duo-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -106,6 +106,8 @@
     { name: "라멘뽀식이", cost: 510 },
     { name: "바베큐맛스낵", cost: 500 },
     { name: "차카니", cost: 286.6 },
+    { name: "미니차카니 오리지널", cost: 60 },
+    { name: "미니차카니 매운맛", cost: 60 },
     { name: "보리건빵 30g", cost: 125 },
     { name: "황금 고구마칩", cost: 3500 },
     { name: "네모스낵 치킨맛", cost: 172.2 },
@@ -126,6 +128,8 @@
   const INVENTORY_DEFS = {
     "풋젤리": { group: "과자", boxesPerPallet: 60, unitsPerBox: 48, structure: "1파렛=60완박스 / 1완박스=4내부박스 / 1내부박스=12개", cost: 580, safetyStock: { pallets: 1 } },
     "차카니": { group: "과자", boxesPerPallet: 90, unitsPerBox: 30, structure: "1파렛=90완박스 / 1완박스=30개", cost: 286.6, safetyStock: { pallets: 1 } },
+    "미니차카니 오리지널": { group: "과자", boxesPerPallet: 72, unitsPerBox: 288, structure: "1파렛=72완박스 / 1완박스=6내부박스 / 1내부박스=48개 / 1완박스=288개 / 1파렛=20,736개", cost: 60, safetyStock: { pallets: 1 } },
+    "미니차카니 매운맛": { group: "과자", boxesPerPallet: 72, unitsPerBox: 288, structure: "1파렛=72완박스 / 1완박스=6내부박스 / 1내부박스=48개 / 1완박스=288개 / 1파렛=20,736개", cost: 60, safetyStock: { pallets: 1 } },
     "보리건빵 30g": { group: "과자", boxesPerPallet: 32, unitsPerBox: 200, structure: "1파렛=32완박스 / 1완박스=200개", cost: 125, safetyStock: { pallets: 3 } },
     "황금 고구마칩": { group: "고구마/밤", boxesPerPallet: 56, unitsPerBox: 10, structure: "1파렛=56완박스 / 1완박스=10개", cost: 3500, safetyStock: { pallets: 2 } },
     "네모스낵 치킨맛": { group: "네모스낵", boxesPerPallet: 72, unitsPerBox: 360, structure: "1파렛=72완박스 / 1완박스=12내부박스 / 1내부박스=30개", cost: 172.2, safetyStock: { boxes: 50 } },
@@ -6270,7 +6274,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-add-batdureong-medium-box-01",
+    cacheVersion: "reborn-add-mini-chakani-duo-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -9090,6 +9094,8 @@ function openInventoryItemDetail(sku) {
   function matchOrderLine(name, units) {
     const text = normalizedText(name);
     const needs = [];
+    const miniChakaniOriginalPattern = /^\[mini\]차카니x(?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+)(?:개)?$/;
+    const miniChakaniSpicyPattern = /^\[mini\]차카니매운맛x(?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+)(?:개)?$/;
     if (/와플매트|와플싱글|컴피싱글/.test(text)) return { excluded: true };
 
     if (/네모스낵/.test(text) && /3종|혼합|세가지|3가지/.test(text)) {
@@ -9122,6 +9128,9 @@ function openInventoryItemDetail(sku) {
     if (/^밭x/.test(text) && !/^밭x(?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+)(?:개)?$/.test(text)) {
       return { needs: ["밭 x 수량 확인 필요"] };
     }
+    if (/(?:mini|미니).*차카니|차카니.*(?:mini|미니)/.test(text) && !miniChakaniSpicyPattern.test(text) && !miniChakaniOriginalPattern.test(text)) {
+      return { needs: ["[MINI] 차카니 x 수량 또는 상품명 확인 필요"] };
+    }
 
     const rules = [
       [/foot|풋젤리/, "풋젤리"],
@@ -9139,6 +9148,8 @@ function openInventoryItemDetail(sku) {
       [/에낙.*스모크|애낙.*스모크|에낙.*smoke|애낙.*smoke|enak.*smoke/i, "에낙 스모크"],
       [/에낙.*스파|애낙.*스파/, "에낙 스파이시"],
       [/에낙.*치킨|애낙.*치킨/, "에낙 치킨"],
+      [miniChakaniSpicyPattern, "미니차카니 매운맛"],
+      [miniChakaniOriginalPattern, "미니차카니 오리지널"],
       [/차카니/, "차카니"],
       [/보리건빵|건빵/, "보리건빵 30g"],
       [/황금고구마칩/, "황금 고구마칩"],
