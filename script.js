@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-add-mini-chakani-duo-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-add-ppungiyo-five-multi-item-excel-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -108,6 +108,11 @@
     { name: "차카니", cost: 286.6 },
     { name: "미니차카니 오리지널", cost: 60 },
     { name: "미니차카니 매운맛", cost: 60 },
+    { name: "4000뻥이요(270g)", cost: 2365 },
+    { name: "허니뻥이요(240g)", cost: 2365 },
+    { name: "500뻥이요(35g)", cost: 335.5 },
+    { name: "뻥이요 골드(60g)", cost: 569.8 },
+    { name: "허니뻥이요(50g)", cost: 569.8 },
     { name: "보리건빵 30g", cost: 125 },
     { name: "황금 고구마칩", cost: 3500 },
     { name: "네모스낵 치킨맛", cost: 172.2 },
@@ -130,6 +135,11 @@
     "차카니": { group: "과자", boxesPerPallet: 90, unitsPerBox: 30, structure: "1파렛=90완박스 / 1완박스=30개", cost: 286.6, safetyStock: { pallets: 1 } },
     "미니차카니 오리지널": { group: "과자", boxesPerPallet: 72, unitsPerBox: 288, structure: "1파렛=72완박스 / 1완박스=6내부박스 / 1내부박스=48개 / 1완박스=288개 / 1파렛=20,736개", cost: 60, safetyStock: { pallets: 1 } },
     "미니차카니 매운맛": { group: "과자", boxesPerPallet: 72, unitsPerBox: 288, structure: "1파렛=72완박스 / 1완박스=6내부박스 / 1내부박스=48개 / 1완박스=288개 / 1파렛=20,736개", cost: 60, safetyStock: { pallets: 1 } },
+    "4000뻥이요(270g)": { group: "과자", boxesPerPallet: 54, unitsPerBox: 12, structure: "1파렛=54완박스 / 1완박스=12개 / 1파렛=648개", cost: 2365 },
+    "허니뻥이요(240g)": { group: "과자", boxesPerPallet: 54, unitsPerBox: 12, structure: "1파렛=54완박스 / 1완박스=12개 / 1파렛=648개", cost: 2365 },
+    "500뻥이요(35g)": { group: "과자", boxesPerPallet: 72, unitsPerBox: 30, structure: "1파렛=72완박스 / 1완박스=30개 / 1파렛=2,160개", cost: 335.5 },
+    "뻥이요 골드(60g)": { group: "과자", boxesPerPallet: 64, unitsPerBox: 30, structure: "1파렛=64완박스 / 1완박스=30개 / 1파렛=1,920개", cost: 569.8 },
+    "허니뻥이요(50g)": { group: "과자", boxesPerPallet: 64, unitsPerBox: 30, structure: "1파렛=64완박스 / 1완박스=30개 / 1파렛=1,920개", cost: 569.8 },
     "보리건빵 30g": { group: "과자", boxesPerPallet: 32, unitsPerBox: 200, structure: "1파렛=32완박스 / 1완박스=200개", cost: 125, safetyStock: { pallets: 3 } },
     "황금 고구마칩": { group: "고구마/밤", boxesPerPallet: 56, unitsPerBox: 10, structure: "1파렛=56완박스 / 1완박스=10개", cost: 3500, safetyStock: { pallets: 2 } },
     "네모스낵 치킨맛": { group: "네모스낵", boxesPerPallet: 72, unitsPerBox: 360, structure: "1파렛=72완박스 / 1완박스=12내부박스 / 1내부박스=30개", cost: 172.2, safetyStock: { boxes: 50 } },
@@ -6274,7 +6284,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-add-mini-chakani-duo-01",
+    cacheVersion: "reborn-add-ppungiyo-five-multi-item-excel-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -8952,6 +8962,7 @@ function openInventoryItemDetail(sku) {
       const orderedQty = Math.max(1, cleanNumber(cols.qty) || 1);
       const unitsInName = extractUnitsFromName(productName);
       const lineUnits = Math.max(1, unitsInName || 1) * orderedQty;
+      const compoundMatch = matchCompoundOrderLine(productName, orderedQty);
 
       const rawAddress = String(cols.address || "").trim();
       const rawAmount = String(cols.amount ?? "").trim();
@@ -8973,6 +8984,35 @@ function openInventoryItemDetail(sku) {
       } else {
         paymentGroups.get(paymentKey).rows.push(index + 1);
         duplicatePaymentRowCount += 1;
+      }
+
+      if (compoundMatch) {
+        if (compoundMatch.needs?.length) {
+          compoundMatch.needs.forEach((reason) => needs.push({ row: index + 1, productName, qty: orderedQty, reason }));
+          return;
+        }
+        if (!compoundMatch.items?.length) {
+          needs.push({ row: index + 1, productName, qty: orderedQty, reason: "복합 주문 상품명 매칭 실패" });
+          return;
+        }
+
+        const rowSkus = new Set();
+        let compoundUnits = 0;
+        compoundMatch.items.forEach(({ sku, units }) => {
+          deductions.set(sku, (deductions.get(sku) || 0) + units);
+          compoundUnits += units;
+          if (!rowSkus.has(sku)) {
+            deductionOrderCounts.set(sku, (deductionOrderCounts.get(sku) || 0) + 1);
+            rowSkus.add(sku);
+          }
+        });
+        needs.push({
+          row: index + 1,
+          productName,
+          qty: compoundUnits,
+          reason: "복합 주문 포장박스 기준 확인 필요 (상품 재고는 차감 목록에 포함)"
+        });
+        return;
       }
 
       const match = matchOrderLine(productName, lineUnits);
@@ -9087,6 +9127,64 @@ function openInventoryItemDetail(sku) {
     return 0;
   }
 
+  function extractCompoundSegmentUnits(name) {
+    const match = String(name || "").trim().match(/x\s*((?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+))\s*(?:개)?\s*$/i);
+    return match ? cleanNumber(match[1]) : 0;
+  }
+
+  function matchCompoundOrderLine(name, orderedQty) {
+    const rawName = String(name || "");
+    if (!rawName.includes("+")) return null;
+    const text = normalizedText(rawName);
+    if (/네모스낵/.test(text) && (/3종|혼합|세가지|3가지/.test(text) || (/치킨/.test(text) && /불고기/.test(text)))) {
+      return null;
+    }
+
+    const segments = rawName.split("+").map((segment) => segment.trim());
+    if (segments.length < 2 || segments.some((segment) => !segment)) {
+      return { needs: ["복합 주문 + 구분 또는 수량 확인 필요"] };
+    }
+
+    const hasMyeonggaContext = /^\s*\[명가\]/.test(segments[0]);
+    const combinedItems = new Map();
+
+    for (let index = 0; index < segments.length; index += 1) {
+      const segment = segments[index];
+      const shouldInheritMyeongga = index > 0
+        && hasMyeonggaContext
+        && /^(?:참깨|흑당)\s*\(500g\)\s*x/i.test(segment);
+      const matchName = shouldInheritMyeongga ? `[명가] ${segment}` : segment;
+      const segmentUnits = extractCompoundSegmentUnits(matchName);
+      if (!segmentUnits) {
+        return { needs: [`복합 주문 ${index + 1}번째 상품 x 수량 확인 필요`] };
+      }
+
+      const match = matchOrderLine(matchName, segmentUnits * orderedQty);
+      if (match.excluded) {
+        return { needs: [`복합 주문 ${index + 1}번째 상품은 재고 계산 제외 품목`] };
+      }
+      if (match.needs?.length) {
+        return { needs: match.needs.map((reason) => `복합 주문 ${index + 1}번째 상품: ${reason}`) };
+      }
+      if (!match.items?.length) {
+        return { needs: [`복합 주문 ${index + 1}번째 상품명 매칭 실패`] };
+      }
+
+      for (const item of match.items) {
+        const units = Number(item.units);
+        if (!item.sku || !Number.isFinite(units) || units <= 0) {
+          return { needs: [`복합 주문 ${index + 1}번째 상품 수량 확인 필요`] };
+        }
+        const sku = canonicalSku(item.sku);
+        combinedItems.set(sku, (combinedItems.get(sku) || 0) + units);
+      }
+    }
+
+    return {
+      items: [...combinedItems.entries()].map(([sku, units]) => ({ sku, units }))
+    };
+  }
+
   function normalizedText(text) {
     return String(text || "").toLowerCase().replace(/\s+/g, "");
   }
@@ -9096,6 +9194,12 @@ function openInventoryItemDetail(sku) {
     const needs = [];
     const miniChakaniOriginalPattern = /^\[mini\]차카니x(?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+)(?:개)?$/;
     const miniChakaniSpicyPattern = /^\[mini\]차카니매운맛x(?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+)(?:개)?$/;
+    const ppungiyo4000Pattern = /^\[red\]뻥이요\(270g\)x(?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+)(?:개)?$/;
+    const honeyPpungiyo240Pattern = /^\[yellow\]뻥이요\(240g\)x(?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+)(?:개)?$/;
+    const ppungiyo500Pattern = /^\[red\]뻥이요\(35g\)x(?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+)(?:개)?$/;
+    const ppungiyoGoldPattern = /^\[red\]뻥이요\(60g\)x(?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+)(?:개)?$/;
+    const honeyPpungiyo50Pattern = /^\[yellow\]뻥이요\(50g\)x(?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+)(?:개)?$/;
+    const ppungiyoPatterns = [ppungiyo4000Pattern, honeyPpungiyo240Pattern, ppungiyo500Pattern, ppungiyoGoldPattern, honeyPpungiyo50Pattern];
     if (/와플매트|와플싱글|컴피싱글/.test(text)) return { excluded: true };
 
     if (/네모스낵/.test(text) && /3종|혼합|세가지|3가지/.test(text)) {
@@ -9131,6 +9235,9 @@ function openInventoryItemDetail(sku) {
     if (/(?:mini|미니).*차카니|차카니.*(?:mini|미니)/.test(text) && !miniChakaniSpicyPattern.test(text) && !miniChakaniOriginalPattern.test(text)) {
       return { needs: ["[MINI] 차카니 x 수량 또는 상품명 확인 필요"] };
     }
+    if (/^\[(?:red|yellow)\]뻥이요/.test(text) && !ppungiyoPatterns.some((pattern) => pattern.test(text))) {
+      return { needs: ["뻥이요 색상/중량/x 수량 확인 필요"] };
+    }
 
     const rules = [
       [/foot|풋젤리/, "풋젤리"],
@@ -9150,6 +9257,11 @@ function openInventoryItemDetail(sku) {
       [/에낙.*치킨|애낙.*치킨/, "에낙 치킨"],
       [miniChakaniSpicyPattern, "미니차카니 매운맛"],
       [miniChakaniOriginalPattern, "미니차카니 오리지널"],
+      [ppungiyo4000Pattern, "4000뻥이요(270g)"],
+      [honeyPpungiyo240Pattern, "허니뻥이요(240g)"],
+      [ppungiyo500Pattern, "500뻥이요(35g)"],
+      [ppungiyoGoldPattern, "뻥이요 골드(60g)"],
+      [honeyPpungiyo50Pattern, "허니뻥이요(50g)"],
       [/차카니/, "차카니"],
       [/보리건빵|건빵/, "보리건빵 30g"],
       [/황금고구마칩/, "황금 고구마칩"],
@@ -9186,6 +9298,7 @@ function openInventoryItemDetail(sku) {
     const cookieBoxUsage = getCookieChocoPackagingBoxUsage(sku, units);
     if (cookieBoxUsage) return cookieBoxUsage;
     if (isCookieChocoSku(sku)) return { size: "none" };
+    if (["4000뻥이요(270g)", "허니뻥이요(240g)", "500뻥이요(35g)", "뻥이요 골드(60g)", "허니뻥이요(50g)"].includes(sku)) return { size: "none" };
     const remainder = units % def.unitsPerBox;
     const qty = remainder === 0 ? 0 : remainder;
     if (qty === 0) return { size: "none" };
@@ -9380,7 +9493,7 @@ function openInventoryItemDetail(sku) {
     if (!analysis) return;
     lastOrderAnalysis = analysis;
     setLocalStorageItem(ORDER_CACHE_KEY, JSON.stringify(analysis), "applyLastOrderDeductions");
-    if (analysis.needs?.length && !confirm(`확인 필요 ${analysis.needs.length}건이 있습니다. 확인 필요 항목은 제외하고 차감할까요?`)) return;
+    if (analysis.needs?.length && !confirm(`확인 필요 ${analysis.needs.length}건이 있습니다. 상품명·수량이 불확실한 항목은 제외되며, 복합 주문의 포장박스 확인 항목은 상품 재고만 차감합니다. 계속할까요?`)) return;
 
     const duplicate = findPotentialDuplicateOrderApplication(analysis);
     if (duplicate && !confirm("이미 적용된 파일일 수 있습니다. 다시 적용하면 재고가 중복 차감될 수 있습니다.\n\n이전 적용: " + formatDateTime(duplicate.record.at) + " / " + (duplicate.record.fileName || "파일명 없음") + " / " + number(duplicate.record.orderRows) + "행\n계속 진행하시겠습니까?")) return;
