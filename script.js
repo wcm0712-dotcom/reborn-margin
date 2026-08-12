@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-add-ppungiyo-five-multi-item-excel-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-multi-item-enak-context-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -6284,7 +6284,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-add-ppungiyo-five-multi-item-excel-01",
+    cacheVersion: "reborn-multi-item-enak-context-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -9132,6 +9132,24 @@ function openInventoryItemDetail(sku) {
     return match ? cleanNumber(match[1]) : 0;
   }
 
+  function resolveCompoundEnakSegmentName(segment, index, hasEnakContext) {
+    const text = normalizedText(segment);
+    const hasExplicitBrand = /^\[[^\]]+\]/.test(text);
+    const isExplicitEnak = /^\[에낙\]/.test(text);
+    const isInheritedEnak = index > 0
+      && hasEnakContext
+      && !hasExplicitBrand
+      && /^(?:치킨|스파이시)\(/.test(text);
+
+    if (!isExplicitEnak && !isInheritedEnak) return { matchName: segment };
+
+    const matchName = isExplicitEnak ? segment : `[에낙] ${segment}`;
+    if (!/^\[에낙\](?:치킨\(16g\)|스파이시\(14g\))x/.test(normalizedText(matchName))) {
+      return { need: `복합 주문 ${index + 1}번째 에낙 상품명/중량 확인 필요 (치킨 16g, 스파이시 14g)` };
+    }
+    return { matchName };
+  }
+
   function matchCompoundOrderLine(name, orderedQty) {
     const rawName = String(name || "");
     if (!rawName.includes("+")) return null;
@@ -9146,6 +9164,7 @@ function openInventoryItemDetail(sku) {
     }
 
     const hasMyeonggaContext = /^\s*\[명가\]/.test(segments[0]);
+    const hasEnakContext = /^\s*\[에낙\]/.test(segments[0]);
     const combinedItems = new Map();
 
     for (let index = 0; index < segments.length; index += 1) {
@@ -9153,7 +9172,10 @@ function openInventoryItemDetail(sku) {
       const shouldInheritMyeongga = index > 0
         && hasMyeonggaContext
         && /^(?:참깨|흑당)\s*\(500g\)\s*x/i.test(segment);
-      const matchName = shouldInheritMyeongga ? `[명가] ${segment}` : segment;
+      let matchName = shouldInheritMyeongga ? `[명가] ${segment}` : segment;
+      const enakSegment = resolveCompoundEnakSegmentName(matchName, index, hasEnakContext);
+      if (enakSegment.need) return { needs: [enakSegment.need] };
+      matchName = enakSegment.matchName;
       const segmentUnits = extractCompoundSegmentUnits(matchName);
       if (!segmentUnits) {
         return { needs: [`복합 주문 ${index + 1}번째 상품 x 수량 확인 필요`] };
