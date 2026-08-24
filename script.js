@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-multi-item-enak-context-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-deactivate-unused-products-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -73,6 +73,23 @@
     return SKU_ALIASES[key] || key;
   }
 
+  const INACTIVE_PRODUCT_SKUS = new Set([
+    "풋젤리",
+    "보리건빵 30g",
+    "황금 고구마칩",
+    "네모스낵 치킨맛",
+    "허니눈꽃 쌀과자 920g",
+    "라멘뽀식이",
+    "촉촉한 고구마",
+    "촉촉한 밤",
+    "코디 3겹",
+    "김 메밀칩 160g"
+  ]);
+
+  function isInactiveProductSku(sku) {
+    return INACTIVE_PRODUCT_SKUS.has(canonicalSku(sku));
+  }
+
   function replaceLegacySkuText(value) {
     return String(value || "")
       .replaceAll("찹쌀 누룽지 무가당 검정콩", CANONICAL_UNSWEETENED_NURUNGJI_SKU)
@@ -130,6 +147,10 @@
     { name: "박스 소", cost: BOX_PRICES.small }
   ];
 
+  function getActiveMarginProducts() {
+    return MARGIN_PRODUCTS.filter((item) => item.name === "직접 입력" || !isInactiveProductSku(item.name));
+  }
+
   const INVENTORY_DEFS = {
     "풋젤리": { group: "과자", boxesPerPallet: 60, unitsPerBox: 48, structure: "1파렛=60완박스 / 1완박스=4내부박스 / 1내부박스=12개", cost: 580, safetyStock: { pallets: 1 } },
     "차카니": { group: "과자", boxesPerPallet: 90, unitsPerBox: 30, structure: "1파렛=90완박스 / 1완박스=30개", cost: 286.6, safetyStock: { pallets: 1 } },
@@ -177,6 +198,10 @@
     "박스 중": { group: "포장박스", boxesPerPallet: 56, unitsPerBox: 20, structure: "1파렛=56묶음 / 1묶음=20장", cost: BOX_PRICES.medium, isBox: true, safetyStock: { pallets: 3 } },
     "박스 소": { group: "포장박스", boxesPerPallet: 90, unitsPerBox: 20, structure: "1파렛=90묶음 / 1묶음=20장", cost: BOX_PRICES.small, isBox: true, safetyStock: { pallets: 2 } }
   };
+
+  function getActiveInventorySkus() {
+    return Object.keys(INVENTORY_DEFS).filter((sku) => !isInactiveProductSku(sku));
+  }
 
   const INITIAL_STOCK_INPUT = {
     "찹쌀 누룽지 스위트": { pallets: 11, boxes: 29, eaches: 0, original: "11파렛 29박스" },
@@ -2636,7 +2661,8 @@
     const hint = picker.querySelector(".product-picker-cost-hint");
     const menu = picker.querySelector(".product-picker-menu");
     const list = picker.querySelector(".product-picker-list");
-    const directProduct = MARGIN_PRODUCTS.find((item) => item.name === "직접 입력") || MARGIN_PRODUCTS[0];
+    const pickerProducts = getActiveMarginProducts();
+    const directProduct = pickerProducts.find((item) => item.name === "직접 입력") || pickerProducts[0];
     let currentItems = [];
     let activeIndex = -1;
 
@@ -2649,7 +2675,7 @@
       const raw = String(keyword || "").trim();
       const compact = normalizeKeyword(raw);
       const words = raw.toLowerCase().split(/\s+/).filter(Boolean);
-      const candidates = MARGIN_PRODUCTS.filter((item) => item.name !== "직접 입력");
+      const candidates = pickerProducts.filter((item) => item.name !== "직접 입력");
       if (!compact) return candidates;
       return candidates
         .map((item) => {
@@ -2673,7 +2699,7 @@
     const exactMatch = (keyword = "") => {
       const compact = normalizeKeyword(keyword);
       if (!compact) return null;
-      return MARGIN_PRODUCTS.find((item) => item.name !== "직접 입력" && normalizeKeyword(item.name) === compact) || null;
+      return pickerProducts.find((item) => item.name !== "직접 입력" && normalizeKeyword(item.name) === compact) || null;
     };
 
     const setHint = (item = null) => {
@@ -2778,7 +2804,7 @@
     list.addEventListener("click", (event) => {
       const option = event.target.closest(".product-picker-option");
       if (!option) return;
-      const item = currentItems[Number(option.dataset.index)] || MARGIN_PRODUCTS.find((entry) => entry.name === option.dataset.name);
+      const item = currentItems[Number(option.dataset.index)] || pickerProducts.find((entry) => entry.name === option.dataset.name);
       applyProduct(item);
     });
 
@@ -2786,7 +2812,7 @@
       if (!picker.contains(event.target)) close();
     });
 
-    const initial = MARGIN_PRODUCTS.find((item) => item.name === select.value);
+    const initial = pickerProducts.find((item) => item.name === select.value);
     if (initial && initial.name !== "직접 입력") {
       input.value = initial.name;
       setHint(initial);
@@ -2802,11 +2828,12 @@
     const select = $("productSelect");
     if (!select) return;
     const current = select.value;
-    select.innerHTML = MARGIN_PRODUCTS.map((item) => {
+    const products = getActiveMarginProducts();
+    select.innerHTML = products.map((item) => {
       const cost = getMarginProductCost(item);
       return `<option value="${escapeHtml(item.name)}" data-cost="${cost}">${escapeHtml(item.name)}${cost ? ` · ${money(cost)}` : ""}</option>`;
     }).join("");
-    select.value = MARGIN_PRODUCTS.some((item) => item.name === current) ? current : "직접 입력";
+    select.value = products.some((item) => item.name === current) ? current : "직접 입력";
   }
 
   function initMarginCalculator() {
@@ -3073,9 +3100,12 @@ function refreshActiveOrderAnalysisSummary() {
   let purchaseDraftRows = [createPurchaseDraftRow()];
 
   function purchaseProductOptionsHtml(selected = "") {
-    return `<option value="">직접 입력</option>` + Object.entries(INVENTORY_DEFS).map(([sku, def]) => `
+    return `<option value="">직접 입력</option>` + getActiveInventorySkus().map((sku) => {
+      const def = INVENTORY_DEFS[sku];
+      return `
       <option value="${escapeHtml(sku)}" ${sku === selected ? "selected" : ""}>${escapeHtml(sku)} · ${escapeHtml(def.group || "기타")}</option>
-    `).join("");
+    `;
+    }).join("");
   }
 
   function purchaseDraftUnitOptions(selected = "pallet") {
@@ -4129,9 +4159,12 @@ function refreshActiveOrderAnalysisSummary() {
   }
 
   function returnAdjustmentSkuOptionsHtml(selected = "") {
-    return `<option value="">품목 선택</option>` + Object.entries(INVENTORY_DEFS).map(([sku, def]) => `
+    return `<option value="">품목 선택</option>` + getActiveInventorySkus().map((sku) => {
+      const def = INVENTORY_DEFS[sku];
+      return `
       <option value="${escapeHtml(sku)}" ${sku === selected ? "selected" : ""}>${escapeHtml(sku)} · ${escapeHtml(def.group || "기타")}</option>
-    `).join("");
+    `;
+    }).join("");
   }
 
   function returnAdjustmentUnitOptionsHtml(sku, selected = "unit") {
@@ -4221,6 +4254,10 @@ function refreshActiveOrderAnalysisSummary() {
 
     if (!INVENTORY_DEFS[sku]) {
       showReturnAdjustmentMessage("처리할 품목을 선택해 주세요.", false);
+      return;
+    }
+    if (isInactiveProductSku(sku)) {
+      showReturnAdjustmentMessage(`사용 중지 품목은 신규 취소/반품 처리할 수 없습니다: ${sku}`, false);
       return;
     }
     if (qty <= 0) {
@@ -4365,6 +4402,7 @@ function refreshActiveOrderAnalysisSummary() {
     state.productCosts = normalizeProductCosts(state.productCosts);
     const query = ($("productCostSearch")?.value || "").trim().toLowerCase();
     const rows = Object.entries(INVENTORY_DEFS)
+      .filter(([sku]) => !isInactiveProductSku(sku))
       .filter(([sku, def]) => !query || sku.toLowerCase().includes(query) || String(def.group || "").toLowerCase().includes(query))
       .sort((a, b) => String(a[1].group || "").localeCompare(String(b[1].group || ""), "ko-KR") || a[0].localeCompare(b[0], "ko-KR"));
 
@@ -4389,6 +4427,7 @@ function refreshActiveOrderAnalysisSummary() {
   function updateProductCost(sku, value) {
     if (!requireEditor("품목 원가 수정")) return;
     if (!INVENTORY_DEFS[sku]) return;
+    if (isInactiveProductSku(sku)) return;
     const next = cleanNumber(value);
     if (!Number.isFinite(next) || next < 0) {
       alert("원가는 0 이상 숫자로 입력해주세요.");
@@ -4409,6 +4448,7 @@ function refreshActiveOrderAnalysisSummary() {
   function resetProductCost(sku) {
     if (!requireEditor("품목 원가 기본값 복구")) return;
     if (!INVENTORY_DEFS[sku]) return;
+    if (isInactiveProductSku(sku)) return;
     const before = getSkuCost(sku);
     const base = defaultSkuCost(sku);
     state.productCosts = normalizeProductCosts(state.productCosts);
@@ -4507,7 +4547,7 @@ function refreshActiveOrderAnalysisSummary() {
   }
 
   function skuOptions(selectedSku = "") {
-    return Object.keys(INVENTORY_DEFS)
+    return getActiveInventorySkus()
       .map((sku) => `<option value="${escapeHtml(sku)}" ${sku === selectedSku ? "selected" : ""}>${escapeHtml(sku)}</option>`)
       .join("");
   }
@@ -4587,7 +4627,10 @@ function refreshActiveOrderAnalysisSummary() {
     const wrap = $("stockMoveRows");
     if (!wrap) return;
     const rowId = `move-row-${++stockMoveRowSeq}`;
-    const selectedSku = defaults.sku || Object.keys(INVENTORY_DEFS)[0] || "";
+    const requestedSku = canonicalSku(defaults.sku || "");
+    const selectedSku = requestedSku && INVENTORY_DEFS[requestedSku] && !isInactiveProductSku(requestedSku)
+      ? requestedSku
+      : getActiveInventorySkus()[0] || "";
     const defaultUnitPrice = defaults.unitPrice ?? (selectedSku ? getSkuCost(selectedSku) : "");
     const currentPricePlaceholder = selectedSku ? `현재 ${money(getSkuCost(selectedSku))}` : "예: 2200";
     const direction = getStockMoveDirection();
@@ -4727,7 +4770,7 @@ function refreshActiveOrderAnalysisSummary() {
     if (!tbody) return;
     const rawKeyword = ($("inventorySearch")?.value || "").trim();
     const keyword = normalizeInventorySearchText(rawKeyword);
-    const allSkus = Object.keys(INVENTORY_DEFS);
+    const allSkus = getActiveInventorySkus();
     const matchedSkus = allSkus
       .filter((sku) => {
         if (!keyword) return true;
@@ -4793,7 +4836,7 @@ function refreshActiveOrderAnalysisSummary() {
   }
 
   function lowSafetyItems() {
-    return Object.keys(INVENTORY_DEFS)
+    return getActiveInventorySkus()
       .map((sku) => ({ sku, status: safetyStatus(sku, state.stock[sku]?.units || 0) }))
       .filter((item) => item.status?.isLow);
   }
@@ -4853,7 +4896,7 @@ function refreshActiveOrderAnalysisSummary() {
     const weekStart = addDays(todayStart, -6);
     const monthStart = addDays(todayStart, -29);
     const itemsBySku = new Map(
-      Object.keys(INVENTORY_DEFS)
+      getActiveInventorySkus()
         .filter((sku) => !INVENTORY_DEFS[sku]?.isBox)
         .map((sku) => [sku, { sku, today: 0, week: 0, month: 0 }])
     );
@@ -4865,7 +4908,7 @@ function refreshActiveOrderAnalysisSummary() {
       details.forEach((detail) => {
         const sku = detail?.sku;
         const def = INVENTORY_DEFS[sku];
-        if (!sku || !def || def.isBox) return;
+        if (!sku || !def || def.isBox || isInactiveProductSku(sku)) return;
         if (detail.direction && detail.direction !== "out") return;
         if (record.source === STOCK_MOVE_SOURCES.manualOutbound || detail.source === STOCK_MOVE_SOURCES.manualOutbound) return;
         const rawCount = cleanNumber(detail.orderCount ?? detail.orders ?? detail.orderRows ?? 0);
@@ -6064,6 +6107,12 @@ function refreshActiveOrderAnalysisSummary() {
       return;
     }
 
+    const inactiveSkus = [...new Set(rows.map((row) => canonicalSku(row.sku)).filter(isInactiveProductSku))];
+    if (inactiveSkus.length) {
+      alert(`사용 중지 품목은 신규 입고/출고 처리할 수 없습니다: ${inactiveSkus.join(", ")}`);
+      return;
+    }
+
     const outboundPriceBySku = new Map();
     if (isOutbound) {
       for (const row of rows) {
@@ -6212,13 +6261,14 @@ function refreshActiveOrderAnalysisSummary() {
     const dateInput = $("moveDate");
     if (dateInput && !dateInput.value) dateInput.value = todayKey();
     clearStockMoveRows({ keepDirection: true, keepDate: true });
-    [
+    const examples = [
       ["에낙 치킨", 3],
       ["브이콘 50g", 6],
       ["명가 참깨", 2],
       ["라멘뽀식이", 3]
-    ].forEach(([sku, pallets]) => addStockMoveRow({ sku, pallets, boxes: 0, eaches: 0 }));
-    $("moveMemo").value = "14파렛 입고";
+    ].filter(([sku]) => !isInactiveProductSku(sku));
+    examples.forEach(([sku, pallets]) => addStockMoveRow({ sku, pallets, boxes: 0, eaches: 0 }));
+    $("moveMemo").value = `${examples.reduce((sum, [, pallets]) => sum + pallets, 0)}파렛 입고`;
     updateStockMoveDirectionUi();
   }
 
@@ -6284,7 +6334,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-multi-item-enak-context-01",
+    cacheVersion: "reborn-deactivate-unused-products-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -8569,6 +8619,10 @@ function saveInventoryManualAdjust(sku) {
     alert("재고 수정 대상을 찾을 수 없습니다.");
     return;
   }
+  if (isInactiveProductSku(sku)) {
+    alert(`사용 중지 품목은 신규 재고 수정 대상에서 제외됩니다: ${sku}`);
+    return;
+  }
   const overlay = $("inventoryItemOverlay");
   const qtyInput = overlay ? overlay.querySelector("[data-inventory-adjust-qty]") : null;
   const reasonInput = overlay ? overlay.querySelector("[data-inventory-adjust-reason]") : null;
@@ -8657,6 +8711,7 @@ function bindInventoryManualAdjustEvents() {
 
 function openInventoryItemDetail(sku) {
     sku = canonicalSku(sku);
+    if (isInactiveProductSku(sku)) return;
     const def = INVENTORY_DEFS[sku];
     const item = state.stock[sku];
     if (!def || !item) return;
@@ -8936,6 +8991,12 @@ function openInventoryItemDetail(sku) {
     }
   }
 
+  function getInactiveProductSkusFromOrderItems(items = []) {
+    return [...new Set((Array.isArray(items) ? items : [])
+      .map((item) => canonicalSku(item?.sku))
+      .filter((sku) => sku && isInactiveProductSku(sku)))];
+  }
+
   function analyzeOrderRows(rows) {
     const deductions = new Map();
     const deductionOrderCounts = new Map();
@@ -8996,6 +9057,12 @@ function openInventoryItemDetail(sku) {
           return;
         }
 
+        const inactiveSkus = getInactiveProductSkusFromOrderItems(compoundMatch.items);
+        if (inactiveSkus.length) {
+          inactiveSkus.forEach((sku) => needs.push({ row: index + 1, productName, qty: orderedQty, reason: `사용 중지 품목: ${sku}` }));
+          return;
+        }
+
         const rowSkus = new Set();
         let compoundUnits = 0;
         compoundMatch.items.forEach(({ sku, units }) => {
@@ -9026,6 +9093,11 @@ function openInventoryItemDetail(sku) {
       }
       if (!match.items?.length) {
         needs.push({ row: index + 1, productName, qty: lineUnits, reason: "상품명 매칭 실패" });
+        return;
+      }
+      const inactiveSkus = getInactiveProductSkusFromOrderItems(match.items);
+      if (inactiveSkus.length) {
+        inactiveSkus.forEach((sku) => needs.push({ row: index + 1, productName, qty: lineUnits, reason: `사용 중지 품목: ${sku}` }));
         return;
       }
       match.items.forEach(({ sku, units }) => {
@@ -9513,6 +9585,11 @@ function openInventoryItemDetail(sku) {
       try { return JSON.parse(localStorage.getItem(ORDER_CACHE_KEY) || "null"); } catch { return null; }
     })());
     if (!analysis) return;
+    const inactiveSkus = getInactiveProductSkusFromOrderItems(analysis.deductions);
+    if (inactiveSkus.length) {
+      alert(`이전 분석 결과에 사용 중지 품목이 포함되어 적용할 수 없습니다: ${inactiveSkus.join(", ")}\n엑셀 파일을 현재 버전에서 다시 분석해주세요.`);
+      return;
+    }
     lastOrderAnalysis = analysis;
     setLocalStorageItem(ORDER_CACHE_KEY, JSON.stringify(analysis), "applyLastOrderDeductions");
     if (analysis.needs?.length && !confirm(`확인 필요 ${analysis.needs.length}건이 있습니다. 상품명·수량이 불확실한 항목은 제외되며, 복합 주문의 포장박스 확인 항목은 상품 재고만 차감합니다. 계속할까요?`)) return;
