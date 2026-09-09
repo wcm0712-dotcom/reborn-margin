@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-deactivate-unused-products-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-add-black-hamon-cracker-294g-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -119,6 +119,7 @@
     { name: "초코팅촉", cost: 316.6 },
     { name: "논두렁", cost: 250 },
     { name: "밭두렁", cost: 287.5 },
+    { name: "블랙 하몽 크래커(294g)", cost: 2500.3 },
     { name: "꾀돌이", cost: 275 },
     { name: "라멘뽀식이", cost: 510 },
     { name: "바베큐맛스낵", cost: 500 },
@@ -189,6 +190,7 @@
     "초코팅촉": { group: "과자", boxesPerPallet: 80, unitsPerBox: 30, structure: "1파렛=80완박스 / 1완박스=30개 / 1파렛=2,400개", cost: 316.6, safetyStock: { pallets: 1 } },
     "논두렁": { group: "과자", boxesPerPallet: 180, unitsPerBox: 40, structure: "1파렛=180완박스 / 1완박스=40개 / 1파렛=7,200개", cost: 250, safetyStock: { pallets: 1 } },
     "밭두렁": { group: "과자", boxesPerPallet: 150, unitsPerBox: 40, structure: "1파렛=150완박스 / 1완박스=40개 / 1파렛=6,000개", cost: 287.5, safetyStock: { pallets: 1 } },
+    "블랙 하몽 크래커(294g)": { group: "과자", boxesPerPallet: 48, unitsPerBox: 12, structure: "1파렛=48완박스 / 1완박스=12개 / 1파렛=576개", cost: 2500.3, safetyStock: { pallets: 3 } },
     "명가 참깨": { group: "명가", boxesPerPallet: 45, unitsPerBox: 16, structure: "1파렛=45완박스 / 1완박스=16개", cost: 4200, safetyStock: { pallets: 2 } },
     "명가 흑당": { group: "명가", boxesPerPallet: 45, unitsPerBox: 16, structure: "1파렛=45완박스 / 1완박스=16개", cost: 4200, safetyStock: { pallets: 2 } },
     "코디 3겹": { group: "휴지", boxesPerPallet: 48, unitsPerBox: 1, structure: "1파렛=48개 / 박스 사용 없음", cost: 8500, safetyStock: { pallets: 6 } },
@@ -6334,7 +6336,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-deactivate-unused-products-01",
+    cacheVersion: "reborn-add-black-hamon-cracker-294g-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -9293,6 +9295,7 @@ function openInventoryItemDetail(sku) {
     const ppungiyo500Pattern = /^\[red\]뻥이요\(35g\)x(?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+)(?:개)?$/;
     const ppungiyoGoldPattern = /^\[red\]뻥이요\(60g\)x(?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+)(?:개)?$/;
     const honeyPpungiyo50Pattern = /^\[yellow\]뻥이요\(50g\)x(?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+)(?:개)?$/;
+    const blackHamonCrackerPattern = /^\[black\]크래커\(294g\)x(?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+)(?:개)?$/;
     const ppungiyoPatterns = [ppungiyo4000Pattern, honeyPpungiyo240Pattern, ppungiyo500Pattern, ppungiyoGoldPattern, honeyPpungiyo50Pattern];
     if (/와플매트|와플싱글|컴피싱글/.test(text)) return { excluded: true };
 
@@ -9332,6 +9335,9 @@ function openInventoryItemDetail(sku) {
     if (/^\[(?:red|yellow)\]뻥이요/.test(text) && !ppungiyoPatterns.some((pattern) => pattern.test(text))) {
       return { needs: ["뻥이요 색상/중량/x 수량 확인 필요"] };
     }
+    if (/^\[black\]크래커\(294g\)/.test(text) && !blackHamonCrackerPattern.test(text)) {
+      return { needs: ["[BLACK] 크래커(294g) x 수량 또는 상품명 확인 필요"] };
+    }
 
     const rules = [
       [/foot|풋젤리/, "풋젤리"],
@@ -9356,6 +9362,7 @@ function openInventoryItemDetail(sku) {
       [ppungiyo500Pattern, "500뻥이요(35g)"],
       [ppungiyoGoldPattern, "뻥이요 골드(60g)"],
       [honeyPpungiyo50Pattern, "허니뻥이요(50g)"],
+      [blackHamonCrackerPattern, "블랙 하몽 크래커(294g)"],
       [/차카니/, "차카니"],
       [/보리건빵|건빵/, "보리건빵 30g"],
       [/황금고구마칩/, "황금 고구마칩"],
@@ -9404,6 +9411,10 @@ function openInventoryItemDetail(sku) {
     if (sku === "논두렁" || sku === "밭두렁") {
       if (qty <= 30) return { size: medium };
       return { size: "none", needCheck: "논두렁/밭두렁 31~39개 박스 기준 확인 필요" };
+    }
+    if (sku === "블랙 하몽 크래커(294g)") {
+      if (qty <= 8) return { size: medium };
+      return { size: "none", needCheck: "블랙 하몽 크래커 9~11개 포장박스 기준 확인 필요" };
     }
     if (sku === "풋젤리") return { size: qty <= 30 ? small : medium };
     if (sku === "차카니") return { size: "none" };
