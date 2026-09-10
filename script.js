@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-add-black-hamon-cracker-294g-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-deactivate-unused-products-02";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -83,7 +83,11 @@
     "촉촉한 고구마",
     "촉촉한 밤",
     "코디 3겹",
-    "김 메밀칩 160g"
+    "김 메밀칩 160g",
+    "에낙 스모크",
+    "바베큐맛스낵",
+    "푸드킹 양파 160g",
+    "초코팅촉"
   ]);
 
   function isInactiveProductSku(sku) {
@@ -6336,7 +6340,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-add-black-hamon-cracker-294g-01",
+    cacheVersion: "reborn-deactivate-unused-products-02",
     functionCalled: {
       collect: false,
       stockout: false,
