@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-deactivate-unused-products-02";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-deactivate-unused-products-03";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -87,7 +87,13 @@
     "에낙 스모크",
     "바베큐맛스낵",
     "푸드킹 양파 160g",
-    "초코팅촉"
+    "초코팅촉",
+    "네모스낵 불고기맛",
+    "에낙 치킨",
+    "에낙 스파이시",
+    "감자알칩",
+    "밭두렁",
+    "쿠키속 초코짱"
   ]);
 
   function isInactiveProductSku(sku) {
@@ -3244,6 +3250,12 @@ function refreshActiveOrderAnalysisSummary() {
       return;
     }
 
+    const inactiveSkus = [...new Set(rows.map((row) => canonicalSku(row.productKey || row.name)).filter(isInactiveProductSku))];
+    if (inactiveSkus.length) {
+      showWmsStatus(`비활성 상품 포함: ${inactiveSkus.join(", ")} / 발주 저장 보류`, false);
+      return;
+    }
+
     const invalid = rows.find((row) => !row.name || row.qty <= 0 || row.unitPrice < 0);
     if (invalid) {
       showWmsStatus("발주 품목명, 수량, 단가를 확인해 주세요.", false);
@@ -4634,6 +4646,10 @@ function refreshActiveOrderAnalysisSummary() {
     if (!wrap) return;
     const rowId = `move-row-${++stockMoveRowSeq}`;
     const requestedSku = canonicalSku(defaults.sku || "");
+    if (isInactiveProductSku(requestedSku)) {
+      alert(`사용 중지 품목은 신규 입고/출고 입력에 추가할 수 없습니다: ${requestedSku}`);
+      return;
+    }
     const selectedSku = requestedSku && INVENTORY_DEFS[requestedSku] && !isInactiveProductSku(requestedSku)
       ? requestedSku
       : getActiveInventorySkus()[0] || "";
@@ -6340,7 +6356,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-deactivate-unused-products-02",
+    cacheVersion: "reborn-deactivate-unused-products-03",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -9065,7 +9081,7 @@ function openInventoryItemDetail(sku) {
 
         const inactiveSkus = getInactiveProductSkusFromOrderItems(compoundMatch.items);
         if (inactiveSkus.length) {
-          inactiveSkus.forEach((sku) => needs.push({ row: index + 1, productName, qty: orderedQty, reason: `사용 중지 품목: ${sku}` }));
+          inactiveSkus.forEach((sku) => needs.push({ row: index + 1, productName, qty: orderedQty, reason: `비활성 상품 포함: ${sku} / 차감 보류` }));
           return;
         }
 
@@ -9103,7 +9119,7 @@ function openInventoryItemDetail(sku) {
       }
       const inactiveSkus = getInactiveProductSkusFromOrderItems(match.items);
       if (inactiveSkus.length) {
-        inactiveSkus.forEach((sku) => needs.push({ row: index + 1, productName, qty: lineUnits, reason: `사용 중지 품목: ${sku}` }));
+        inactiveSkus.forEach((sku) => needs.push({ row: index + 1, productName, qty: lineUnits, reason: `비활성 상품 포함: ${sku} / 차감 보류` }));
         return;
       }
       match.items.forEach(({ sku, units }) => {
