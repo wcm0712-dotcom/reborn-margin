@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-deactivate-unused-products-03";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-nurungji-box-12-units-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -178,9 +178,9 @@
     "네모스낵 불고기맛": { group: "네모스낵", boxesPerPallet: 72, unitsPerBox: 360, structure: "1파렛=72완박스 / 1완박스=12내부박스 / 1내부박스=30개", cost: 172.2, safetyStock: { boxes: 30 } },
     "네모스낵 매콤한맛": { group: "네모스낵", boxesPerPallet: 72, unitsPerBox: 360, structure: "1파렛=72완박스 / 1완박스=12내부박스 / 1내부박스=30개", cost: 172.2, safetyStock: { boxes: 30 } },
     "허니눈꽃 쌀과자 920g": { group: "쌀과자", boxesPerPallet: 42, unitsPerBox: 4, structure: "1파렛=42완박스 / 1완박스=4개", cost: 6800, safetyStock: { pallets: 3 } },
-    "찹쌀 누룽지 무가당": { group: "찹쌀 누룽지", boxesPerPallet: 42, unitsPerBox: 14, structure: "1파렛=42완박스 / 1완박스=14개", cost: 2200, safetyStock: { pallets: 4 } },
-    "찹쌀 누룽지 츄러스": { group: "찹쌀 누룽지", boxesPerPallet: 42, unitsPerBox: 14, structure: "1파렛=42완박스 / 1완박스=14개", cost: 2300, safetyStock: { pallets: 1 } },
-    "찹쌀 누룽지 스위트": { group: "찹쌀 누룽지", boxesPerPallet: 42, unitsPerBox: 14, structure: "1파렛=42완박스 / 1완박스=14개", cost: 2200, safetyStock: { pallets: 4 } },
+    "찹쌀 누룽지 무가당": { group: "찹쌀 누룽지", boxesPerPallet: 42, unitsPerBox: 12, structure: "1파렛=42완박스 / 1완박스=12개", cost: 2200, safetyStock: { pallets: 4 } },
+    "찹쌀 누룽지 츄러스": { group: "찹쌀 누룽지", boxesPerPallet: 42, unitsPerBox: 12, structure: "1파렛=42완박스 / 1완박스=12개", cost: 2300, safetyStock: { pallets: 1 } },
+    "찹쌀 누룽지 스위트": { group: "찹쌀 누룽지", boxesPerPallet: 42, unitsPerBox: 12, structure: "1파렛=42완박스 / 1완박스=12개", cost: 2200, safetyStock: { pallets: 4 } },
     "에낙 치킨": { group: "에낙", boxesPerPallet: 70, unitsPerBox: 180, structure: "1파렛=70완박스 / 1완박스=6내부박스 / 1내부박스=30개", cost: 163.8, safetyStock: { pallets: 2 } },
     "에낙 스파이시": { group: "에낙", boxesPerPallet: 70, unitsPerBox: 180, structure: "1파렛=70완박스 / 1완박스=6내부박스 / 1내부박스=30개", cost: 163.8, safetyStock: { pallets: 2 } },
     "에낙 스모크": { group: "에낙", boxesPerPallet: 70, unitsPerBox: 180, structure: "1파렛=70완박스 / 1완박스=6내부박스 / 1내부박스=30개", cost: 163.8, safetyStock: { pallets: 2 } },
@@ -287,6 +287,17 @@
   };
   const todayKey = () => dateKey(new Date());
 
+  function isNurungjiBox12Sku(sku) {
+    return ["찹쌀 누룽지 스위트", "찹쌀 누룽지 무가당", "찹쌀 누룽지 츄러스"].includes(canonicalSku(sku));
+  }
+
+  function legacyStockUnitsFromInput(sku, input) {
+    if (!isNurungjiBox12Sku(sku) || Object.prototype.hasOwnProperty.call(input || {}, "units")) {
+      return unitsFromInput(sku, input);
+    }
+    return cleanNumber(input?.pallets) * 42 * 14 + cleanNumber(input?.boxes) * 14 + cleanNumber(input?.eaches);
+  }
+
   function unitsFromInput(sku, input) {
     sku = canonicalSku(sku);
     const def = INVENTORY_DEFS[sku];
@@ -326,6 +337,7 @@
 
   function formatStock(sku, units) {
     sku = canonicalSku(sku);
+    if (isNurungjiBox12Sku(sku) && units < 0) return `-(${formatStock(sku, Math.abs(units))})`;
     const n = normalizeUnits(sku, units);
     const labels = getUnitLabels(sku);
     const parts = [];
@@ -334,6 +346,12 @@
     if (n.eaches) parts.push(`${n.eaches.toLocaleString("ko-KR")}${labels.each}`);
     return parts.length ? parts.join(" ") : "0";
   }
+
+  function formatHistoricalStock(sku, units) {
+    const text = formatStock(sku, units);
+    return isNurungjiBox12Sku(sku) ? `${text} (현재 포장 규격 기준 환산)` : text;
+  }
+
   function safetyUnits(sku) {
     sku = canonicalSku(sku);
     const def = INVENTORY_DEFS[sku];
@@ -433,7 +451,7 @@
     Object.keys(INVENTORY_DEFS).forEach((sku) => {
       const input = INITIAL_STOCK_INPUT[sku] || { pallets: 0, boxes: 0, eaches: 0, original: "0" };
       stock[sku] = {
-        units: unitsFromInput(sku, input),
+        units: legacyStockUnitsFromInput(sku, input),
         original: input.original || "0"
       };
     });
@@ -574,7 +592,7 @@
     if (Object.prototype.hasOwnProperty.call(incoming, "pallets")
       || Object.prototype.hasOwnProperty.call(incoming, "boxes")
       || Object.prototype.hasOwnProperty.call(incoming, "eaches")) {
-      return unitsFromInput(sku, incoming);
+      return legacyStockUnitsFromInput(sku, incoming);
     }
     return 0;
   }
@@ -1338,7 +1356,7 @@
   function formatUndoStockChange(item) {
     const sign = item.diffUnits > 0 ? "+" : "-";
     const units = Math.abs(item.diffUnits);
-    const qty = INVENTORY_DEFS[item.sku] ? formatStock(item.sku, units) : `${number(units)}개`;
+    const qty = INVENTORY_DEFS[item.sku] ? formatHistoricalStock(item.sku, units) : `${number(units)}개`;
     return `${item.sku} ${sign}${qty}`;
   }
 
@@ -3074,6 +3092,10 @@ function refreshActiveOrderAnalysisSummary() {
   function purchaseUnitsPerSelectedUnit(item) {
     const def = item.productKey ? getDefByKey(item.productKey) : null;
     if (!def) return 1;
+    if (isNurungjiBox12Sku(item.productKey)) {
+      if (item.unit === "pallet") return 42 * 14;
+      if (item.unit === "box") return 14;
+    }
     if (item.unit === "pallet") return cleanNumber(def.boxesPerPallet) * cleanNumber(def.unitsPerBox) || 1;
     if (item.unit === "box") return cleanNumber(def.unitsPerBox) || 1;
     return 1;
@@ -4215,7 +4237,7 @@ function refreshActiveOrderAnalysisSummary() {
     const qty = cleanNumber(record.qty);
     const qtyText = Number.isInteger(qty) ? number(qty) : qty.toLocaleString("ko-KR", { maximumFractionDigits: 2 });
     const unitLabel = returnAdjustmentUnitLabel(record.sku, record.unit);
-    return `${qtyText}${unitLabel} · ${formatStock(record.sku, record.units)} 환산`;
+    return `${qtyText}${unitLabel} · ${formatHistoricalStock(record.sku, record.units)} 환산`;
   }
 
   function setReturnAdjustmentDefaults() {
@@ -4405,7 +4427,7 @@ function refreshActiveOrderAnalysisSummary() {
             <span>${escapeHtml(info.label)} · ${escapeHtml(record.date || "-")}</span>
           </div>
           <div class="return-adjust-record-qty">
-            <b>${escapeHtml(formatStock(record.sku, record.units))}</b>
+            <b>${escapeHtml(formatHistoricalStock(record.sku, record.units))}</b>
             <small>${escapeHtml(formatReturnAdjustmentInputQty(record))}</small>
           </div>
           <span class="return-adjust-badge ${tone}">${record.restores ? "재고 복구" : "재고 미복구"}</span>
@@ -5574,7 +5596,7 @@ function refreshActiveOrderAnalysisSummary() {
   function formatDailyFlowUnits(sku, units) {
     const safeUnits = Math.max(0, Math.round(cleanNumber(units)));
     if (sku && INVENTORY_DEFS[canonicalSku(sku)]) {
-      return `${number(safeUnits)}개 · ${formatStock(sku, safeUnits)}`;
+      return `${number(safeUnits)}개 · ${formatHistoricalStock(sku, safeUnits)}`;
     }
     return `${number(safeUnits)}개`;
   }
@@ -6356,7 +6378,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-deactivate-unused-products-03",
+    cacheVersion: "reborn-nurungji-box-12-units-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -8943,7 +8965,7 @@ function openInventoryItemDetail(sku) {
       ? details.map((detail) => `
         <div class="detail-line">
           <strong>${escapeHtml(detail.sku || "품목")}</strong>
-          <span>${escapeHtml(detail.text || (hasFlowDetailUnits(detail.units) ? formatMovementDetail(detail.sku, detail.units, detail.direction || "out") : "수량 상세 없음"))}</span>
+          <span>${escapeHtml(detail.text || (hasFlowDetailUnits(detail.units) ? (isNurungjiBox12Sku(detail.sku) ? formatFlowDetailQuantityText(detail.sku, detail.units) : formatMovementDetail(detail.sku, detail.units, detail.direction || "out")) : "수량 상세 없음"))}</span>
           ${renderHistoryDetailQuantity(detail)}
         </div>`).join("")
       : `<div class="detail-empty">이전 버전에서 저장된 기록이라 품목별 상세 내역이 없습니다.</div>`;
@@ -9616,6 +9638,12 @@ function openInventoryItemDetail(sku) {
       try { return JSON.parse(localStorage.getItem(ORDER_CACHE_KEY) || "null"); } catch { return null; }
     })());
     if (!analysis) return;
+    if (!lastOrderAnalysis && analysis.deductions.some(({ sku }) => isNurungjiBox12Sku(sku))) {
+      const message = "누룽지 완박스 규격이 12개입으로 변경되었습니다. 저장된 분석 결과는 적용할 수 없습니다. 아직 적용하지 않은 엑셀 파일을 현재 버전에서 다시 분석해주세요. 이미 적용한 파일은 재적용하지 마세요.";
+      setText("excelNotice", message);
+      alert(message);
+      return;
+    }
     const inactiveSkus = getInactiveProductSkusFromOrderItems(analysis.deductions);
     if (inactiveSkus.length) {
       alert(`이전 분석 결과에 사용 중지 품목이 포함되어 적용할 수 없습니다: ${inactiveSkus.join(", ")}\n엑셀 파일을 현재 버전에서 다시 분석해주세요.`);
