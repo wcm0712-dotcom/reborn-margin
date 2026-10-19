@@ -11,15 +11,15 @@
     if (!root || root.dataset.ready) return;
     root.dataset.ready = '1';
     let admin = false, lastRole = null, initialized = false, page = 0, rows = [], total = null, requestId = 0, accessId = 0;
-    let selected = null, uploading = false, stopRequested = false, activeController = null, detailUrl = null, rotation = 0, zoom = 1;
+    let selected = null, uploading = false, preparing = false, preparationId = 0, stopRequested = false, activeController = null, detailUrl = null, preparedUrl = null, rotation = 0, zoom = 1;
     let currentPartner = null, partners = [], categoriesReady = false, categoryRequest = 0, exportController = null, partnerLimit = 100;
     const categoryCore = window.RebornEvidenceCategories;
     const queue = [], urls = new Set();
-    root.innerHTML = `<div class="evidence-toolbar"><p>업체별 회계자료</p><div><button type="button" id="evidenceReload">새로고침</button><button type="button" id="evidenceExport">전체 업체 이미지 ZIP</button><button type="button" id="evidenceBackup" data-evidence-admin hidden>전체 업체 원본 백업</button><button type="button" id="evidenceNew" class="primary-btn" data-evidence-admin hidden>사진 등록</button></div></div>
+    root.innerHTML = `<div class="evidence-toolbar"><p>업체별 회계자료</p><div><button type="button" id="evidenceReload">새로고침</button><button type="button" id="evidenceExport">전체 업체 이미지 ZIP</button><button type="button" id="evidenceBackup" data-evidence-admin hidden>전체 업체 등록 파일 백업</button><button type="button" id="evidenceNew" class="primary-btn" data-evidence-admin hidden>사진 등록</button></div></div>
       <p class="evidence-public-note">공개 자료실 · 로그인 없이 사진과 분류 정보를 조회할 수 있습니다. 사진 보관은 회계처리 완료를 뜻하지 않습니다.</p>
       <div class="evidence-category-tools"><label>업체 검색<input id="evidencePartnerSearch" type="search" maxlength="100"></label><label>정렬<select id="evidencePartnerSort"><option value="name">업체명순</option><option value="recent">최근 자료순</option><option value="count">자료 많은 순</option></select></label><label data-evidence-admin hidden>보관<select id="evidenceCategoryTrash"><option value="active">일반 목록</option><option value="trash">휴지통</option></select></label></div>
       <div id="evidenceCategories"><p id="evidenceCategoryStatus" role="status"></p><div id="evidencePartnerList" class="evidence-partner-list"></div><button type="button" id="evidencePartnersMore" hidden>업체 더 보기</button></div>
-      <section id="evidenceCategoryContent" hidden><div class="evidence-category-heading"><button type="button" id="evidenceCategoryBack" title="업체 목록으로" aria-label="업체 목록으로"></button><div><h2 id="evidenceCategoryTitle"></h2><p id="evidenceCategoryScope"></p></div><div class="evidence-category-download-tools"><label>이미지 종류<select id="evidenceCategoryKind"><option value="preview">공개 이미지</option><option value="original" data-evidence-admin hidden>원본 (관리자)</option></select></label><button type="button" id="evidenceCategoryDownload">업체 전체 이미지 ZIP</button></div></div>
+      <section id="evidenceCategoryContent" hidden><div class="evidence-category-heading"><button type="button" id="evidenceCategoryBack" title="업체 목록으로" aria-label="업체 목록으로"></button><div><h2 id="evidenceCategoryTitle"></h2><p id="evidenceCategoryScope"></p></div><div class="evidence-category-download-tools"><label>이미지 종류<select id="evidenceCategoryKind"><option value="preview">공개 이미지</option><option value="original" data-evidence-admin hidden>등록 파일 (관리자)</option></select></label><button type="button" id="evidenceCategoryDownload">업체 전체 이미지 ZIP</button></div></div>
       <form id="evidenceFilters" class="evidence-filters evidence-category-filters"><label>시작일<input name="from" type="date"></label><label>종료일<input name="to" type="date"></label><label>유형<select name="type"><option value="">전체</option>${types.map(type => '<option>'+type+'</option>').join('')}</select></label><label>검토<select name="review"><option value="">전체</option>${reviews.map(value => '<option>'+value+'</option>').join('')}</select></label><input type="hidden" name="trash" value="active"><button type="submit">조회</button></form>
       <p id="evidenceStatus" role="status" aria-live="polite"></p><div id="evidenceGrid" class="evidence-grid"></div><div class="evidence-pagination"><button type="button" id="evidencePrevious">이전</button><span id="evidencePage"></span><button type="button" id="evidenceNext">다음</button></div></section>
       <div class="evidence-export-progress"><p id="evidenceDownloadStatus" role="status" aria-live="polite"></p><progress id="evidenceDownloadProgress" max="1" value="0" hidden aria-label="이미지 ZIP 준비 진행률"></progress><button type="button" id="evidenceDownloadCancel" hidden>다운로드 중단</button></div>`;
@@ -27,19 +27,22 @@
     const uploadDialog = document.createElement('dialog');
     uploadDialog.id = 'evidenceUploadDialog'; uploadDialog.className = 'evidence-dialog';
     uploadDialog.setAttribute('aria-labelledby', 'evidenceUploadTitle');
-    uploadDialog.innerHTML = `<div class="evidence-dialog-heading"><h2 id="evidenceUploadTitle">회계자료 등록</h2><button type="button" data-close aria-label="등록창 닫기">닫기</button></div><form id="evidenceUploadForm"><div class="evidence-fields"><label>업체 카테고리<select id="evidenceUploadPartner" required></select></label><label id="evidenceNewPartnerField" hidden>새 업체명<input name="partner" required maxlength="100" autocomplete="off" disabled></label><label>증빙일<input name="business_date" type="date" required></label><label>유형<select name="document_type">${types.map(type => '<option>'+type+'</option>').join('')}</select></label><label class="evidence-note-field">공개 메모<textarea name="note" maxlength="500" rows="2"></textarea></label></div><label class="evidence-public-confirm"><input name="public_confirmed" type="checkbox" required> 사진 속 연락처·계좌·이름과 업체·날짜·메모가 로그인 없이 공개됨을 확인하며 이 자료를 공개할 권한이 있습니다.</label><label class="evidence-file-input">사진 선택<input id="evidencePhotoInput" type="file" accept="image/jpeg,image/png" multiple></label><p>JPEG·정지 PNG · 장당 10MB/1,200만 화소 이하 · 한 번에 30장/100MB. 선택한 사진은 동일한 업체·증빙일로 등록됩니다.</p><div id="evidenceQueue"></div><div class="evidence-actions"><button type="submit" class="primary-btn" id="evidenceUploadStart">등록 시작</button><button type="button" id="evidenceUploadStop">중단 요청</button></div><p id="evidenceUploadStatus" role="status"></p></form>`;
+    uploadDialog.innerHTML = `<div class="evidence-dialog-heading"><h2 id="evidenceUploadTitle">회계자료 등록</h2><button type="button" data-close aria-label="등록창 닫기">닫기</button></div><form id="evidenceUploadForm"><div class="evidence-fields"><label>업체 카테고리<select id="evidenceUploadPartner" required></select></label><label id="evidenceNewPartnerField" hidden>새 업체명<input name="partner" required maxlength="100" autocomplete="off" disabled></label><label>증빙일<input name="business_date" type="date" required></label><label>유형<select name="document_type">${types.map(type => '<option>'+type+'</option>').join('')}</select></label><label class="evidence-note-field">공개 메모<textarea name="note" maxlength="500" rows="2"></textarea></label></div><label class="evidence-public-confirm"><input name="public_confirmed" type="checkbox" required> 사진 속 연락처·계좌·이름과 업체·날짜·메모가 로그인 없이 공개됨을 확인하며 이 자료를 공개할 권한이 있습니다.</label><label class="evidence-file-input">사진 선택<input id="evidencePhotoInput" type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" multiple></label><p>JPG·JPEG·정지 PNG · 장당 10MB 이하 · 한 번에 30장/100MB · 동일 업체·증빙일로 등록됩니다. JPG는 2,400만 화소·한 변 8,192px까지 선택 가능하며, 해상도·서버 처리 한도 초과 시 800만 화소 이하 등록 사본을 준비합니다. PNG는 1,200만 화소 이하입니다.</p><div id="evidenceQueue"></div><label id="evidenceResizeConfirm" class="evidence-public-confirm" hidden><input id="evidenceResizeAccepted" type="checkbox"> 업로드용 조정 사본의 글자와 방향을 확인했습니다. 이 사본은 JPEG 재압축되며 EXIF 등 부가정보는 제외됩니다. PC의 촬영 원본은 변경되지 않으며, 앱의 등록 파일·백업에는 사본이 보관됩니다.</label><div class="evidence-actions"><button type="submit" class="primary-btn" id="evidenceUploadStart">등록 시작</button><button type="button" id="evidenceUploadStop">중단 요청</button></div><p id="evidenceUploadStatus" role="status" aria-live="polite"></p></form>`;
+    const preparedDialog = document.createElement('dialog');
+    preparedDialog.id = 'evidencePreparedDialog'; preparedDialog.className = 'evidence-dialog'; preparedDialog.setAttribute('aria-labelledby','evidencePreparedTitle');
+    preparedDialog.innerHTML = `<div class="evidence-dialog-heading"><h2 id="evidencePreparedTitle">업로드용 사본 확인</h2><button type="button" data-close aria-label="사본 확인 닫기">닫기</button></div><p id="evidencePreparedInfo"></p><div class="evidence-image-stage"><img id="evidencePreparedImage" alt="업로드용 조정 사본"></div><a id="evidencePreparedSave">사본 내려받아 확대 확인</a>`;
     const detailDialog = document.createElement('dialog');
     detailDialog.id = 'evidenceDetailDialog'; detailDialog.className = 'evidence-dialog evidence-detail-dialog';
     detailDialog.setAttribute('aria-labelledby', 'evidenceDetailTitle');
-    detailDialog.innerHTML = `<div class="evidence-dialog-heading"><h2 id="evidenceDetailTitle">자료 상세</h2><button type="button" data-close aria-label="상세 닫기">닫기</button></div><div class="evidence-image-tools"><button type="button" id="evidenceZoomOut" aria-label="축소">−</button><button type="button" id="evidenceZoomIn" aria-label="확대">+</button><button type="button" id="evidenceRotate" aria-label="시계 방향 90도 회전">↻</button><button type="button" id="evidenceDownload">공개 이미지 저장</button><button type="button" id="evidenceOriginal" data-evidence-admin hidden>원본 저장</button></div><div class="evidence-image-stage"><img id="evidenceDetailImage" alt="선택한 회계자료"></div><form id="evidenceEditForm"><div id="evidenceDetailFields" class="evidence-fields"></div><div class="evidence-actions" data-evidence-admin hidden><button type="submit" class="primary-btn">분류 저장</button><button type="button" id="evidenceTrash">휴지통으로 이동</button><button type="button" id="evidenceRestore">복원</button></div></form><p id="evidenceDetailStatus" role="status"></p><div id="evidenceEvents" data-evidence-admin hidden></div>`;
-    document.body.append(uploadDialog, detailDialog);
+    detailDialog.innerHTML = `<div class="evidence-dialog-heading"><h2 id="evidenceDetailTitle">자료 상세</h2><button type="button" data-close aria-label="상세 닫기">닫기</button></div><div class="evidence-image-tools"><button type="button" id="evidenceZoomOut" aria-label="축소">−</button><button type="button" id="evidenceZoomIn" aria-label="확대">+</button><button type="button" id="evidenceRotate" aria-label="시계 방향 90도 회전">↻</button><button type="button" id="evidenceDownload">공개 이미지 저장</button><button type="button" id="evidenceOriginal" data-evidence-admin hidden>등록 파일 저장</button></div><div class="evidence-image-stage"><img id="evidenceDetailImage" alt="선택한 회계자료"></div><form id="evidenceEditForm"><div id="evidenceDetailFields" class="evidence-fields"></div><div class="evidence-actions" data-evidence-admin hidden><button type="submit" class="primary-btn">분류 저장</button><button type="button" id="evidenceTrash">휴지통으로 이동</button><button type="button" id="evidenceRestore">복원</button></div></form><p id="evidenceDetailStatus" role="status"></p><div id="evidenceEvents" data-evidence-admin hidden></div>`;
+    document.body.append(uploadDialog, detailDialog, preparedDialog);
     function client() { const value = callbacks.getClient(); if (!value) throw new Error('사진 연결을 초기화하지 못했습니다. 네트워크와 라이브러리를 확인해주세요.'); return value; }
     function status(text, error = false) {byId('evidenceStatus').textContent = text; byId('evidenceStatus').classList.toggle('evidence-error', error);}
     function showAdmin() {for (const target of [root,uploadDialog,detailDialog]) target.querySelectorAll('[data-evidence-admin]').forEach(element => element.hidden = !admin);}
     function releaseUrl(url) {if (url) {URL.revokeObjectURL(url); urls.delete(url);}}
     function objectUrl(blob) {const url = URL.createObjectURL(blob); urls.add(url); return url;}
     function clearUrls() {for (const url of urls) URL.revokeObjectURL(url); urls.clear(); detailUrl = null;}
-    function resetQueue() {queue.splice(0); renderQueue(); byId('evidencePhotoInput').value = '';}
+    function resetQueue() {preparationId++; queue.splice(0); byId('evidenceResizeAccepted').checked = false; renderQueue(); byId('evidencePhotoInput').value = ''; if (preparedDialog.open) preparedDialog.close();}
     function icon(name) {
       const paths = window.RebornWorkspaceIcons?.[name] || [];
       return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+paths.map(([tag,attributes])=>'<'+tag+' '+Object.entries(attributes).map(([key,value])=>key+'="'+escape(value)+'"').join(' ')+'></'+tag+'>').join('')+'</svg>';
@@ -178,33 +181,50 @@
       const buttons = [...form.querySelectorAll('button')]; buttons.forEach(button => button.disabled = true);
       try {await invoke({id:item.id,version:item.version,action,values:Object.fromEntries(new FormData(form))}); detailDialog.close(); await reloadEvidence();} catch (error) {byId('evidenceDetailStatus').textContent = error.message;} finally {buttons.forEach(button => button.disabled = false);}
     }
-    function renderQueue() {byId('evidenceQueue').innerHTML = queue.map(item => `<div class="evidence-queue-item"><div><strong>${escape(item.file.name)}</strong><span>${escape(item.status)}${item.duplicate?' · 동일 이미지 후보':''}</span><progress max="100" value="${item.progress || 0}" aria-label="${escape(item.file.name)} 단계 진행률"></progress></div><div>${!uploading?'<button type="button" data-queue-remove="'+item.id+'" title="대기 목록에서만 제거합니다. 이미 저장한 사진은 남습니다.">목록에서 제거</button>':''}</div></div>`).join('');}
+    function renderQueue() {
+      byId('evidenceQueue').innerHTML = queue.map(item => `<div class="evidence-queue-item"><div><strong>${escape(item.file.name)}</strong><span>${escape(item.status)}${item.duplicate?' · 동일 이미지 후보':''}</span>${item.resized?'<span>촬영 파일 '+item.source.width+'×'+item.source.height+' → 등록 사본 '+item.output.width+'×'+item.output.height+' · '+(item.uploadFile.size/1024/1024).toFixed(2)+'MB</span>':''}<progress max="100" value="${item.progress || 0}" aria-label="${escape(item.file.name)} 단계 진행률"></progress></div><div class="evidence-queue-actions">${item.resized&&!item.invalid?'<button type="button" data-queue-preview="'+item.id+'">사본 확인</button>':''}${!uploading&&!preparing?'<button type="button" data-queue-remove="'+item.id+'" title="대기 목록에서만 제거합니다. 이미 저장한 사진은 남습니다.">목록에서 제거</button>':''}</div></div>`).join('');
+      const copies = queue.some(item=>item.resized&&!item.invalid&&!item.done);
+      byId('evidenceResizeConfirm').hidden = !copies; byId('evidenceResizeAccepted').required = copies;
+      byId('evidenceResizeAccepted').disabled = uploading || preparing;
+      byId('evidenceUploadStart').disabled = uploading || preparing;
+      byId('evidencePhotoInput').disabled = uploading || preparing;
+    }
     async function addPhotos(files) {
-      if (!admin || uploading) return;
+      if (!admin || !callbacks.isAdmin() || uploading || preparing) return;
       if (queue.length+files.length > 30 || [...queue.map(item => item.file),...files].reduce((sum,file) => sum+file.size,0) > 100*1024*1024) {byId('evidenceUploadStatus').textContent = '한 번에 30장·100MB 이하로 선택해주세요.'; return;}
-      for (const file of files) {
-        const item = {id:crypto.randomUUID(),file,status:'대기',progress:0,hash:'',snapshot:null}; queue.push(item); renderQueue();
-        try {
-          if (!/\.(jpe?g|png)$/i.test(file.name) || file.size > 10*1024*1024) throw new Error('JPEG·PNG/10MB 한도 확인 필요');
-          const bytes = new Uint8Array(await file.arrayBuffer());
-          const guard = await import('./backend/image-guard.mjs?v='+encodeURIComponent(window.__REBORN_APP_VERSION__));
-          guard.inspectImage(bytes);
-          const jpeg = bytes[0]===255 && bytes[1]===216, png = bytes.length>24 && bytes.slice(0,8).every((value,index) => value===[137,80,78,71,13,10,26,10][index]);
-          if (!jpeg && !png) throw new Error('실제 이미지 형식 확인 필요');
-          const bitmap = await createImageBitmap(file); const pixels = bitmap.width*bitmap.height; bitmap.close(); if (pixels > 12000000) throw new Error('1,200만 화소 초과');
-          item.hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(value => value.toString(16).padStart(2,'0')).join('');
-          if (!admin) return;
-          item.duplicate = queue.some(value => value!==item && value.hash===item.hash);
-          const result = await client().from('reborn_evidence_files').select('id').eq('original_sha256',item.hash).limit(1);
-          if (result.error) throw new Error('저장소 중복 조회 실패: 연결 확인 후 다시 선택');
-          item.duplicate ||= result.data.length > 0;
-          item.status = '등록 대기';
-        } catch (error) {item.status = /^(?:IMAGE_|JPEG_|PNG_|ANIMATED_)/.test(error.message) ? '이미지 형식·해상도·손상 확인 필요 (정지 JPEG/PNG만 가능)' : error.message; item.invalid = true;}
-        renderQueue();
+      const token = ++preparationId, access = accessId;
+      const pending = files.map(file=>({id:crypto.randomUUID(),file,status:'검증 대기',progress:0,hash:'',snapshot:null,invalid:true}));
+      queue.push(...pending); preparing = true; byId('evidenceResizeAccepted').checked = false; renderQueue();
+      function active(item) {if (token!==preparationId || access!==accessId || !admin || !callbacks.isAdmin() || !queue.includes(item)) throw new DOMException('사진 검증 중단','AbortError');}
+      try {
+        const helper = await import('./evidence-image-upload.mjs?v='+encodeURIComponent(window.__REBORN_APP_VERSION__));
+        for (const item of pending) {
+          try {
+            active(item); item.status = '사진 검증·사본 준비 중'; renderQueue();
+            const prepared = await helper.preparePhoto(item.file,()=>active(item)); active(item);
+            Object.assign(item,{uploadFile:prepared.file,source:prepared.source,output:prepared.output,hash:prepared.hash,sourceHash:prepared.sourceHash,resized:prepared.resized});
+            const hashes = [...new Set([item.sourceHash,item.hash])];
+            item.duplicate = queue.some(value=>value!==item&&hashes.some(hash=>value.hash===hash||value.sourceHash===hash));
+            for (const hash of hashes) {
+              const result = await client().from('reborn_evidence_files').select('id').eq('original_sha256',hash).limit(1); active(item);
+              if (result.error) throw new Error('저장소 중복 조회 실패: 연결 확인 후 다시 선택');
+              item.duplicate ||= result.data.length > 0;
+            }
+            item.status = prepared.resized ? '등록 대기 · 업로드용 조정 사본 확인 필요' : '등록 대기'; item.invalid = false;
+          } catch (error) {
+            if (error.name === 'AbortError') break;
+            item.status = error.message === 'JPG_SOURCE_DIMENSION' ? 'JPG는 2,400만 화소·한 변 8,192px까지 가능합니다. 원본을 보관하고 더 작은 사본을 선택해주세요.' : /^(?:IMAGE_|JPEG_|PNG_|ANIMATED_)/.test(error.message) || error.name === 'InvalidStateError' ? '이미지 형식·해상도·손상 확인 필요 (정지 JPG/JPEG/PNG)' : error.message;
+          }
+          renderQueue();
+        }
+      } catch {for (const item of pending) item.status = '사진 검증 기능을 불러오지 못했습니다. 다시 선택해주세요.';}
+      finally {
+        for (const item of pending) if (item.invalid && /검증 대기|준비 중/.test(item.status)) item.status = '검증 중단 · 다시 선택 필요';
+        preparing = false; renderQueue();
       }
     }
     async function upload(event) {
-      event.preventDefault(); if (!admin || !callbacks.isAdmin() || uploading) return;
+      event.preventDefault(); if (!admin || !callbacks.isAdmin() || uploading || preparing) return;
       const form = byId('evidenceUploadForm'); if (!form.reportValidity()) return;
       const pending = queue.filter(item => !item.invalid && !item.done); if (!pending.length) {byId('evidenceUploadStatus').textContent = '등록할 정상 사진을 선택해주세요.'; return;}
       if (pending.some(item => item.duplicate) && !confirm('같은 이미지 후보가 있습니다. 다른 업무 기록으로 등록할 필요가 있는지 확인했습니까?')) return;
@@ -215,7 +235,7 @@
       try {
         for (const item of pending) {
           if (stopRequested || !admin || !callbacks.isAdmin()) break;
-          item.snapshot ||= {...values}; const body = new FormData(); for (const [key,value] of Object.entries(item.snapshot)) body.set(key,value); body.set('id',item.id); body.set('public_confirmed','true'); body.set('original',item.file);
+          item.snapshot ||= {...values}; const body = new FormData(); for (const [key,value] of Object.entries(item.snapshot)) body.set(key,value); body.set('id',item.id); body.set('public_confirmed','true'); body.set('original',item.uploadFile);
           activeController = new AbortController(); item.status = '전송·서버 검증 중'; item.progress = 25; renderQueue();
           try {await invoke(body,activeController.signal); item.done = true; item.status = '등록 완료 · 미검토'; item.progress = 100;}
           catch (error) {item.status = stopRequested ? '중단 요청됨 · 저장 여부 확인/동일 작업 재시도 필요' : '실패/저장 미확인 · 동일 작업으로 재시도 가능'; item.progress = 0;}
@@ -268,7 +288,7 @@
         await writer.add('metadata.csv',new Blob(['\ufeff'+csv]));
         if (originals) await writer.add('backup-manifest.json',new Blob([JSON.stringify({format:'reborn-evidence-export-1',exportedAt:new Date().toISOString(),items:manifest},null,2)]));
         await writer.add('archive-info.json',new Blob([JSON.stringify({format:'reborn-evidence-images-1',scope:selection,originals,expectedCount:expected,imageCount:completed,complete:completed===expected,exportedAt:new Date().toISOString()},null,2)]));
-        await writer.add('README.txt',new Blob([originals?'선택 범위의 등록 원본·메타데이터·이력 내보내기입니다. 시스템 전체 백업이나 자동 복구 파일은 아닙니다. 비공개로 보관하세요.':'공개 이미지와 공개 분류 정보입니다. 등록 원본은 포함하지 않습니다. 사진 보관은 회계 장부 반영이 아닙니다.']));
+        await writer.add('README.txt',new Blob([originals?'선택 범위의 등록 파일·메타데이터·이력 내보내기입니다. 업로드용 조정 사본을 등록했다면 촬영 원본이 아니라 사본이 포함됩니다. 시스템 전체 백업이나 자동 복구 파일은 아닙니다. 비공개로 보관하세요.':'공개 이미지와 공개 분류 정보입니다. 등록 원본은 포함하지 않습니다. 사진 보관은 회계 장부 반영이 아닙니다.']));
         active(); const blob = await writer.finish(); active(); if (blob) save(blob,filename);
         message.textContent = writable ? `${label} · ${completed}장 ZIP 저장 완료` : `${label} · ${completed}장 ZIP 생성 완료. 브라우저 다운로드 목록에서 저장 완료를 확인해주세요.`;
       } catch (error) {
@@ -305,9 +325,21 @@
       dialog.addEventListener('close', () => {if (dialog === detailDialog) {releaseUrl(detailUrl); detailUrl = null; selected = null; byId('evidenceDetailImage').removeAttribute('src');}});
     }
     byId('evidencePhotoInput').addEventListener('change', event => {const files = [...event.target.files]; event.target.value = ''; addPhotos(files).catch(() => {byId('evidenceUploadStatus').textContent = '사진 검증 실패';});});
-    byId('evidenceQueue').addEventListener('click', event => {const button = event.target.closest('[data-queue-remove]'); if (!uploading && button) {const index = queue.findIndex(item => item.id === button.dataset.queueRemove); if (index >= 0) queue.splice(index,1); renderQueue();}});
+    byId('evidenceQueue').addEventListener('click', event => {
+      const preview = event.target.closest('[data-queue-preview]');
+      if (preview && admin && callbacks.isAdmin()) {
+        const item = queue.find(value=>value.id===preview.dataset.queuePreview); if (!item?.uploadFile) return;
+        releaseUrl(preparedUrl); preparedUrl = objectUrl(item.uploadFile); byId('evidencePreparedImage').src = preparedUrl;
+        byId('evidencePreparedInfo').textContent = item.source.width+'×'+item.source.height+' → '+item.output.width+'×'+item.output.height+' · 원본은 PC에 그대로 남고 이 사본만 등록됩니다.';
+        byId('evidencePreparedSave').href = preparedUrl; byId('evidencePreparedSave').download = item.uploadFile.name; preparedDialog.showModal();
+      }
+      const button = event.target.closest('[data-queue-remove]'); if (!uploading && !preparing && button) {const index = queue.findIndex(item => item.id === button.dataset.queueRemove); if (index >= 0) queue.splice(index,1); byId('evidenceResizeAccepted').checked = false; renderQueue();}
+    });
+    preparedDialog.querySelector('[data-close]').addEventListener('click',()=>preparedDialog.close());
+    preparedDialog.addEventListener('close',()=>{releaseUrl(preparedUrl); preparedUrl=null; byId('evidencePreparedImage').removeAttribute('src'); byId('evidencePreparedSave').removeAttribute('href');});
+    uploadDialog.addEventListener('close',()=>{if (preparing) preparationId++; if (preparedDialog.open) preparedDialog.close();});
     byId('evidenceUploadForm').addEventListener('submit', upload);
-    byId('evidenceUploadStop').addEventListener('click', () => {stopRequested = true; activeController?.abort(); byId('evidenceUploadStatus').textContent = '중단 요청했습니다. 서버에서 이미 저장되었을 수 있으므로 새로고침으로 확인하세요.';});
+    byId('evidenceUploadStop').addEventListener('click', () => {stopRequested = true; if (preparing) preparationId++; activeController?.abort(); byId('evidenceUploadStatus').textContent = preparing ? '사진 검증 중단 요청 · 아직 등록하지 않은 사진은 서버로 전송되지 않습니다.' : '중단 요청했습니다. 서버에서 이미 저장되었을 수 있으므로 새로고침으로 확인하세요.';});
     byId('evidenceEditForm').addEventListener('submit', event => {event.preventDefault(); change('수정');});
     byId('evidenceTrash').addEventListener('click', () => change('휴지통')); byId('evidenceRestore').addEventListener('click', () => change('복원'));
     byId('evidenceRotate').addEventListener('click', () => {rotation = (rotation+90)%360; transform();});
