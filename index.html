@@ -8,10 +8,10 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <!-- Cache busting -->
-  <meta name="reborn-app-version" content="reborn-add-candy-five-01" />
+  <meta name="reborn-app-version" content="reborn-excel-margin-original-format-01" />
   <script>
     (function () {
-      var APP_VERSION = "reborn-add-candy-five-01";
+      var APP_VERSION = "reborn-excel-margin-original-format-01";
       var VERSION_PARAM = "v";
       var VERSION_STORAGE_KEY = "rebornAppVersion";
       var REFRESH_FLAG_KEY = "rebornCacheRepairReloaded:" + APP_VERSION;
@@ -193,12 +193,12 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>리본컴퍼니 관리 시스템</title>
-  <link rel="manifest" href="./manifest.json?v=reborn-add-candy-five-01" />
+  <link rel="manifest" href="./manifest.json?v=reborn-excel-margin-original-format-01" />
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="64x64" href="./favicon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
-  <link rel="stylesheet" href="./style.css?v=reborn-add-candy-five-01" />
-  <link rel="stylesheet" href="./workspace-ui.css?v=reborn-add-candy-five-01" />
+  <link rel="stylesheet" href="./style.css?v=reborn-excel-margin-original-format-01" />
+  <link rel="stylesheet" href="./workspace-ui.css?v=reborn-excel-margin-original-format-01" />
 </head>
 <body>
   <div id="appLaunchSplash" class="app-launch-splash" aria-hidden="true">
@@ -770,10 +770,15 @@
                 </span>
               </label>
               <input id="orderFile" class="visually-hidden-file" type="file" accept=".xlsx,.xls,.csv" />
-              <button id="parseOrderFile" type="button" class="primary-btn">엑셀 분석</button>
+              <button id="parseOrderFile" type="button" class="primary-btn" disabled>엑셀 분석</button>
               <button id="applyOrderDeductions" type="button" class="ghost-btn" disabled>분석 결과 차감 적용</button>
             </div>
-            <div class="notice" id="excelNotice">A열 주소 / B열 상품명 / C열 판매금액 / D열 추가배송비 기준으로 분석합니다. 분석 후 버튼을 눌러 재고현황에서 실제 차감합니다.</div>
+            <div class="order-format-controls">
+              <label for="orderFormat">양식<select id="orderFormat"><option value="original">원본 주문 양식 · F/H/I/X</option><option value="legacy">기존 4열 양식 · A/B/C/D</option></select></label>
+              <label for="orderSheet">시트<select id="orderSheet"><option value="">파일 선택 전</option></select></label>
+            </div>
+            <p id="orderFormatMapping" class="order-format-mapping" aria-live="polite">파일 선택 전</p>
+            <div class="notice" id="excelNotice" role="status">분석 대기</div>
             <div class="notice warning hidden" id="excelFormatWarning">.xls는 오래된 엑셀 형식이라 일부 인식 오류가 발생할 수 있습니다. 가능하면 .xlsx로 변환 후 업로드해 주세요. 분석은 계속 시도할 수 있습니다.</div>
             <div class="mini-summary" id="excelSummary"></div>
           </section>
@@ -786,13 +791,26 @@
               <p>확인 필요가 있는 주문은 자동 차감하지 않도록 분리합니다.</p>
             </div>
           </div>
+          <section id="originalFinance" class="original-finance" hidden aria-labelledby="orderFinanceStatus">
+            <h3 id="orderFinanceStatus">쿠팡 예상 마진</h3>
+            <p id="orderFinanceCoverage" class="order-finance-coverage" role="status"></p>
+            <div class="order-finance-columns">
+              <section><h4>쿠팡 매출·비용</h4><dl id="orderFinanceCosts" class="order-finance-metrics"></dl></section>
+              <section><h4>예상 마진</h4><dl id="orderFinanceMargins" class="order-finance-metrics"></dl></section>
+            </div>
+            <details class="order-finance-basis"><summary>계산 기준·원본 대조</summary>
+              <p>쿠팡만 집계 · X는 I와 별도 고객 배송비 · 수수료 12%와 선정산 1.2%는 I 기준 예상 요율(별도 부가세 미가산) · 송장당 2,170원 · 비용은 파일 합산 후 원 단위 반올림</p>
+              <p>부가세 추정은 매출÷11, 매입세액 공제 미반영이며 실제 납부세액이 아닙니다. 광고비·월 이용료·반품 등 별도 비용은 미반영입니다. 상품표는 전체 파일, 마진은 쿠팡 범위입니다.</p>
+              <dl id="orderFinanceReconciliation" class="order-finance-metrics"></dl>
+            </details>
+          </section>
           <div class="result-tabs">
             <button class="subtab active" data-result-tab="deduct">차감 품목</button>
             <button class="subtab" data-result-tab="boxes">박스 사용</button>
             <button class="subtab" data-result-tab="needs">확인 필요</button>
           </div>
           <div class="result-pane active" id="pane-deduct">
-            <div class="table-wrap"><table><thead><tr><th>품목</th><th>차감 낱개</th><th>환산</th></tr></thead><tbody id="deductTable"></tbody></table></div>
+            <div class="table-wrap"><table><thead id="deductHead"><tr><th>품목</th><th>차감 낱개</th><th>환산</th></tr></thead><tbody id="deductTable"></tbody></table></div>
           </div>
           <div class="result-pane" id="pane-boxes">
             <div class="table-wrap"><table><thead><tr><th>박스</th><th>사용 장수</th><th>환산</th></tr></thead><tbody id="boxUseTable"></tbody></table></div>
@@ -1147,9 +1165,10 @@
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./workspace-icons.js?v=reborn-add-candy-five-01"></script>
-  <script src="./workspace-ui.js?v=reborn-add-candy-five-01"></script>
-  <script src="./script.js?v=reborn-add-candy-five-01"></script>
+  <script src="./workspace-icons.js?v=reborn-excel-margin-original-format-01"></script>
+  <script src="./workspace-ui.js?v=reborn-excel-margin-original-format-01"></script>
+  <script src="./original-order.js?v=reborn-excel-margin-original-format-01"></script>
+  <script src="./script.js?v=reborn-excel-margin-original-format-01"></script>
   <script>
     (function () {
       var expectedVersion = window.__REBORN_APP_VERSION__;

@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-add-candy-five-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-excel-margin-original-format-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -504,6 +504,8 @@
   let localStateLoadFailed = false;
   let state = loadState();
   let lastOrderAnalysis = null;
+  let orderWorkbookSession = null;
+  let orderWorkbookGeneration = 0;
   let stockMoveRowSeq = 0;
   let orderChartMode = "daily";
   let chartResizeTimer = null;
@@ -564,7 +566,7 @@
     return {
       ...analysis,
       deductions,
-      assetDeductionValue: calcMovementAssetValue(deductions),
+      assetDeductionValue: analysis.formatId === "original-order-01" ? analysis.assetDeductionValue : calcMovementAssetValue(deductions),
       needs: Array.isArray(analysis.needs) ? analysis.needs.map((item) => ({ ...item, productName: replaceLegacySkuText(item.productName), reason: replaceLegacySkuText(item.reason) })) : [],
       excluded: Array.isArray(analysis.excluded) ? analysis.excluded.map((item) => ({ ...item, productName: replaceLegacySkuText(item.productName), reason: replaceLegacySkuText(item.reason) })) : []
     };
@@ -3037,6 +3039,10 @@
 
 function refreshActiveOrderAnalysisSummary() {
     if (!lastOrderAnalysis) return;
+    if (lastOrderAnalysis.formatId === "original-order-01") {
+      renderOriginalOrderAnalysis(lastOrderAnalysis);
+      return;
+    }
     const summary = $("excelSummary");
     if (!summary) return;
 
@@ -6003,7 +6009,12 @@ function refreshActiveOrderAnalysisSummary() {
       const fileName = file?.name || "엑셀 파일 선택";
       setText("orderFileName", fileName);
       setExcelFormatWarning(file);
+      prepareOrderWorkbook(file);
     });
+    ["orderFormat", "orderSheet"].forEach((id) => $(id)?.addEventListener("change", () => {
+      invalidateOrderPreview();
+      updateOrderFormatPreview();
+    }));
     $("inventoryTable")?.addEventListener("click", (event) => {
       const row = event.target.closest("[data-inventory-sku]");
       if (row) openInventoryItemDetail(row.dataset.inventorySku);
@@ -6446,7 +6457,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-add-candy-five-01",
+    cacheVersion: "reborn-excel-margin-original-format-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -9060,6 +9071,139 @@ function openInventoryItemDetail(sku) {
     overlay.hidden = true;
   }
 
+  function invalidateOrderPreview() {
+    lastOrderAnalysis = null;
+    if ($("applyOrderDeductions")) $("applyOrderDeductions").disabled = true;
+    if ($("orderResultCard")) $("orderResultCard").hidden = true;
+    if ($("originalFinance")) $("originalFinance").hidden = true;
+    if ($("excelSummary")) $("excelSummary").innerHTML = "";
+  }
+
+  function orderInputFormat() {
+    return $("orderFormat")?.value || "legacy";
+  }
+
+  async function prepareOrderWorkbook(file) {
+    const generation = ++orderWorkbookGeneration;
+    orderWorkbookSession = null;
+    invalidateOrderPreview();
+    if ($("parseOrderFile")) $("parseOrderFile").disabled = true;
+    if ($("orderSheet")) $("orderSheet").innerHTML = '<option value="">파일 선택 전</option>';
+    setText("orderFormatMapping", "파일 선택 전");
+    setText("excelNotice", "분석 대기");
+    if (!file || !isEditorSession()) return;
+    if (!window.XLSX) { setText("excelNotice", "엑셀 라이브러리 로딩 실패"); return; }
+    try {
+      const workbook = XLSX.read(await file.arrayBuffer(), {type: "array", cellNF: true, cellStyles: true});
+      if (generation !== orderWorkbookGeneration) return;
+      orderWorkbookSession = {file, workbook, generation};
+      $("orderSheet").innerHTML = workbook.SheetNames.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+      updateOrderFormatPreview();
+    } catch {
+      setText("excelNotice", "파일 읽기 실패: 유효한 Excel 파일인지 확인해주세요.");
+    }
+  }
+
+  function selectedOrderSheet() {
+    if (!orderWorkbookSession) throw new Error("엑셀 파일을 먼저 선택해주세요.");
+    const name = $("orderSheet")?.value;
+    const sheet = orderWorkbookSession.workbook.Sheets[name];
+    if (!sheet) throw new Error("분석할 시트를 선택해주세요.");
+    return {name, sheet, rows: XLSX.utils.sheet_to_json(sheet, {header: 1, defval: "", raw: true})};
+  }
+
+  function updateOrderFormatPreview() {
+    if (!orderWorkbookSession) return;
+    try {
+      const selected = selectedOrderSheet();
+      if (orderInputFormat() === "original") {
+        if (!window.RebornOriginalOrder) throw new Error("원본 양식 분석 모듈 로딩 실패");
+        const info = window.RebornOriginalOrder.inspect(selected.rows);
+        const formulaColumns = new Set(["A", "C", "D", "E", "F", "H", "I", "K", "L", "U", "X"]);
+        if (Object.keys(selected.sheet).some((key) => formulaColumns.has(key.replace(/[0-9]/g, "")) && selected.sheet[key]?.f)) {
+          throw new Error("분석 대상 열에 수식이 있습니다. 수식 실행 없이 값 확정이 필요합니다.");
+        }
+        const hidden = (selected.sheet["!rows"] || []).filter((row) => row?.hidden).length;
+        const merged = (selected.sheet["!merges"] || []).length;
+        setText("orderFormatMapping", `${selected.name} · 헤더 ${info.headerRow + 1}행 · ${info.orderRows}행 · ${info.mapping}${hidden ? ` · 숨김 ${hidden}행 포함` : ""}${merged ? ` · 병합 ${merged}곳 확인 필요` : ""}`);
+      } else {
+        if (selected.rows.slice(0, 30).some((row) => normalizeHeader(row[7]) === "주문선택사항")) throw new Error("원본 주문 양식입니다. 원본 양식 모드를 선택해주세요.");
+        setText("orderFormatMapping", `${selected.name} · A 주소 · B 상품명 · C 판매금액 · D 추가배송비`);
+      }
+      setText("excelNotice", "열 연결 확인 완료 · 분석 전");
+      $("parseOrderFile").disabled = false;
+    } catch (error) {
+      setText("orderFormatMapping", "열 연결 확인 필요");
+      setText("excelNotice", error.message);
+      $("parseOrderFile").disabled = true;
+    }
+  }
+
+  function originalOrderUnitCost(sku) {
+    const raw = Object.prototype.hasOwnProperty.call(state.productCosts || {}, sku) ? state.productCosts[sku] : INVENTORY_DEFS[sku]?.cost;
+    return window.RebornOriginalOrder.finiteMoney(raw);
+  }
+
+  function originalOrderCostSignature() {
+    return JSON.stringify(Object.keys(INVENTORY_DEFS).map((sku) => [sku, state.productCosts?.[sku], INVENTORY_DEFS[sku].cost]));
+  }
+
+  function isExactOriginalOrderProduct(name, items) {
+    if (items.length !== 1) return false;
+    const base = normalizedText(name).replace(/x[0-9,]+(?:개)?$/, "");
+    const sku = items[0].sku;
+    const aliases = {
+      "에낙 치킨": ["[에낙]치킨(16g)", "[애낙]치킨(16g)", "에낙치킨(16g)", "애낙치킨(16g)"],
+      "에낙 스파이시": ["[에낙]스파이시(14g)", "[애낙]스파이시(14g)", "에낙스파이시(14g)", "애낙스파이시(14g)"],
+      "명가 참깨": ["[명가]참깨(500g)", "명가참깨(500g)"],
+      "명가 흑당": ["[명가]흑당(500g)", "명가흑당(500g)"],
+      "브이콘 50g": ["브이콘(50g)", "v콘(50g)", "vicon(50g)", "브이콘", "v콘", "vicon"],
+      "브이콘 100g": ["브이콘(100g)", "v콘(100g)", "vicon(100g)", "옥수수브이콘(100g)"],
+      "찹쌀 누룽지 스위트": ["찹쌀누룽지(288g)", "찹쌀누룽지(300g)", "찹쌀누룽지스위트(288g)", "찹쌀누룽지스위트(300g)", "찹쌀누룽지"],
+      "찹쌀 누룽지 무가당": ["찹쌀누룽지무가당(288g)", "찹쌀누룽지무가당(300g)", "무가당(288g)", "무가당(300g)", "검정콩", "검은콩", "찹쌀누룽지검정콩"],
+      "찹쌀 누룽지 츄러스": ["찹쌀누룽지츄러스(288g)", "찹쌀누룽지츄러스(300g)", "츄러스(288g)", "츄러스(300g)", "츄러스"],
+      "싱싱 양파 160g": ["싱싱양파(160g)", "양파(160g)", "양파160g", "양파메밀칩(160g)"],
+      "싱싱 양파 100g": ["싱싱양파(100g)", "양파(100g)", "양파100g", "양파메밀칩(100g)"],
+      "꾀돌이": ["꾀돌이(40g)"],
+      "대파 메밀칩 160g": ["대파"], "논두렁": ["논"], "밭두렁": ["밭"],
+      "미니차카니 오리지널": ["[mini]차카니"], "미니차카니 매운맛": ["[mini]차카니매운맛"],
+      "4000뻥이요(270g)": ["[red]뻥이요(270g)"], "허니뻥이요(240g)": ["[yellow]뻥이요(240g)"],
+      "500뻥이요(35g)": ["[red]뻥이요(35g)"], "뻥이요 골드(60g)": ["[red]뻥이요(60g)"], "허니뻥이요(50g)": ["[yellow]뻥이요(50g)"],
+      "블랙 하몽 크래커(294g)": ["[black]크래커(294g)"],
+      "커피캔디 175g": ["커피(175g)"], "커피캔디 통 612.5g": ["커피통(612.5g)"], "커피캔디 210g": ["커피(210g)"],
+      "비타캔디 100g": ["candy(100g)"], "엘반 트러플초콜렛 500g": ["[elvan]truffle"]
+    };
+    return base === normalizedText(sku) || (aliases[sku] || []).includes(base);
+  }
+
+  function analyzeOriginalGoodsRow(name) {
+    const reject = () => ({deductions: [], boxUsages: [], needs: [{reason: "정확한 상품명과 x 양의 정수 수량 확인 필요"}]});
+    const compound = matchCompoundOrderLine(name, 1);
+    const segments = compound ? name.split("+").map((segment) => segment.trim()) : [name];
+    const enakContext = /^\s*\[에낙\]/.test(segments[0]);
+    const myeonggaContext = /^\s*\[명가\]/.test(segments[0]);
+    for (let index = 0; index < segments.length; index++) {
+      let segment = segments[index];
+      const rawQuantity = segment.match(/x\s*((?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+))\s*(?:개)?\s*$/i);
+      const units = rawQuantity ? parseCandyPositiveQuantity(rawQuantity[1]) : null;
+      if (!units) return reject();
+      if (index > 0 && myeonggaContext && /^(?:참깨|흑당)\s*\(500g\)\s*x/i.test(segment)) segment = `[명가] ${segment}`;
+      const enak = resolveCompoundEnakSegmentName(segment, index, enakContext);
+      if (enak.need) return reject();
+      const matched = matchOrderLine(enak.matchName, units);
+      if (matched.items?.length && !getInactiveProductSkusFromOrderItems(matched.items).length && !isExactOriginalOrderProduct(enak.matchName, matched.items)) return reject();
+    }
+    return analyzeOrderRows([["", name, 0, 0]]);
+  }
+
+  function originalOrderPreviewIsCurrent(analysis) {
+    return Boolean(analysis?.originalContext && orderWorkbookSession && !analysis.originalApplied
+      && analysis.originalContext.file === orderWorkbookSession.file
+      && analysis.originalContext.generation === orderWorkbookSession.generation
+      && analysis.originalContext.sheet === $("orderSheet")?.value && orderInputFormat() === "original"
+      && analysis.originalContext.costs === originalOrderCostSignature());
+  }
+
   async function parseOrderFile() {
     if (!requireEditor("엑셀 주문 분석")) return;
 
@@ -9083,11 +9227,15 @@ function openInventoryItemDetail(sku) {
       return;
     }
     try {
-      const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: "array" });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
-      const analysis = normalizeOrderAnalysis(analyzeOrderRows(rows));
+      if (orderWorkbookSession?.file !== file) await prepareOrderWorkbook(file);
+      updateOrderFormatPreview();
+      if (!orderWorkbookSession || $("parseOrderFile").disabled) return;
+      const selected = selectedOrderSheet();
+      const original = orderInputFormat() === "original";
+      const analysis = normalizeOrderAnalysis(original
+        ? window.RebornOriginalOrder.analyze(selected.rows, {goods: analyzeOriginalGoodsRow, cost: originalOrderUnitCost})
+        : analyzeOrderRows(selected.rows));
+      if (original) analysis.originalContext = {file, generation: orderWorkbookSession.generation, sheet: selected.name, costs: originalOrderCostSignature()};
       analysis.fileMeta = {
         name: file.name || "",
         size: file.size || 0,
@@ -9097,11 +9245,10 @@ function openInventoryItemDetail(sku) {
       };
       analysis.orderApplicationSignature = buildOrderApplicationSignature(analysis);
       lastOrderAnalysis = analysis;
-      setLocalStorageItem(ORDER_CACHE_KEY, JSON.stringify(analysis), "analyzeOrderFile");
+      if (!original) setLocalStorageItem(ORDER_CACHE_KEY, JSON.stringify(analysis), "analyzeOrderFile");
       renderOrderAnalysis(analysis);
-      $("applyOrderDeductions").disabled = analysis.deductions.length === 0 && analysis.boxUsages.length === 0;
+      $("applyOrderDeductions").disabled = (analysis.deductions.length === 0 && analysis.boxUsages.length === 0) || (original && !analysis.finance.paymentComplete);
     } catch (error) {
-      console.error(error);
       setText("excelNotice", "엑셀 파일을 읽는 중 오류가 발생했습니다. .xlsx로 저장 후 다시 시도해주세요.");
     }
   }
@@ -9732,7 +9879,55 @@ function openInventoryItemDetail(sku) {
     return record;
   }
 
+  function orderPreviewMoney(value, decimals = 0) {
+    return typeof value === "number" && Number.isFinite(value)
+      ? new Intl.NumberFormat("ko-KR", {maximumFractionDigits: decimals}).format(value) + "원" : "미확정";
+  }
+
+  function renderOriginalOrderAnalysis(analysis) {
+    const finance = analysis.finance, values = finance.values, margins = finance.margins;
+    const stale = !analysis.originalApplied && !originalOrderPreviewIsCurrent(analysis);
+    $("orderResultCard").hidden = false;
+    $("originalFinance").hidden = false;
+    $("orderResultCard").classList.add("original-order-result");
+    setText("excelNotice", `${analysis.originalApplied ? "차감 적용 처리된 분석" : stale ? "재분석 필요: 입력 또는 원가 변경" : "분석 미리보기"} · 전체 ${number(analysis.orderRows)}행 · 상품 확인 필요 ${number(analysis.needs.length)}항목`);
+    $("applyOrderDeductions").disabled = stale || Boolean(analysis.originalApplied) || !finance.paymentComplete || (!analysis.deductions.length && !analysis.boxUsages.length);
+    const metric = (label, value, emphasis = false) => `<div class="${emphasis ? "order-finance-emphasis" : ""}${typeof value === "number" && value < 0 ? " order-finance-negative" : ""}"><dt>${escapeHtml(label)}</dt><dd>${orderPreviewMoney(value)}</dd></div>`;
+    $("excelSummary").innerHTML = `<div>전체 주문 <strong>${number(analysis.orderRows)}행</strong></div>
+      <div>결제 <strong>${number(analysis.paymentGroupCount)}건${finance.paymentComplete ? "" : " 확인분"}</strong></div>
+      <div>쿠팡 <strong>${number(finance.scope.rows)}행</strong></div><div>기타 사이트 <strong>${number(finance.scope.otherRows)}행 · 마진 제외</strong></div>`;
+    setText("orderFinanceStatus", stale ? "이전 분석값 · 재분석 필요" : margins.margin === null ? "쿠팡 마진 미확정" : "쿠팡 예상 마진 · 분석 시점 기준");
+    $("orderFinanceCosts").innerHTML = metric("판매금액 I · 결제별 1회", finance.knownAmount)
+      + metric("고객 배송비 X · 결제별 1회", finance.knownExtra)
+      + metric("매출 합계 I+X", values.revenue, true)
+      + metric(finance.scope.goodsComplete ? "상품원가 · 박스 제외" : "확인된 상품원가 · 부분", finance.scope.goodsComplete ? values.goods : finance.knownGoodsCost)
+      + metric(`택배비 · ${number(finance.shipmentCount)}송장 × 2,170원`, values.delivery)
+      + metric("판매수수료 추정 · I의 12%", values.fee)
+      + metric("선정산 추정 · I의 1.2%", values.early)
+      + metric("매출 부가세 보수 추정 · 매출÷11", values.vat)
+      + metric(values.boxes === null ? "확인된 박스비 · 부분" : "예상 박스 사용금액", values.boxes === null ? finance.knownBoxCost : values.boxes);
+    $("orderFinanceMargins").innerHTML = metric("박스 제외 · 부가세 차감 전", margins.margin, true)
+      + metric("박스 제외 · 부가세 추정 차감 후", margins.afterVat, true)
+      + metric("박스 반영 참고 · 부가세 차감 전", margins.withBoxes)
+      + metric("박스 반영 참고 · 부가세 추정 차감 후", margins.afterVatWithBoxes)
+      + `<div><dt>박스 제외 마진율 · 매출 I+X 기준</dt><dd>${margins.rate === null ? "계산 불가" : number(Math.round(margins.rate * 100) / 100) + "%"}</dd></div>`;
+    $("orderFinanceReconciliation").innerHTML = metric("전체 원본 I 합계 · 중복 포함", analysis.amountRawSum)
+      + metric("전체 결제별 I 합계", finance.paymentComplete ? analysis.paymentUniqueSum : null)
+      + metric("전체 I 중복 제외 금액", finance.paymentComplete && analysis.amountRawSum !== null ? analysis.amountRawSum - analysis.paymentUniqueSum : null)
+      + metric("전체 원본 X 합계", finance.extraRawSum);
+    setText("orderFinanceCoverage", `상품 보류 ${number(finance.scope.heldRows)}행 · 포장 확인 ${number(finance.scope.boxPendingRows)}행 · 금융 확인 ${number(finance.issues.length)}항목${!finance.paymentComplete ? " · 결제정보 확인 전 적용 불가" : ""}`);
+    $("deductHead").innerHTML = "<tr><th>품목</th><th>주문 행</th><th>전체 낱개</th><th>쿠팡 낱개</th><th>낱개 원가</th><th>전체 상품원가</th></tr>";
+    $("deductTable").innerHTML = finance.products.map((item) => `<tr><td>${escapeHtml(item.sku)}<small class="order-product-units">${escapeHtml(formatStock(item.sku, item.units))}</small></td><td>${number(item.orderCount)}</td><td>${number(item.units)}</td><td>${number(item.marginUnits)}</td><td>${orderPreviewMoney(item.unitCost, 20)}</td><td>${orderPreviewMoney(item.subtotal, 2)}</td></tr>`).join("") || '<tr><td colspan="6">차감할 품목이 없습니다.</td></tr>';
+    $("boxUseTable").innerHTML = analysis.boxUsages.map((item) => `<tr><td>${escapeHtml(item.sku)}</td><td>${number(item.units)}장</td><td>${escapeHtml(formatStock(item.sku, item.units))}</td></tr>`).join("") || '<tr><td colspan="3">확정된 배송박스가 없습니다.</td></tr>';
+    const issues = [...analysis.needs, ...finance.issues.map((item) => ({...item, productName: "금융 집계", qty: null}))];
+    $("needsTable").innerHTML = issues.map((item) => `<tr><td>${number(item.row)}</td><td>${escapeHtml(item.productName)}</td><td>${item.qty === null ? "-" : number(item.qty)}</td><td>${escapeHtml(item.reason)}</td></tr>`).join("") || '<tr><td colspan="4">확인 필요 항목이 없습니다.</td></tr>';
+  }
+
   function renderOrderAnalysis(analysis) {
+    if (analysis.formatId === "original-order-01") { renderOriginalOrderAnalysis(analysis); return; }
+    if ($("originalFinance")) $("originalFinance").hidden = true;
+    $("orderResultCard").classList.remove("original-order-result");
+    $("deductHead").innerHTML = "<tr><th>품목</th><th>차감 낱개</th><th>환산</th></tr>";
     $("orderResultCard").hidden = false;
     const duplicatePaymentText = analysis.duplicatePaymentRowCount ? `, 주문금액 중복 ${analysis.duplicatePaymentRowCount.toLocaleString("ko-KR")}행 제외` : "";
     setText("excelNotice", `분석 완료: ${analysis.orderRows.toLocaleString("ko-KR")}행 처리, 주소+판매금액 기준 ${analysis.paymentGroupCount.toLocaleString("ko-KR")}건${duplicatePaymentText}, 확인 필요 ${analysis.needs.length.toLocaleString("ko-KR")}건, 제외 ${analysis.excluded.length.toLocaleString("ko-KR")}건 · 문제 없으면 "분석 결과 차감 적용"을 눌러 재고에서 뺄 수 있습니다.`);
@@ -9773,6 +9968,12 @@ function openInventoryItemDetail(sku) {
 
   function applyLastOrderDeductions() {
     if (!requireEditor("엑셀 주문 차감")) return;
+    if (orderWorkbookSession && !lastOrderAnalysis) { alert("선택한 파일과 시트를 먼저 분석해주세요."); return; }
+    if (lastOrderAnalysis?.formatId === "original-order-01" && orderInputFormat() !== "original") { alert("양식이 변경되었습니다. 다시 분석해주세요."); return; }
+    if (orderInputFormat() === "original" && (!originalOrderPreviewIsCurrent(lastOrderAnalysis) || !lastOrderAnalysis.finance?.paymentComplete)) {
+      alert("현재 파일·시트·원가 기준으로 다시 분석하고 결제정보를 확인해주세요. 이전 캐시의 원본 양식 분석은 적용할 수 없습니다.");
+      return;
+    }
 
     const analysis = normalizeOrderAnalysis(lastOrderAnalysis || (() => {
       try { return JSON.parse(localStorage.getItem(ORDER_CACHE_KEY) || "null"); } catch { return null; }
@@ -9790,7 +9991,7 @@ function openInventoryItemDetail(sku) {
       return;
     }
     lastOrderAnalysis = analysis;
-    setLocalStorageItem(ORDER_CACHE_KEY, JSON.stringify(analysis), "applyLastOrderDeductions");
+    if (analysis.formatId !== "original-order-01") setLocalStorageItem(ORDER_CACHE_KEY, JSON.stringify(analysis), "applyLastOrderDeductions");
     if (analysis.needs?.length && !confirm(`확인 필요 ${analysis.needs.length}건이 있습니다. 상품명·수량이 불확실한 항목은 제외되며, 복합 주문의 포장박스 확인 항목은 상품 재고만 차감합니다. 계속할까요?`)) return;
 
     const duplicate = findPotentialDuplicateOrderApplication(analysis);
@@ -9833,6 +10034,7 @@ function openInventoryItemDetail(sku) {
       source: "excelOrderDeduction",
       details: detailItems
     });
+    if (analysis.formatId === "original-order-01") analysis.originalApplied = true;
     saveState("엑셀 주문 차감 적용");
     $("applyOrderDeductions").disabled = true;
   }

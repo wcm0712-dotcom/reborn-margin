@@ -211,6 +211,41 @@ body.workspace-ui #inventoryPanelCard .stock-now-cell { min-width: 0; }
 body.workspace-ui .sku-rank-panel { border-radius: 0; border: 0; padding: 0; }
 body.workspace-ui .sku-rank-row { border-radius: 5px; }
 body.workspace-ui .move-row, body.workspace-ui .notice, body.workspace-ui .mini-summary { border-radius: 6px; }
+body.workspace-ui #excelOrderCard .order-format-controls { display: grid; grid-template-columns: minmax(200px, 320px) minmax(140px, 240px); gap: 12px; margin-top: 14px; }
+body.workspace-ui #excelOrderCard .order-format-controls label { display: grid; gap: 6px; font-size: 13px; font-weight: 600; }
+body.workspace-ui #excelOrderCard .order-format-controls select { width: 100%; min-width: 0; min-height: 42px; margin: 0; }
+body.workspace-ui #excelOrderCard .order-format-mapping { margin: 10px 0; color: #43554d; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+body.workspace-ui #excelOrderCard #excelSummary { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); max-width: 880px; gap: 8px 16px; padding: 12px 0; background: none; border: 0; }
+body.workspace-ui #excelOrderCard #excelSummary > div { padding: 0; min-height: 0; font-size: 12px; }
+body.workspace-ui .original-finance { border-top: 1px solid #dce4df; padding-top: 16px; margin-top: 14px; }
+body.workspace-ui .original-finance h3 { font-size: 18px; line-height: 1.4; margin: 0 0 8px; }
+body.workspace-ui .original-finance h4 { font-size: 13px; margin: 0 0 12px; color: #43554d; }
+body.workspace-ui .order-finance-columns { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 24px; }
+body.workspace-ui .order-finance-columns > section { min-width: 0; padding: 0; margin: 0; background: transparent; border: 0; box-shadow: none; border-radius: 0; }
+body.workspace-ui .order-finance-coverage { font-size: 12px; color: #8a4b1c; margin: 0 0 18px; overflow-wrap: anywhere; }
+body.workspace-ui .order-finance-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; margin: 0; }
+body.workspace-ui .order-finance-metrics > div { min-width: 0; padding: 10px 0; border-bottom: 1px solid #e9eeeb; }
+body.workspace-ui .order-finance-metrics dt { margin: 0 0 5px; font-size: 11px; color: #52665b; line-height: 1.5; overflow-wrap: anywhere; }
+body.workspace-ui .order-finance-metrics dd { margin: 0; font-size: 17px; line-height: 1.5; font-weight: 650; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+body.workspace-ui .order-finance-metrics .order-finance-emphasis dd { color: #176449; font-size: 20px; }
+body.workspace-ui .order-finance-metrics .order-finance-negative dd { color: #a0333f; }
+body.workspace-ui .order-finance-basis { margin: 18px 0; padding: 12px 0; border-top: 1px solid #dce4df; border-bottom: 1px solid #dce4df; }
+body.workspace-ui .order-finance-basis summary { cursor: pointer; font-size: 12px; font-weight: 600; }
+body.workspace-ui .order-finance-basis p { font-size: 12px; line-height: 1.7; color: #52665b; max-width: 900px; }
+body.workspace-ui .original-order-result #pane-deduct table { min-width: 680px; }
+body.workspace-ui .original-order-result #pane-deduct th:not(:first-child), body.workspace-ui .original-order-result #pane-deduct td:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+body.workspace-ui .original-order-result #pane-deduct td:first-child { min-width: 170px; overflow-wrap: anywhere; }
+body.workspace-ui .order-product-units { display: block; color: #6c7c73; font-size: 11px; margin-top: 4px; font-weight: 400; }
+@media (max-width: 960px) {
+  body.workspace-ui .order-finance-columns { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+  body.workspace-ui .order-finance-columns > section:last-child { order: -1; }
+}
+@media (max-width: 520px) {
+  body.workspace-ui #excelOrderCard .order-format-controls { grid-template-columns: minmax(0, 1fr); }
+  body.workspace-ui .order-finance-metrics { gap: 0 12px; }
+  body.workspace-ui .order-finance-metrics dd { font-size: 15px; }
+  body.workspace-ui .order-finance-metrics .order-finance-emphasis dd { font-size: 18px; }
+}
 body.workspace-ui #page-wms #stockMoveCard:not([hidden]),
 body.workspace-ui #page-wms #orderResultCard:not([hidden]),
 body.workspace-ui #page-wms #orderChartCard:not([hidden]),
