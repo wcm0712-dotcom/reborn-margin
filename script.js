@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-evidence-jpg-upload-fix-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-ui-sizing-order-margin-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -6447,7 +6447,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-evidence-jpg-upload-fix-01",
+    cacheVersion: "reborn-ui-sizing-order-margin-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -9875,7 +9875,9 @@ function openInventoryItemDetail(sku) {
   }
 
   function renderOriginalOrderAnalysis(analysis) {
-    const finance = analysis.finance, values = finance.values, margins = finance.margins;
+    const finance = analysis.finance;
+    const partial = finance.margins.margin === null && finance.preview?.margins.margin !== null && finance.preview?.margins.margin !== undefined;
+    const values = partial ? finance.preview.values : finance.values, margins = partial ? finance.preview.margins : finance.margins;
     const stale = !analysis.originalApplied && !originalOrderPreviewIsCurrent(analysis);
     $("orderResultCard").hidden = false;
     $("originalFinance").hidden = false;
@@ -9886,26 +9888,30 @@ function openInventoryItemDetail(sku) {
     $("excelSummary").innerHTML = `<div>전체 주문 <strong>${number(analysis.orderRows)}행</strong></div>
       <div>결제 <strong>${number(analysis.paymentGroupCount)}건${finance.paymentComplete ? "" : " 확인분"}</strong></div>
       <div>쿠팡 <strong>${number(finance.scope.rows)}행</strong></div><div>기타 사이트 <strong>${number(finance.scope.otherRows)}행 · 마진 제외</strong></div>`;
-    setText("orderFinanceStatus", stale ? "이전 분석값 · 재분석 필요" : margins.margin === null ? "쿠팡 마진 미확정" : "쿠팡 예상 마진 · 분석 시점 기준");
-    $("orderFinanceCosts").innerHTML = metric("판매금액 I · 결제별 1회", finance.knownAmount)
-      + metric("고객 배송비 X · 결제별 1회", finance.knownExtra)
-      + metric("매출 합계 I+X", values.revenue, true)
-      + metric(finance.scope.goodsComplete ? "상품원가 · 박스 제외" : "확인된 상품원가 · 부분", finance.scope.goodsComplete ? values.goods : finance.knownGoodsCost)
-      + metric(`택배비 · ${number(finance.shipmentCount)}송장 × 2,170원`, values.delivery)
+    setText("orderFinanceStatus", stale ? "이전 분석값 · 재분석 필요" : partial ? "쿠팡 확인분 예상마진 · 일부 보류 · 부가세 미반영" : margins.margin === null ? "쿠팡 마진 계산 보류 · 필수 금액 확인 필요" : "쿠팡 전체 예상마진 · 부가세 미반영");
+    $("orderFinanceCosts").innerHTML = metric(partial ? "확인분 I · 결제별 1회" : "판매금액 I · 결제별 1회", partial ? finance.preview.amount : finance.knownAmount)
+      + metric(partial ? "확인분 X · 결제별 1회" : "고객 배송비 X · 결제별 1회", partial ? finance.preview.extra : finance.knownExtra)
+      + metric(partial ? "확인분 매출 I+X" : "매출 합계 I+X", values.revenue, true)
+      + metric(partial ? "확인분 상품원가 · 박스 제외" : finance.scope.goodsComplete ? "상품원가 · 박스 제외" : "확인된 상품원가 · 부분 참고", partial || finance.scope.goodsComplete ? values.goods : finance.knownGoodsCost)
+      + metric(`택배비 · ${number(partial ? finance.preview.shipmentCount : finance.shipmentCount)}송장 × 2,170원`, values.delivery)
       + metric("판매수수료 추정 · I의 12%", values.fee)
-      + metric("선정산 추정 · I의 1.2%", values.early)
-      + metric("매출 부가세 보수 추정 · 매출÷11", values.vat)
-      + metric(values.boxes === null ? "확인된 박스비 · 부분" : "예상 박스 사용금액", values.boxes === null ? finance.knownBoxCost : values.boxes);
-    $("orderFinanceMargins").innerHTML = metric("박스 제외 · 부가세 차감 전", margins.margin, true)
-      + metric("박스 제외 · 부가세 추정 차감 후", margins.afterVat, true)
-      + metric("박스 반영 참고 · 부가세 차감 전", margins.withBoxes)
-      + metric("박스 반영 참고 · 부가세 추정 차감 후", margins.afterVatWithBoxes)
-      + `<div><dt>박스 제외 마진율 · 매출 I+X 기준</dt><dd>${margins.rate === null ? "계산 불가" : number(Math.round(margins.rate * 100) / 100) + "%"}</dd></div>`;
+      + metric("선정산 추정 · (I − I×12%)의 1.2%", values.early)
+      + metric("박스 사용금액 · 확인 전이면 미반영", values.boxes)
+      + metric("부가세 참고 · 매출÷11 · 마진에서 미차감", values.vat);
+    const balanceInputs = [values.revenue, values.goods, values.fee, values.early];
+    const balance = values.delivery === null && balanceInputs.every(value => typeof value === "number" && Number.isFinite(value)) ? values.revenue - values.goods - values.fee - values.early : null;
+    const safeBalance = balance !== null && Number.isFinite(balance) && Math.abs(balance) <= Number.MAX_SAFE_INTEGER ? balance : null;
+    $("orderFinanceMargins").innerHTML = metric(partial ? "확인분 · 박스 제외 · 부가세 미차감" : "박스 제외 · 부가세 미차감", margins.margin, true)
+      + metric("박스 반영 참고 · 부가세 미차감", margins.withBoxes)
+      + (safeBalance === null ? "" : metric("택배비 미반영 잔액 · 최종 마진 아님", safeBalance))
+      + `<div><dt>${partial ? "확인분 " : ""}박스 제외 마진율 · 매출 I+X 기준</dt><dd>${margins.rate === null ? "계산 불가" : number(Math.round(margins.rate * 100) / 100) + "%"}</dd></div>`;
     $("orderFinanceReconciliation").innerHTML = metric("전체 원본 I 합계 · 중복 포함", analysis.amountRawSum)
       + metric("전체 결제별 I 합계", finance.paymentComplete ? analysis.paymentUniqueSum : null)
       + metric("전체 I 중복 제외 금액", finance.paymentComplete && analysis.amountRawSum !== null ? analysis.amountRawSum - analysis.paymentUniqueSum : null)
       + metric("전체 원본 X 합계", finance.extraRawSum);
-    setText("orderFinanceCoverage", `상품 보류 ${number(finance.scope.heldRows)}행 · 포장 확인 ${number(finance.scope.boxPendingRows)}행 · 금융 확인 ${number(finance.issues.length)}항목${!finance.paymentComplete ? " · 결제정보 확인 전 적용 불가" : ""}`);
+    const included = margins.margin === null ? 0 : partial ? finance.preview.includedRows : finance.scope.rows;
+    const reasons = partial || margins.margin === null ? (finance.preview?.reasons || []).map(item => `${item.reason} ${number(item.rows)}행`).join(" · ") : "";
+    setText("orderFinanceCoverage", `쿠팡 ${number(finance.scope.rows)}행 중 마진 계산 ${number(included)}행 · 보류 ${number(finance.scope.rows - included)}행${partial ? " · 확인분 매출·비용만 계산한 부분 결과" : ""} · 포장 확인 ${number(finance.scope.boxPendingRows)}행 · 금융 확인 ${number(finance.issues.length)}항목${reasons ? " · 보류 사유(중복 가능): " + reasons : ""}${!finance.paymentComplete ? " · 결제정보 확인 전 재고 적용 불가" : ""}`);
     $("deductHead").innerHTML = "<tr><th>품목</th><th>주문 행</th><th>전체 낱개</th><th>쿠팡 낱개</th><th>낱개 원가</th><th>전체 상품원가</th></tr>";
     $("deductTable").innerHTML = finance.products.map((item) => `<tr><td>${escapeHtml(item.sku)}<small class="order-product-units">${escapeHtml(formatStock(item.sku, item.units))}</small></td><td>${number(item.orderCount)}</td><td>${number(item.units)}</td><td>${number(item.marginUnits)}</td><td>${orderPreviewMoney(item.unitCost, 20)}</td><td>${orderPreviewMoney(item.subtotal, 2)}</td></tr>`).join("") || '<tr><td colspan="6">차감할 품목이 없습니다.</td></tr>';
     $("boxUseTable").innerHTML = analysis.boxUsages.map((item) => `<tr><td>${escapeHtml(item.sku)}</td><td>${number(item.units)}장</td><td>${escapeHtml(formatStock(item.sku, item.units))}</td></tr>`).join("") || '<tr><td colspan="3">확정된 배송박스가 없습니다.</td></tr>';

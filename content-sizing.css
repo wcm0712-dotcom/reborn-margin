@@ -1,0 +1,39 @@
+body.workspace-ui #workspace-flow { max-width: 1180px; }
+body.workspace-ui #workspace-movement { max-width: 1040px; }
+body.workspace-ui #workspace-orders { max-width: 1160px; }
+body.workspace-ui #workspace-statistics { max-width: 1080px; }
+body.workspace-ui #workspace-labor { max-width: 1000px; }
+body.workspace-ui #workspace-evidence { max-width: 1040px; }
+body.workspace-ui #workspace-management { max-width: 1000px; }
+body.workspace-ui #page-margin { max-width: 1060px; }
+body.workspace-ui #page-excel-count { max-width: 1120px; }
+body.workspace-ui .workspace-view, body.workspace-ui #page-margin, body.workspace-ui #page-excel-count { width: 100%; min-width: 0; box-sizing: border-box; }
+body.workspace-ui #page-margin .margin-layout, body.workspace-ui #page-excel-count .excel-count-app { width: 100%; max-width: 100%; margin-left: 0; margin-right: 0; }
+body.workspace-ui #skuOrderRankCard { max-width: 840px; }
+body.workspace-ui #boxStockCard { max-width: 1080px; }
+body.workspace-ui #palletCard { max-width: 760px; }
+body.workspace-ui #workspace-management > #backupCard { max-width: 760px; }
+body.workspace-ui #workspace-evidence .evidence-toolbar { align-items: flex-start; gap: 12px; }
+body.workspace-ui #workspace-evidence .evidence-toolbar > div { justify-content: flex-start; }
+body.workspace-ui #page-wms #stockMoveCard .move-control-panel { display: grid; grid-template-columns: 120px 150px 175px minmax(0,1fr); }
+body.workspace-ui #page-wms #stockMoveCard .move-row { grid-template-columns: minmax(200px,2.3fr) repeat(3,minmax(80px,.8fr)) minmax(110px,1fr) 38px; }
+body.workspace-ui #page-wms #stockMoveCard #applyStockMove { width: auto; min-width: 150px; }
+body.workspace-ui #workspace-orders .order-finance-columns { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+body.workspace-ui #workspace-orders .order-finance-metrics > div { align-items: baseline; gap: 12px; }
+body.workspace-ui #workspace-orders .order-finance-metrics dt { min-width: 0; overflow-wrap: anywhere; }
+body.workspace-ui #workspace-orders .order-finance-metrics dd { min-width: 0; white-space: normal; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+body.workspace-ui #workspace-orders #orderFinanceCoverage { max-width: 90ch; }
+body.workspace-ui #workspace-orders .order-finance-basis p { max-width: 90ch; }
+@media (max-width: 960px) {
+  body.workspace-ui #page-wms #stockMoveCard .move-control-panel { grid-template-columns: 110px 140px minmax(160px,1fr); }
+  body.workspace-ui #page-wms #stockMoveCard .move-memo-field { grid-column: 1 / -1; }
+  body.workspace-ui #page-wms #stockMoveCard .move-row { grid-template-columns: minmax(150px,2fr) repeat(3,minmax(65px,1fr)) minmax(90px,1fr) 36px; }
+}
+@media (max-width: 760px) {
+  body.workspace-ui #workspace-orders .order-finance-columns { grid-template-columns: minmax(0,1fr); }
+  body.workspace-ui #page-wms #stockMoveCard .move-control-panel { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  body.workspace-ui #page-wms #stockMoveCard .inbound-badge { grid-column: 1 / -1; }
+  body.workspace-ui #page-wms #stockMoveCard .move-row { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  body.workspace-ui #page-wms #stockMoveCard .move-row .field:first-child { grid-column: 1 / -1; }
+  body.workspace-ui #page-wms #stockMoveCard .move-row .icon-btn { justify-self: end; }
+}

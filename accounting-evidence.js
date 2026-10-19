@@ -213,7 +213,7 @@
             item.status = prepared.resized ? '등록 대기 · 업로드용 조정 사본 확인 필요' : '등록 대기'; item.invalid = false;
           } catch (error) {
             if (error.name === 'AbortError') break;
-            item.status = error.message === 'JPG_SOURCE_DIMENSION' ? 'JPG는 2,400만 화소·한 변 8,192px까지 가능합니다. 원본을 보관하고 더 작은 사본을 선택해주세요.' : /^(?:IMAGE_|JPEG_|PNG_|ANIMATED_)/.test(error.message) || error.name === 'InvalidStateError' ? '이미지 형식·해상도·손상 확인 필요 (정지 JPG/JPEG/PNG)' : error.message;
+            item.status = error.message === 'JPEG_INCOMPLETE' ? 'JPEG 사진 데이터의 끝부분이 누락됐습니다. 원본을 다시 받아 선택해주세요.' : error.message === 'JPEG_STRUCTURE' ? 'JPEG 내부 구조를 읽지 못했습니다. 원본 파일을 다시 받아 선택해주세요.' : error.message === 'JPG_SOURCE_DIMENSION' ? 'JPG는 2,400만 화소·한 변 8,192px까지 가능합니다. 원본을 보관하고 더 작은 사본을 선택해주세요.' : /^(?:IMAGE_|PNG_|ANIMATED_)/.test(error.message) || error.name === 'InvalidStateError' ? '이미지 형식·해상도·손상 확인 필요 (정지 JPG/JPEG/PNG)' : error.message;
           }
           renderQueue();
         }

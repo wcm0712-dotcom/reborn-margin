@@ -1,7 +1,7 @@
 # JPG 등록 수정 안내
 
-- 버전: `reborn-evidence-jpg-upload-fix-01`
-- 기준: `reborn_margin_wms_evidence_partner_categories_01.zip`
+- 버전: `reborn-evidence-jpg-upload-fix-02`
+- 기준: `reborn_margin_wms_evidence_jpg_upload_fix_01.zip`
 - 이번 ZIP은 기존 앱 전체에 JPG 등록 수정이 포함된 배포용 파일입니다. 실제 사이트 배포나 사진 등록은 수행하지 않았습니다.
 
 ## 사용 순서
@@ -16,6 +16,7 @@
 
 ## 지원 범위와 원본 보존
 
+- 02 수정: JPEG 종료 표시 뒤에 카메라 부가정보가 붙은 정상 사진을 손상으로 오인하지 않습니다. 실제 JPEG 구조와 종료 표시를 확인하며, 종료 표시가 없는 잘린 사진은 계속 차단합니다. 부가정보 내부의 작은 썸네일 종료 표시만으로 정상 파일을 판정하지 않습니다.
 - JPG/JPEG: 파일당 10MiB, 최대 2,400만 화소. 1,200만 화소를 넘는 사진의 한 변은 최대 8,192px입니다.
 - 정지 PNG: 기존과 같이 파일당 10MiB, 1,200만 화소 이하입니다.
 - 한 번에 30장/원본 파일 크기 합계 100MiB입니다. GIF/APNG/HEIC/PDF 등은 이번에 추가하지 않았습니다.

@@ -1,4 +1,4 @@
-import {inspectImage,MAX_BYTES,MAX_PIXELS} from './backend/image-guard.mjs?v=reborn-evidence-jpg-upload-fix-01';
+import {inspectImage,MAX_BYTES,MAX_PIXELS} from './backend/image-guard.mjs?v=reborn-ui-sizing-order-margin-01';
 
 export const MAX_SOURCE_PIXELS=24000000;
 const MAX_DECODE_BYTES=112*1024*1024;
@@ -39,6 +39,32 @@ function jpegSize(bytes) {
   throw new Error('JPEG_STRUCTURE');
 }
 
+function jpegEnd(bytes) {
+  const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+  let offset=2,scan=false,scanned=false;
+  while(offset<bytes.length) {
+    if(scan)while(offset<bytes.length&&bytes[offset]!==255)offset++;
+    if(offset>=bytes.length)break;
+    if(bytes[offset++]!==255)throw new Error('JPEG_STRUCTURE');
+    while(bytes[offset]===255)offset++;
+    if(offset>=bytes.length)break;
+    const marker=bytes[offset++];
+    if(scan&&(marker===0||(marker>=208&&marker<=215)))continue;
+    if(marker===217) {
+      if(!scanned)throw new Error('JPEG_STRUCTURE');
+      return offset;
+    }
+    if(marker===1)continue;
+    if(marker===0||marker===216||(marker>=208&&marker<=215))throw new Error('JPEG_STRUCTURE');
+    if(offset+2>bytes.length)break;
+    const length=view.getUint16(offset);
+    if(length<2)throw new Error('JPEG_STRUCTURE');
+    if(offset+length>bytes.length)break;
+    offset+=length;scan=marker===218;scanned ||= scan;
+  }
+  throw new Error('JPEG_INCOMPLETE');
+}
+
 export async function preparePhoto(file,active=()=>{}) {
   if(!/\.(jpe?g|png)$/i.test(file.name))throw new Error('JPG·JPEG·정지 PNG 파일을 선택해주세요.');
   if(!file.size||file.size>MAX_BYTES)throw new Error('파일 크기는 0바이트 초과·10MB 이하여야 합니다.');
@@ -46,7 +72,7 @@ export async function preparePhoto(file,active=()=>{}) {
   const bytes=new Uint8Array(await file.arrayBuffer());active();
   const jpeg=bytes[0]===255&&bytes[1]===216;
   const source=jpeg?jpegSize(bytes):inspectImage(bytes);
-  if(jpeg&&(bytes[bytes.length-2]!==255||bytes[bytes.length-1]!==217))throw new Error('JPEG_STRUCTURE');
+  if(jpeg)jpegEnd(bytes);
   const sourceHash=await digest(bytes);active();
   const normalized=new File([file],file.name,{type:source.mime,lastModified:file.lastModified});
   let bitmap,canvas;

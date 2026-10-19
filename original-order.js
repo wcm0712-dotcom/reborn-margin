@@ -39,11 +39,51 @@
       rate: margin !== null && revenue > 0 ? margin / revenue * 100 : null};
   }
 
+  function previewFinance(payments, shipments, facts) {
+    const parents = new Map(), firstTracking = new Map(), firstOrder = new Map();
+    for (const fact of facts) parents.set(fact.paymentKey, fact.paymentKey);
+    const root = key => {let current = key; while (parents.get(current) !== current) current = parents.get(current); while (parents.get(key) !== key) {const next = parents.get(key); parents.set(key, current); key = next;} return current;};
+    for (const fact of facts) {
+      if (fact.orderLink) {
+        if (firstOrder.has(fact.orderLink)) parents.set(root(fact.paymentKey), root(firstOrder.get(fact.orderLink)));
+        else firstOrder.set(fact.orderLink, fact.paymentKey);
+      }
+      if (!fact.tracking) continue;
+      if (firstTracking.has(fact.tracking)) parents.set(root(fact.paymentKey), root(firstTracking.get(fact.tracking)));
+      else firstTracking.set(fact.tracking, fact.paymentKey);
+    }
+    const components = new Map();
+    for (const fact of facts) {const key = root(fact.paymentKey); if (!components.has(key)) components.set(key, []); components.get(key).push(fact);}
+    const included = [], heldReasons = new Map();
+    for (const component of components.values()) {
+      const reasons = new Set();
+      for (const fact of component) {
+        if (!payments.get(fact.paymentKey)?.valid) reasons.add("결제 식별·금액 확인");
+        if (fact.goods === null) reasons.add("상품·수량·원가 확인");
+        if (!fact.tracking || shipments.get(fact.tracking)?.conflict) reasons.add("운송장·배송비 확인");
+      }
+      if (!reasons.size) included.push(...component);
+      else for (const reason of reasons) heldReasons.set(reason, (heldReasons.get(reason) || 0) + component.length);
+    }
+    const keys = [...new Set(included.map(fact => fact.paymentKey))], tracking = new Set(included.map(fact => fact.tracking));
+    const sum = list => {let total = 0; for (const value of list) {if (value === null || !safeAdd(total, value)) return null; total += value;} return total;};
+    const amount = sum(keys.map(key => payments.get(key).amount)), extra = sum(keys.map(key => payments.get(key).extra));
+    const revenue = amount !== null && extra !== null && safeAdd(amount, extra) ? Math.round(amount + extra) : null;
+    const goods = sum(included.map(fact => fact.goods)), boxCost = sum(included.map(fact => fact.boxes));
+    const values = {revenue, goods: goods === null ? null : Math.round(goods), delivery: tracking.size * 2170,
+      fee: amount === null ? null : Math.round(amount * 0.12), early: amount === null ? null : Math.round((amount - amount * 0.12) * 0.012),
+      vat: revenue === null ? null : Math.round(revenue / 11), boxes: boxCost === null ? null : Math.round(boxCost)};
+    if (!keys.length) for (const key of Object.keys(values)) values[key] = null;
+    return {values, amount: keys.length ? amount : null, extra: keys.length ? extra : null, margins: calculateMargins(values), includedRows: included.length, heldRows: facts.length - included.length,
+      includedPayments: keys.length, heldPayments: parents.size - keys.length, shipmentCount: tracking.size,
+      reasons: [...heldReasons.entries()].map(([reason, rows]) => ({reason, rows}))};
+  }
+
   function analyze(rows, hooks) {
     const format = inspect(rows);
     const payments = new Map(), shipments = new Map(), deductions = new Map(), boxes = new Map(), products = new Map();
     const needs = [], excluded = [], financeIssues = [];
-    const trackingRows = new Map();
+    const trackingRows = new Map(), financeFacts = [];
     rows.slice(format.headerRow + 1).forEach(row => {if (text(row?.[7]) && validId(row?.[11])) {const key = text(row[11]); trackingRows.set(key, (trackingRows.get(key) || 0) + 1);}});
     const scope = {rows: 0, otherRows: 0, heldRows: 0, boxPendingRows: 0, goodsComplete: true, boxesComplete: true, goodsCost: 0, boxCost: 0};
     let orderRows = 0, amountRawSum = 0, extraRawSum = 0, amountsValid = true, paymentRowsInvalid = 0;
@@ -62,6 +102,9 @@
       if (!paymentValid) { paymentRowsInvalid++; addIssue(rowNumber, "결제 식별정보 또는 I/X 금액 확인 필요"); }
       const paymentKey = paymentValid ? JSON.stringify([text(row[2]), text(row[10])]) : "invalid-row-" + rowNumber;
       const identity = JSON.stringify([0, 3, 4, 5, 20].map(column => text(row[column])));
+      const fact = {paymentKey, orderLink: validId(row[2]) && validId(row[10]) ? JSON.stringify([text(row[2]), text(row[10])]) : null,
+        tracking: validId(row[11]) ? text(row[11]) : null, goods: null, boxes: null};
+      if (coupang) financeFacts.push(fact);
       if (!payments.has(paymentKey)) payments.set(paymentKey, {amount, extra, identity, coupang, valid: paymentValid, rows: [rowNumber]});
       else {
         const payment = payments.get(paymentKey);
@@ -98,10 +141,12 @@
         if (result.excluded?.length) excluded.push({row: rowNumber, productName: "원본 주문 " + rowNumber + "행", qty: 0, reason: "재고 계산 제외 품목"});
         continue;
       }
+      fact.goods = 0;
       for (const item of rowItems) {
         const aggregate = deductions.get(item.sku) || {sku: item.sku, units: 0, orderCount: 0};
         aggregate.units += item.units; aggregate.orderCount++; deductions.set(item.sku, aggregate);
         const unitCost = hooks.cost(item.sku);
+        if (fact.goods !== null) fact.goods = unitCost !== null && safeAdd(fact.goods, item.units * unitCost) ? fact.goods + item.units * unitCost : null;
         const product = products.get(item.sku) || {sku: item.sku, units: 0, marginUnits: 0, orderCount: 0, unitCost, subtotal: 0};
         product.units += item.units; product.orderCount++;
         if (coupang) product.marginUnits += item.units;
@@ -118,6 +163,7 @@
         if (coupang) {scope.boxPendingRows++; scope.boxesComplete = false;}
       }
       const sharedBoxPending = (trackingRows.get(text(row[11])) || 0) > 1 && result.boxUsages?.length;
+      fact.boxes = result.needs?.length || sharedBoxPending ? null : 0;
       if (sharedBoxPending) {
         needs.push({row: rowNumber, productName: rowItems.map(item => item.sku).join(" + "), qty: rowItems.reduce((sum, item) => sum + item.units, 0), reason: "동일 송장 다품목 포장박스 기준 확인 필요 (상품 재고는 차감 목록에 포함)"});
         if (coupang) {scope.boxesComplete = false; scope.boxPendingRows++;}
@@ -128,6 +174,7 @@
         boxes.set(item.sku, previous + item.units);
         if (coupang) {
           const unitCost = hooks.cost(item.sku);
+          if (fact.boxes !== null) fact.boxes = unitCost !== null && safeAdd(fact.boxes, item.units * unitCost) ? fact.boxes + item.units * unitCost : null;
           if (unitCost === null || !safeAdd(scope.boxCost, item.units * unitCost)) scope.boxesComplete = false;
           else scope.boxCost += item.units * unitCost;
         }
@@ -151,7 +198,7 @@
     const values = {revenue, goods: scope.goodsComplete ? Math.round(scope.goodsCost) : null,
       delivery: deliveryIncomplete ? null : shipmentCount * 2170,
       fee: coupangPaymentComplete && knownAmount !== null ? Math.round(knownAmount * 0.12) : null,
-      early: coupangPaymentComplete && knownAmount !== null ? Math.round(knownAmount * 0.012) : null,
+      early: coupangPaymentComplete && knownAmount !== null ? Math.round((knownAmount - knownAmount * 0.12) * 0.012) : null,
       vat: revenue !== null ? Math.round(revenue / 11) : null, boxes: scope.boxesComplete ? Math.round(scope.boxCost) : null};
     if (scope.rows === 0) { for (const key of Object.keys(values)) values[key] = null; }
     const goodsList = [...deductions.values()];
@@ -163,11 +210,11 @@
       extraShippingSum: extraSum, amountRawSum: amountsValid ? amountRawSum : null,
       assetDeductionValue: allGoodsCost, boxAssetDeductionValue: allBoxCost,
       deductions: goodsList, boxUsages: [...boxes.entries()].map(([sku, units]) => ({sku, units})), needs, excluded,
-      finance: {scope, values, margins: calculateMargins(values), products: [...products.values()], issues: financeIssues,
+      finance: {scope, values, margins: calculateMargins(values), preview: previewFinance(payments, shipments, financeFacts), products: [...products.values()], issues: financeIssues,
         paymentComplete, paymentRowsInvalid, shipmentCount, coupangPaymentCount: coupangGroups.filter(group => group.valid).length,
         knownAmount, knownExtra, extraRawSum: amountsValid ? extraRawSum : null,
         knownBoxCost: scope.boxCost, knownGoodsCost: scope.goodsCost,
-        policy: {delivery: 2170, fee: 12, early: 1.2, feeBase: "쿠팡 상품 결제금액 I, X 제외", vat: "부가세 포함 매출÷11, 매입세액 공제 미반영", rounding: "파일 합산 후 원 단위 반올림"}}};
+        policy: {delivery: 2170, fee: 12, early: 1.2, feeBase: "쿠팡 상품 결제금액 I, X 제외", earlyBase: "I − I×12%, X 제외", vat: "부가세 포함 매출÷11, 매입세액 공제 미반영", rounding: "중간 요율값 반올림 없이 파일 합산 후 항목별 원 단위 반올림"}}};
   }
   window.RebornOriginalOrder = Object.freeze({formatId: FORMAT, inspect, analyze, calculateMargins, finiteMoney, isCoupang});
 })();
