@@ -12,16 +12,22 @@
     root.dataset.ready = '1';
     let admin = false, lastRole = null, initialized = false, page = 0, rows = [], total = null, requestId = 0, accessId = 0;
     let selected = null, uploading = false, stopRequested = false, activeController = null, detailUrl = null, rotation = 0, zoom = 1;
+    let currentPartner = null, partners = [], categoriesReady = false, categoryRequest = 0, exportController = null, partnerLimit = 100;
+    const categoryCore = window.RebornEvidenceCategories;
     const queue = [], urls = new Set();
-    root.innerHTML = `<div class="evidence-toolbar"><p>날짜·업체별 자료</p><div><button type="button" id="evidenceReload">새로고침</button><button type="button" id="evidenceExport">조건별 내려받기</button><button type="button" id="evidenceBackup" data-evidence-admin hidden>원본 백업</button><button type="button" id="evidenceNew" class="primary-btn" data-evidence-admin hidden>사진 등록</button></div></div>
+    root.innerHTML = `<div class="evidence-toolbar"><p>업체별 회계자료</p><div><button type="button" id="evidenceReload">새로고침</button><button type="button" id="evidenceExport">전체 업체 이미지 ZIP</button><button type="button" id="evidenceBackup" data-evidence-admin hidden>전체 업체 원본 백업</button><button type="button" id="evidenceNew" class="primary-btn" data-evidence-admin hidden>사진 등록</button></div></div>
       <p class="evidence-public-note">공개 자료실 · 로그인 없이 사진과 분류 정보를 조회할 수 있습니다. 사진 보관은 회계처리 완료를 뜻하지 않습니다.</p>
-      <form id="evidenceFilters" class="evidence-filters"><label>시작일<input name="from" type="date"></label><label>종료일<input name="to" type="date"></label><label>업체<input name="partner" type="search" maxlength="100" placeholder="업체명"></label><label>유형<select name="type"><option value="">전체</option>${types.map(type => '<option>'+type+'</option>').join('')}</select></label><label>검토<select name="review"><option value="">전체</option>${reviews.map(value => '<option>'+value+'</option>').join('')}</select></label><label data-evidence-admin hidden>보관<select name="trash"><option value="active">일반 목록</option><option value="trash">휴지통</option></select></label><button type="submit">조회</button></form>
-      <p id="evidenceStatus" role="status" aria-live="polite"></p><div id="evidenceGrid" class="evidence-grid"></div><div class="evidence-pagination"><button type="button" id="evidencePrevious">이전</button><span id="evidencePage"></span><button type="button" id="evidenceNext">다음</button></div>`;
+      <div class="evidence-category-tools"><label>업체 검색<input id="evidencePartnerSearch" type="search" maxlength="100"></label><label>정렬<select id="evidencePartnerSort"><option value="name">업체명순</option><option value="recent">최근 자료순</option><option value="count">자료 많은 순</option></select></label><label data-evidence-admin hidden>보관<select id="evidenceCategoryTrash"><option value="active">일반 목록</option><option value="trash">휴지통</option></select></label></div>
+      <div id="evidenceCategories"><p id="evidenceCategoryStatus" role="status"></p><div id="evidencePartnerList" class="evidence-partner-list"></div><button type="button" id="evidencePartnersMore" hidden>업체 더 보기</button></div>
+      <section id="evidenceCategoryContent" hidden><div class="evidence-category-heading"><button type="button" id="evidenceCategoryBack" title="업체 목록으로" aria-label="업체 목록으로"></button><div><h2 id="evidenceCategoryTitle"></h2><p id="evidenceCategoryScope"></p></div><div class="evidence-category-download-tools"><label>이미지 종류<select id="evidenceCategoryKind"><option value="preview">공개 이미지</option><option value="original" data-evidence-admin hidden>원본 (관리자)</option></select></label><button type="button" id="evidenceCategoryDownload">업체 전체 이미지 ZIP</button></div></div>
+      <form id="evidenceFilters" class="evidence-filters evidence-category-filters"><label>시작일<input name="from" type="date"></label><label>종료일<input name="to" type="date"></label><label>유형<select name="type"><option value="">전체</option>${types.map(type => '<option>'+type+'</option>').join('')}</select></label><label>검토<select name="review"><option value="">전체</option>${reviews.map(value => '<option>'+value+'</option>').join('')}</select></label><input type="hidden" name="trash" value="active"><button type="submit">조회</button></form>
+      <p id="evidenceStatus" role="status" aria-live="polite"></p><div id="evidenceGrid" class="evidence-grid"></div><div class="evidence-pagination"><button type="button" id="evidencePrevious">이전</button><span id="evidencePage"></span><button type="button" id="evidenceNext">다음</button></div></section>
+      <div class="evidence-export-progress"><p id="evidenceDownloadStatus" role="status" aria-live="polite"></p><progress id="evidenceDownloadProgress" max="1" value="0" hidden aria-label="이미지 ZIP 준비 진행률"></progress><button type="button" id="evidenceDownloadCancel" hidden>다운로드 중단</button></div>`;
     const byId = id => document.getElementById(id), filters = byId('evidenceFilters');
     const uploadDialog = document.createElement('dialog');
     uploadDialog.id = 'evidenceUploadDialog'; uploadDialog.className = 'evidence-dialog';
     uploadDialog.setAttribute('aria-labelledby', 'evidenceUploadTitle');
-    uploadDialog.innerHTML = `<div class="evidence-dialog-heading"><h2 id="evidenceUploadTitle">회계자료 등록</h2><button type="button" data-close aria-label="등록창 닫기">닫기</button></div><form id="evidenceUploadForm"><div class="evidence-fields"><label>증빙일<input name="business_date" type="date" required></label><label>업체<input name="partner" required maxlength="100" autocomplete="off"></label><label>유형<select name="document_type">${types.map(type => '<option>'+type+'</option>').join('')}</select></label><label class="evidence-note-field">공개 메모<textarea name="note" maxlength="500" rows="2"></textarea></label></div><label class="evidence-public-confirm"><input name="public_confirmed" type="checkbox" required> 사진·업체·날짜·메모가 인터넷에 공개됨을 확인했습니다. 개인정보가 없는 자료만 등록합니다.</label><label class="evidence-file-input">사진 선택<input id="evidencePhotoInput" type="file" accept="image/jpeg,image/png" multiple></label><p>JPEG·정지 PNG · 장당 10MB/1,200만 화소 이하 · 한 번에 30장/100MB. 원본은 관리자만 내려받을 수 있습니다.</p><div id="evidenceQueue"></div><div class="evidence-actions"><button type="submit" class="primary-btn" id="evidenceUploadStart">등록 시작</button><button type="button" id="evidenceUploadStop">중단 요청</button></div><p id="evidenceUploadStatus" role="status"></p></form>`;
+    uploadDialog.innerHTML = `<div class="evidence-dialog-heading"><h2 id="evidenceUploadTitle">회계자료 등록</h2><button type="button" data-close aria-label="등록창 닫기">닫기</button></div><form id="evidenceUploadForm"><div class="evidence-fields"><label>업체 카테고리<select id="evidenceUploadPartner" required></select></label><label id="evidenceNewPartnerField" hidden>새 업체명<input name="partner" required maxlength="100" autocomplete="off" disabled></label><label>증빙일<input name="business_date" type="date" required></label><label>유형<select name="document_type">${types.map(type => '<option>'+type+'</option>').join('')}</select></label><label class="evidence-note-field">공개 메모<textarea name="note" maxlength="500" rows="2"></textarea></label></div><label class="evidence-public-confirm"><input name="public_confirmed" type="checkbox" required> 사진 속 연락처·계좌·이름과 업체·날짜·메모가 로그인 없이 공개됨을 확인하며 이 자료를 공개할 권한이 있습니다.</label><label class="evidence-file-input">사진 선택<input id="evidencePhotoInput" type="file" accept="image/jpeg,image/png" multiple></label><p>JPEG·정지 PNG · 장당 10MB/1,200만 화소 이하 · 한 번에 30장/100MB. 선택한 사진은 동일한 업체·증빙일로 등록됩니다.</p><div id="evidenceQueue"></div><div class="evidence-actions"><button type="submit" class="primary-btn" id="evidenceUploadStart">등록 시작</button><button type="button" id="evidenceUploadStop">중단 요청</button></div><p id="evidenceUploadStatus" role="status"></p></form>`;
     const detailDialog = document.createElement('dialog');
     detailDialog.id = 'evidenceDetailDialog'; detailDialog.className = 'evidence-dialog evidence-detail-dialog';
     detailDialog.setAttribute('aria-labelledby', 'evidenceDetailTitle');
@@ -34,33 +40,100 @@
     function objectUrl(blob) {const url = URL.createObjectURL(blob); urls.add(url); return url;}
     function clearUrls() {for (const url of urls) URL.revokeObjectURL(url); urls.clear(); detailUrl = null;}
     function resetQueue() {queue.splice(0); renderQueue(); byId('evidencePhotoInput').value = '';}
+    function icon(name) {
+      const paths = window.RebornWorkspaceIcons?.[name] || [];
+      return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+paths.map(([tag,attributes])=>'<'+tag+' '+Object.entries(attributes).map(([key,value])=>key+'="'+escape(value)+'"').join(' ')+'></'+tag+'>').join('')+'</svg>';
+    }
+    byId('evidenceCategoryBack').innerHTML = icon('ChevronLeft');
+    function uploadPartner() {
+      const value = byId('evidenceUploadPartner').value;
+      return value === 'new' ? byId('evidenceUploadForm').elements.partner.value.trim() : value.startsWith('p:') ? partners[Number(value.slice(2))]?.name || '' : '';
+    }
+    function syncPartnerInput() {
+      const create = byId('evidenceUploadPartner').value === 'new';
+      byId('evidenceNewPartnerField').hidden = !create; byId('evidenceUploadForm').elements.partner.disabled = !create || uploading;
+    }
+    function partnerOptions(preferred = currentPartner) {
+      const select = byId('evidenceUploadPartner');
+      select.innerHTML = '<option value="">업체 선택</option>'+partners.map((partner,index)=>'<option value="p:'+index+'">'+escape(partner.name)+'</option>').join('')+'<option value="new">+ 새 업체</option>';
+      const index = partners.findIndex(partner=>partner.name===preferred);
+      select.value = index >= 0 ? 'p:'+index : preferred ? 'new' : '';
+      if (preferred && index < 0) byId('evidenceUploadForm').elements.partner.value = preferred;
+      syncPartnerInput();
+    }
     async function refreshAccess() {
       const role = Boolean(callbacks.isAdmin());
       if (role === lastRole) return;
       lastRole = role; const token = ++accessId; admin = false; showAdmin();
+      exportController?.abort(); categoryRequest++; requestId++;
       if (!role) {
         stopRequested = true; activeController?.abort();
         if (uploadDialog.open) uploadDialog.close(); if (detailDialog.open) detailDialog.close();
-        resetQueue(); clearUrls(); page = 0;
+        resetQueue(); clearUrls(); page = 0; filters.elements.trash.value = 'active'; byId('evidenceCategoryTrash').value = 'active'; byId('evidenceCategoryKind').value = 'preview';
       } else {
         try {const result = await client().rpc('reborn_evidence_can_manage'); if (token === accessId && !result.error && result.data === true) admin = true;} catch {}
       }
-      if (token !== accessId) return; showAdmin(); if (initialized) load();
+      if (token !== accessId) return;
+      if (!admin) {
+        stopRequested = true; activeController?.abort();
+        if (uploadDialog.open) uploadDialog.close(); if (detailDialog.open) detailDialog.close();
+        resetQueue(); clearUrls(); filters.elements.trash.value = 'active'; byId('evidenceCategoryTrash').value = 'active'; byId('evidenceCategoryKind').value = 'preview';
+      }
+      showAdmin(); if (initialized) reloadEvidence();
     }
-    function query(limit = 24, offset = page * 24) {
-      const values = new FormData(filters), from = values.get('from'), to = values.get('to');
+    function scope(allDates = false, partner = currentPartner) {
+      const values = new FormData(filters);
+      return {partner,from:allDates?'':values.get('from'),to:allDates?'':values.get('to'),type:allDates?'':values.get('type'),review:allDates?'':values.get('review'),trash:admin && values.get('trash') === 'trash'};
+    }
+    function query(limit = 24, offset = page * 24, selection = scope(), columns = 'id,business_date,partner,document_type,review_status,note,preview_path,thumbnail_path,created_at,updated_at,version,deleted_at', signal) {
+      const {from,to,partner,type,review,trash} = selection;
       if (from && to && from > to) throw new Error('조회 시작일과 종료일을 확인해주세요.');
-      let result = client().from('reborn_evidence_items').select('id,business_date,partner,document_type,review_status,note,preview_path,thumbnail_path,created_at,updated_at,version,deleted_at', {count:'exact'}).eq('ready',true);
-      result = admin && values.get('trash') === 'trash' ? result.not('deleted_at','is',null) : result.is('deleted_at',null);
+      let result = client().from('reborn_evidence_items').select(columns, {count:'exact'}).eq('ready',true);
+      result = trash ? result.not('deleted_at','is',null) : result.is('deleted_at',null);
       if (from) result = result.gte('business_date',from); if (to) result = result.lte('business_date',to);
-      const partner = String(values.get('partner') || '').trim();
-      if (partner) result = result.ilike('partner','%'+partner.replace(/[\\%_]/g,'\\$&')+'%');
-      if (values.get('type')) result = result.eq('document_type',values.get('type'));
-      if (values.get('review')) result = result.eq('review_status',values.get('review'));
-      return result.order('business_date',{ascending:false}).order('created_at',{ascending:false}).order('id',{ascending:true}).range(offset,offset+limit-1);
+      if (partner !== null) result = result.eq('partner',partner);
+      if (type) result = result.eq('document_type',type); if (review) result = result.eq('review_status',review);
+      result = columns === 'id,partner,business_date' ? result.order('id',{ascending:true}) : result.order('business_date',{ascending:false}).order('created_at',{ascending:false}).order('id',{ascending:true});
+      if (signal) result = result.abortSignal(signal);
+      return result.range(offset,offset+limit-1);
     }
+    function renderPartners() {
+      const search = byId('evidencePartnerSearch').value.trim().toLocaleLowerCase('ko'), sort = byId('evidencePartnerSort').value;
+      const visible = partners.filter(partner=>partner.name.toLocaleLowerCase('ko').includes(search));
+      visible.sort((left,right)=> (sort==='count'?right.count-left.count:sort==='recent'?right.last.localeCompare(left.last):0) || left.name.localeCompare(right.name,'ko'));
+      byId('evidenceCategoryStatus').textContent = `${partners.length}개 업체 · ${partners.reduce((sum,partner)=>sum+partner.count,0)}개 자료 · ${filters.elements.trash.value==='trash'?'휴지통':'일반 목록'}${search?' · 검색 '+visible.length+'개 업체':''}${visible.length>partnerLimit?' · 표시 '+partnerLimit+'개 업체':''}`;
+      byId('evidencePartnerList').innerHTML = visible.slice(0,partnerLimit).map(partner=>`<div class="evidence-partner-row"><button type="button" class="evidence-partner-open" data-partner-open="${partners.indexOf(partner)}"><span><strong>${escape(partner.name)}</strong><small>${escape(partner.first===partner.last?partner.first:partner.first+' ~ '+partner.last)}</small></span><span class="evidence-partner-count">${partner.count.toLocaleString('ko-KR')}장 ${icon('ChevronRight')}</span></button><button type="button" class="evidence-partner-download" data-partner-download="${partners.indexOf(partner)}" title="${escape(partner.name)} 전체 이미지 ZIP" aria-label="${escape(partner.name)} 전체 이미지 ZIP">${icon('Download')}</button></div>`).join('');
+      byId('evidencePartnersMore').hidden = visible.length <= partnerLimit;
+      if (!visible.length) byId('evidencePartnerList').textContent = search?'검색 결과가 없습니다.':'등록된 자료가 없습니다.';
+    }
+    function showCategory(partner) {
+      currentPartner = partner; page = 0; requestId++; clearUrls();
+      if (detailDialog.open) detailDialog.close();
+      byId('evidenceCategories').hidden = partner !== null; byId('evidenceCategoryContent').hidden = partner === null;
+      byId('evidencePartnerSearch').closest('label').hidden = partner !== null; byId('evidencePartnerSort').closest('label').hidden = partner !== null;
+      byId('evidenceExport').textContent = partner === null?'전체 업체 이미지 ZIP':'조건별 이미지 ZIP'; byId('evidenceBackup').textContent = partner === null?'전체 업체 원본 백업':'조건별 원본 백업';
+      if (partner !== null) {
+        byId('evidenceCategoryTitle').textContent = partner;
+        const item = partners.find(value=>value.name===partner);
+        byId('evidenceCategoryScope').textContent = `업체 전체 ${item?.count ?? '확인 중'}장 · 전체 기간 · ${filters.elements.trash.value==='trash'?'휴지통':'일반 목록'}`;
+        load();
+      } else byId('evidencePartnerList').querySelector('button')?.focus({preventScroll:true});
+    }
+    async function loadCategories() {
+      const token = ++categoryRequest, access = accessId, selection = scope(true,null), preferred = uploadDialog.open ? uploadPartner() : currentPartner;
+      categoriesReady = false; byId('evidenceCategoryStatus').textContent = '업체 목록 집계 중'; byId('evidencePartnerList').replaceChildren();
+      try {
+        const data = await categoryCore.readAll((offset,limit)=>query(limit,offset,selection,'id,partner,business_date'));
+        if (token !== categoryRequest || access !== accessId) return false;
+        partners = categoryCore.group(data); categoriesReady = true; renderPartners(); partnerOptions(preferred);
+        if (currentPartner !== null) {const item = partners.find(value=>value.name===currentPartner); byId('evidenceCategoryScope').textContent = `업체 전체 ${item?.count || 0}장 · 전체 기간 · ${filters.elements.trash.value==='trash'?'휴지통':'일반 목록'}`;}
+        return true;
+      } catch {if (token === categoryRequest && access === accessId) {partners = []; byId('evidenceCategoryStatus').textContent = '업체 목록 조회 실패 · 전체 집계 미완료. 새로고침해주세요.';} return false;}
+    }
+    async function reloadEvidence() {await loadCategories(); if (currentPartner !== null) await load();}
     async function image(path) {const response = await client().storage.from(bucketName).download(path); if (response.error || !response.data) throw new Error('사진을 불러오지 못했습니다.'); return response.data;}
     async function load() {
+      if (currentPartner === null) return;
       const token = ++requestId; status('자료를 불러오는 중입니다.');
       try {
         const result = await query(); if (token !== requestId) return;
@@ -103,7 +176,7 @@
       const item = selected, form = byId('evidenceEditForm'); if (action === '수정' && !form.reportValidity()) return;
       if (!confirm(action==='수정'?'분류를 저장할까요? 업체·메모는 공개됩니다.':action==='휴지통'?'공개 목록에서 숨기고 휴지통으로 이동할까요? 원본은 보존됩니다.':'공개 목록으로 복원할까요?')) return;
       const buttons = [...form.querySelectorAll('button')]; buttons.forEach(button => button.disabled = true);
-      try {await invoke({id:item.id,version:item.version,action,values:Object.fromEntries(new FormData(form))}); detailDialog.close(); await load();} catch (error) {byId('evidenceDetailStatus').textContent = error.message;} finally {buttons.forEach(button => button.disabled = false);}
+      try {await invoke({id:item.id,version:item.version,action,values:Object.fromEntries(new FormData(form))}); detailDialog.close(); await reloadEvidence();} catch (error) {byId('evidenceDetailStatus').textContent = error.message;} finally {buttons.forEach(button => button.disabled = false);}
     }
     function renderQueue() {byId('evidenceQueue').innerHTML = queue.map(item => `<div class="evidence-queue-item"><div><strong>${escape(item.file.name)}</strong><span>${escape(item.status)}${item.duplicate?' · 동일 이미지 후보':''}</span><progress max="100" value="${item.progress || 0}" aria-label="${escape(item.file.name)} 단계 진행률"></progress></div><div>${!uploading?'<button type="button" data-queue-remove="'+item.id+'" title="대기 목록에서만 제거합니다. 이미 저장한 사진은 남습니다.">목록에서 제거</button>':''}</div></div>`).join('');}
     async function addPhotos(files) {
@@ -137,7 +210,8 @@
       if (pending.some(item => item.duplicate) && !confirm('같은 이미지 후보가 있습니다. 다른 업무 기록으로 등록할 필요가 있는지 확인했습니까?')) return;
       uploading = true; stopRequested = false; byId('evidenceUploadStart').disabled = true; byId('evidencePhotoInput').disabled = true;
       for (const control of form.querySelectorAll('.evidence-fields input,.evidence-fields select,.evidence-fields textarea,.evidence-public-confirm input')) control.disabled = true;
-      const values = {business_date:form.elements.business_date.value,partner:form.elements.partner.value.trim(),document_type:form.elements.document_type.value,note:form.elements.note.value.trim()};
+      const values = {business_date:form.elements.business_date.value,partner:uploadPartner(),document_type:form.elements.document_type.value,note:form.elements.note.value.trim()};
+      if (!values.partner) {uploading = false; byId('evidenceUploadStart').disabled = false; byId('evidencePhotoInput').disabled = false; for (const control of form.querySelectorAll('.evidence-fields input,.evidence-fields select,.evidence-fields textarea,.evidence-public-confirm input')) control.disabled = false; syncPartnerInput(); byId('evidenceUploadStatus').textContent = '업체 카테고리를 확인해주세요.'; return;}
       try {
         for (const item of pending) {
           if (stopRequested || !admin || !callbacks.isAdmin()) break;
@@ -151,39 +225,80 @@
         uploading = false; activeController = null; byId('evidenceUploadStart').disabled = false; byId('evidencePhotoInput').disabled = false;
         for (const control of form.querySelectorAll('.evidence-fields input,.evidence-fields select,.evidence-fields textarea,.evidence-public-confirm input')) control.disabled = false;
         byId('evidenceUploadStatus').textContent = `완료 ${queue.filter(item => item.done).length}장 / ${queue.length}장 · 실패·중단은 저장 완료가 아닙니다. 재시도는 최초 분류와 같은 작업 ID로 진행됩니다.`;
-        renderQueue(); await load();
+        syncPartnerInput(); renderQueue(); await reloadEvidence();
       }
     }
-    async function exportBundle(originals) {
-      if (originals && !admin) return;
-      const button = byId(originals?'evidenceBackup':'evidenceExport'); button.disabled = true;
+    async function exportBundle(originals, options = {}) {
+      if (exportController || (originals && (!admin || !callbacks.isAdmin()))) return;
+      const selection = scope(options.allDates || currentPartner === null,options.partner === undefined ? currentPartner : options.partner), access = accessId;
+      const controller = new AbortController(); exportController = controller;
+      const progress = byId('evidenceDownloadProgress'), message = byId('evidenceDownloadStatus'), cancel = byId('evidenceDownloadCancel');
+      const label = selection.partner === null ? '전체 업체' : selection.partner;
+      let writer = null, writable = null, completed = 0, expected = null;
+      const filename = 'reborn-'+categoryCore.safeSegment(label)+'-'+(originals?'originals-':'images-')+today()+'.zip';
+      function active() {categoryCore.assertActive(controller.signal); if (access !== accessId || (originals && (!admin || !callbacks.isAdmin()))) throw new DOMException('권한이 변경되었습니다.','AbortError');}
+      for (const button of [byId('evidenceExport'),byId('evidenceBackup'),byId('evidenceCategoryDownload')]) button.disabled = true;
+      cancel.hidden = false; progress.hidden = false; progress.value = 0; progress.max = 1;
+      message.textContent = label+' · ZIP 준비 중';
       try {
-        const response = await query(101,0); if (response.error) throw new Error('내려받기 목록 조회 실패'); if (response.count > 100) throw new Error('한 번에 100개 이하로 날짜·업체 조건을 좁혀주세요.');
-        if (!response.data.length) throw new Error('내려받을 자료가 없습니다.');
-        const archive = XLSX.CFB.utils.cfb_new(), metadata = [], manifest = []; let bytes = 0;
-        for (const item of response.data) {
-          status(`내려받기 준비 ${metadata.length+1}/${response.data.length}`);
-          let path = item.preview_path, fileMeta = null;
-          if (originals) {fileMeta = await original(item); path = fileMeta.original_path;}
-          const blob = await image(path); bytes += blob.size; if (bytes > 200*1024*1024) throw new Error('200MB를 초과합니다. 조건을 더 좁혀주세요.');
-          XLSX.CFB.utils.cfb_add(archive,'images/'+item.id+(path.endsWith('.png')?'.png':'.jpg'),new Uint8Array(await blob.arrayBuffer()));
-          metadata.push([item.id,item.business_date,item.partner,item.document_type,item.review_status,item.note,item.deleted_at?'휴지통':'일반']);
-          if (originals) {const events = await client().from('reborn_evidence_events').select('actor,action,at,details').eq('item_id',item.id).order('at',{ascending:true}); if (events.error) throw new Error('백업 이력 조회 실패'); manifest.push({item,file:fileMeta,events:events.data});}
+        if (typeof window.showSaveFilePicker === 'function') {
+          const handle = await window.showSaveFilePicker({suggestedName:filename,types:[{description:'ZIP archive',accept:{'application/zip':['.zip']}}]}); active(); writable = await handle.createWritable(); active();
         }
-        const csv = [['자료ID','증빙일','업체','유형','검토','공개 메모','상태'],...metadata].map(row => row.map(value => '"'+safe(value).replace(/"/g,'""')+'"').join(',')).join('\r\n');
-        XLSX.CFB.utils.cfb_add(archive,'metadata.csv',new TextEncoder().encode('\ufeff'+csv));
-        if (originals) XLSX.CFB.utils.cfb_add(archive,'backup-manifest.json',new TextEncoder().encode(JSON.stringify({format:'reborn-evidence-export-1',exportedAt:new Date().toISOString(),items:manifest},null,2)));
-        XLSX.CFB.utils.cfb_add(archive,'README.txt',new TextEncoder().encode(originals?'선택 조건의 원본·메타데이터·이력 내보내기입니다. 전체 시스템 백업이 아니며 자동 복구 기능은 없습니다. 비공개로 보관하세요.':'공개 미리보기와 공개 분류 정보입니다. 원본 파일이나 개인정보 제거를 보장하는 자료가 아닙니다.'));
-        save(new Blob([XLSX.CFB.write(archive,{type:'array',fileType:'zip'})],{type:'application/zip'}),'reborn-evidence-'+(originals?'originals-':'previews-')+today()+'.zip');
-        status('내려받기 파일을 만들었습니다. 저장 완료 여부는 브라우저 다운로드 목록에서 확인해주세요.');
-      } catch (error) {status(error.message,true);} finally {button.disabled = false;}
+        const list = await categoryCore.readAll((offset,limit)=>query(limit,offset,selection,undefined,controller.signal),{signal:controller.signal,onProgress:(count,total)=>{message.textContent=`${label} · 목록 확인 ${count}/${total}`;}}); active();
+        expected = list.length; if (!expected) throw new Error('내려받을 자료가 없습니다.');
+        writer = categoryCore.zipWriter({writable,signal:controller.signal}); progress.max = expected;
+        const metadata = [], manifest = [], directories = new Map();
+        for (const item of list) {
+          active(); message.textContent = `${label} · 이미지 준비 ${completed+1}/${expected}`;
+          let path = item.preview_path, fileMeta = null;
+          if (originals) {fileMeta = await original(item); active(); path = fileMeta.original_path;}
+          const blob = await image(path); active(); if (!blob.size) throw new Error('빈 이미지가 있어 전체 다운로드를 중단했습니다.');
+          if (!directories.has(item.partner)) directories.set(item.partner,String(directories.size+1).padStart(4,'0')+'_'+categoryCore.safeSegment(item.partner));
+          const date = /^\d{4}-\d{2}-\d{2}$/.test(item.business_date) ? item.business_date : '날짜미상';
+          const archivePath = 'images/'+directories.get(item.partner)+'/'+date+'/'+String(completed+1).padStart(6,'0')+'_'+categoryCore.safeSegment(item.id)+(path.endsWith('.png')?'.png':'.jpg');
+          await writer.add(archivePath,blob); active();
+          metadata.push([item.id,item.business_date,item.partner,item.document_type,item.review_status,item.note,item.deleted_at?'휴지통':'일반',archivePath]);
+          if (originals) {const events = await client().from('reborn_evidence_events').select('actor,action,at,details').eq('item_id',item.id).order('at',{ascending:true}).abortSignal(controller.signal); active(); if (events.error) throw new Error('백업 이력 조회 실패'); manifest.push({item,file:fileMeta,events:events.data});}
+          completed++; progress.value = completed;
+        }
+        message.textContent = label+' · 자료 목록 변경 여부 재확인 중';
+        const verified = await categoryCore.readAll((offset,limit)=>query(limit,offset,selection,undefined,controller.signal),{signal:controller.signal}); active();
+        if (JSON.stringify(verified) !== JSON.stringify(list)) throw new Error('다운로드 중 자료가 변경되었습니다. 새로고침 후 다시 시도해주세요.');
+        const csv = [['자료ID','증빙일','업체','유형','검토','공개 메모','상태','이미지 경로'],...metadata].map(row=>row.map(value=>'"'+safe(value).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+        await writer.add('metadata.csv',new Blob(['\ufeff'+csv]));
+        if (originals) await writer.add('backup-manifest.json',new Blob([JSON.stringify({format:'reborn-evidence-export-1',exportedAt:new Date().toISOString(),items:manifest},null,2)]));
+        await writer.add('archive-info.json',new Blob([JSON.stringify({format:'reborn-evidence-images-1',scope:selection,originals,expectedCount:expected,imageCount:completed,complete:completed===expected,exportedAt:new Date().toISOString()},null,2)]));
+        await writer.add('README.txt',new Blob([originals?'선택 범위의 등록 원본·메타데이터·이력 내보내기입니다. 시스템 전체 백업이나 자동 복구 파일은 아닙니다. 비공개로 보관하세요.':'공개 이미지와 공개 분류 정보입니다. 등록 원본은 포함하지 않습니다. 사진 보관은 회계 장부 반영이 아닙니다.']));
+        active(); const blob = await writer.finish(); active(); if (blob) save(blob,filename);
+        message.textContent = writable ? `${label} · ${completed}장 ZIP 저장 완료` : `${label} · ${completed}장 ZIP 생성 완료. 브라우저 다운로드 목록에서 저장 완료를 확인해주세요.`;
+      } catch (error) {
+        if (writer) await writer.abort(); else if (writable) {try {await writable.abort();} catch {}}
+        message.textContent = `${label} · 다운로드 미완료 (${completed}/${expected ?? '확인 중'}) · ${error.name==='AbortError'?'중단 또는 권한 변경':error.message}`;
+      } finally {
+        if (exportController === controller) exportController = null;
+        cancel.hidden = true; progress.hidden = true;
+        for (const button of [byId('evidenceExport'),byId('evidenceBackup'),byId('evidenceCategoryDownload')]) button.disabled = false;
+      }
     }
     filters.addEventListener('submit', event => {event.preventDefault(); page = 0; load();});
     byId('evidenceReload').addEventListener('click', () => {lastRole = null; refreshAccess();});
     byId('evidencePrevious').addEventListener('click', () => {if (page > 0) {page--; load();}});
     byId('evidenceNext').addEventListener('click', () => {if (total !== null && (page+1)*24 < total) {page++; load();}});
     byId('evidenceGrid').addEventListener('click', event => {const button = event.target.closest('[data-evidence-id]'); if (button) openDetail(button.dataset.evidenceId).catch(() => status('자료 상세 조회 실패',true));});
-    byId('evidenceNew').addEventListener('click', () => {if (!admin) return; byId('evidenceUploadForm').elements.public_confirmed.checked = false; uploadDialog.showModal();});
+    byId('evidenceNew').addEventListener('click', async () => {if (!admin) return; if (!categoriesReady && !await loadCategories()) {status('업체 목록을 확인하지 못해 등록창을 열지 않았습니다. 새로고침해주세요.',true); return;} if (!admin || !callbacks.isAdmin()) return; partnerOptions(currentPartner); byId('evidenceUploadForm').elements.public_confirmed.checked = false; uploadDialog.showModal();});
+    byId('evidenceUploadPartner').addEventListener('change',syncPartnerInput);
+    byId('evidencePartnerSearch').addEventListener('input',()=>{partnerLimit = 100; if (categoriesReady) renderPartners();});
+    byId('evidencePartnerSort').addEventListener('change',()=>{partnerLimit = 100; if (categoriesReady) renderPartners();});
+    byId('evidencePartnersMore').addEventListener('click',()=>{partnerLimit += 100; if (categoriesReady) renderPartners();});
+    byId('evidenceCategoryTrash').addEventListener('change',()=>{if (!admin) return; filters.elements.trash.value = byId('evidenceCategoryTrash').value; page = 0; reloadEvidence();});
+    byId('evidenceCategoryBack').addEventListener('click',()=>showCategory(null));
+    byId('evidencePartnerList').addEventListener('click',event=>{
+      const open = event.target.closest('[data-partner-open]'), download = event.target.closest('[data-partner-download]');
+      if (open && partners[Number(open.dataset.partnerOpen)]) showCategory(partners[Number(open.dataset.partnerOpen)].name);
+      if (download && partners[Number(download.dataset.partnerDownload)]) exportBundle(false,{partner:partners[Number(download.dataset.partnerDownload)].name,allDates:true});
+    });
+    byId('evidenceCategoryDownload').addEventListener('click',()=>{if (currentPartner !== null) exportBundle(byId('evidenceCategoryKind').value==='original',{allDates:true});});
+    byId('evidenceDownloadCancel').addEventListener('click',()=>{exportController?.abort(); byId('evidenceDownloadStatus').textContent = '다운로드 중단 요청 · 현재 요청 종료 후 정리합니다.';});
     for (const dialog of [uploadDialog,detailDialog]) {
       dialog.querySelector('[data-close]').addEventListener('click', () => {if (dialog === uploadDialog && uploading) {if (!confirm('등록 중입니다. 중단을 요청하고 닫을까요? 저장 여부는 다시 확인해야 합니다.')) return; stopRequested = true; activeController?.abort();} dialog.close();});
       dialog.addEventListener('cancel', event => {if (dialog === uploadDialog && uploading) {event.preventDefault(); byId('evidenceUploadStatus').textContent = '등록 중에는 중단 요청 후 닫아주세요.';}});
@@ -200,7 +315,7 @@
     byId('evidenceDownload').addEventListener('click', async () => {try {if (selected) save(await image(selected.preview_path),'evidence-'+selected.id+'.jpg');} catch (error) {byId('evidenceDetailStatus').textContent = error.message;}});
     byId('evidenceOriginal').addEventListener('click', async () => {try {if (!selected) return; const item = await original(selected); save(await image(item.original_path),'evidence-'+selected.id+(item.mime==='image/png'?'.png':'.jpg'));} catch (error) {byId('evidenceDetailStatus').textContent = error.message;}});
     byId('evidenceExport').addEventListener('click', () => exportBundle(false)); byId('evidenceBackup').addEventListener('click', () => exportBundle(true));
-    document.addEventListener('reborn-workspace-view', event => {if (event.detail.view === 'evidence') {if (!initialized) {initialized = true; refreshAccess(); load();}}});
+    document.addEventListener('reborn-workspace-view', event => {if (event.detail.view === 'evidence') {if (!initialized) {initialized = true; refreshAccess(); reloadEvidence();}}});
     new MutationObserver(refreshAccess).observe(document.body,{attributes:true,attributeFilter:['class']});
     showAdmin(); refreshAccess();
   }

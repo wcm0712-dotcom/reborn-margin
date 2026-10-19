@@ -5,3 +5,4 @@
 - 사진 서버의 npm 의존성은 `@supabase/supabase-js@2.57.4`(MIT), `jpeg-js@0.4.4`(BSD-3-Clause), `pngjs@7.0.0`(MIT)로 고정했습니다. 서버 런타임이 해당 패키지의 배포물을 가져오며 프런트엔드에 비밀키를 넣지 않습니다.
 - 기존 Lucide 아이콘 데이터 및 `LUCIDE-LICENSE`는 그대로 보존했습니다.
 - 기존 프런트엔드 Supabase SDK의 로딩·인증 흐름은 유지했습니다. 이 SDK의 기존 CDN 경로는 별도 버전 고정 작업 대상으로 남겼습니다.
+- `vendor/fflate-0.8.2.min.js`: [fflate 0.8.2](https://github.com/101arrowz/fflate/tree/v0.8.2)의 공식 npm UMD 배포물입니다. 코드 변경 없이 로컬 동봉했고 MIT 라이선스는 `vendor/FFLATE-LICENSE`에 있습니다. 순차 ZIP 생성에 사용하며 실제 업무 자료를 외부 압축 서비스로 보내지 않습니다.
