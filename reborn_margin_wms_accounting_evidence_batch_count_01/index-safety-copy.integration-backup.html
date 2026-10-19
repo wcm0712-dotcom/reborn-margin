@@ -1,0 +1,2385 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>개인용 엑셀 주문 분석기</title>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #667085;
+      --line: #e5e7eb;
+      --line-strong: #d0d5dd;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --primary-soft: #eff6ff;
+      --good: #047857;
+      --warn: #b45309;
+      --danger: #b91c1c;
+      --shadow: 0 8px 22px rgba(15, 23, 42, 0.07);
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", Roboto, Arial, sans-serif;
+      background:
+        radial-gradient(circle at 8% 12%, rgba(37, 99, 235, 0.09), transparent 34rem),
+        radial-gradient(circle at 92% 10%, rgba(4, 120, 87, 0.05), transparent 30rem),
+        var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+    }
+
+    .app {
+      width: min(1840px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 16px 0 36px;
+    }
+
+    body.is-empty .app {
+      width: min(1120px, calc(100% - 32px));
+      padding-top: clamp(30px, 7vh, 76px);
+    }
+
+    .workspace-layout {
+      display: grid;
+      grid-template-columns: minmax(320px, 390px) minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    body.is-empty .workspace-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .side-panel {
+      position: sticky;
+      top: 14px;
+      display: grid;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    body.is-empty .side-panel {
+      position: static;
+      width: 100%;
+      max-width: 1040px;
+      margin: 0 auto;
+    }
+
+    .main-panel {
+      min-width: 0;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    body.is-empty .hero {
+      grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+      gap: 14px;
+    }
+
+    .hero-card,
+    .upload-card,
+    .panel,
+    .seller-card,
+    .notice {
+      background: rgba(255, 255, 255, 0.94);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .hero-card { padding: 18px; }
+
+    .upload-card {
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      justify-content: center;
+      min-width: 0;
+    }
+
+    body.is-empty .upload-card {
+      padding: 22px;
+      border-color: rgba(147, 197, 253, 0.72);
+      background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+      box-shadow: 0 18px 42px rgba(15, 23, 42, 0.1);
+    }
+
+    .upload-heading {
+      display: grid;
+      gap: 5px;
+      margin-bottom: 2px;
+    }
+
+    .upload-kicker {
+      display: inline-flex;
+      width: fit-content;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: #e0f2fe;
+      color: #075985;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .upload-heading strong {
+      color: var(--text);
+      font-size: 22px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .upload-heading p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .hero-card h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      letter-spacing: 0;
+      line-height: 1.12;
+    }
+
+    .hero-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .rule-list {
+      display: grid;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .rule {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      color: #344054;
+      font-size: 13px;
+    }
+
+    .rule b { color: var(--primary); }
+
+    .compact-help {
+      margin-top: 12px;
+      border-top: 1px solid var(--line);
+      padding-top: 10px;
+      color: #475467;
+      font-size: 13px;
+    }
+
+    .compact-help summary {
+      cursor: pointer;
+      font-weight: 800;
+      color: var(--text);
+    }
+
+    .upload-box {
+      border: 1.5px dashed #93c5fd;
+      border-radius: 16px;
+      background: linear-gradient(180deg, var(--primary-soft) 0%, #f8fbff 100%);
+      padding: 20px;
+      text-align: center;
+    }
+
+    .privacy-note {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      padding: 10px 11px;
+      border-radius: 12px;
+      background: #ecfdf5;
+      border: 1px solid #bbf7d0;
+      color: #065f46;
+      font-size: 13px;
+    }
+
+    .privacy-note b {
+      color: var(--good);
+      white-space: nowrap;
+    }
+
+    .pre-analysis-only { display: none; }
+
+    body.is-empty .pre-analysis-only { display: grid; }
+
+    .landing-preview {
+      grid-column: 1 / -1;
+      gap: 12px;
+      padding: 16px;
+      border: 1px solid rgba(147, 197, 253, 0.42);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.76);
+      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
+    }
+
+    .landing-preview-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .landing-preview-header strong {
+      font-size: 15px;
+      letter-spacing: 0;
+    }
+
+    .landing-preview-header span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .landing-steps {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .step-card,
+    .placeholder-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      padding: 11px;
+      min-width: 0;
+    }
+
+    .step-card {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 9px;
+      align-items: start;
+    }
+
+    .step-num {
+      display: inline-grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .step-card strong {
+      display: block;
+      margin-bottom: 2px;
+      font-size: 13px;
+    }
+
+    .step-card span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .placeholder-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .placeholder-card span {
+      display: block;
+      margin-bottom: 2px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .placeholder-card strong {
+      font-size: 14px;
+      color: #344054;
+    }
+
+    .upload-box input,
+    .select {
+      width: 100%;
+      padding: 12px;
+      background: #fff;
+      border: 1px solid var(--line-strong);
+      border-radius: 12px;
+      cursor: pointer;
+      color: var(--text);
+    }
+
+    .field-label {
+      display: block;
+      margin-bottom: 6px;
+      color: #344054;
+      font-weight: 800;
+      font-size: 14px;
+    }
+
+    .small {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .status {
+      min-height: 28px;
+      padding: 9px 11px;
+      border-radius: 10px;
+      background: #f8fafc;
+      color: #334155;
+      font-size: 13px;
+      border: 1px solid var(--line);
+      word-break: keep-all;
+    }
+
+    .status.good {
+      background: #ecfdf5;
+      color: var(--good);
+      border-color: #bbf7d0;
+    }
+
+    .status.warn {
+      background: #fffbeb;
+      color: var(--warn);
+      border-color: #fde68a;
+    }
+
+    .status.danger {
+      background: #fef2f2;
+      color: var(--danger);
+      border-color: #fecaca;
+    }
+
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      padding: 10px;
+      margin: 0 0 10px;
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+    }
+
+    .input {
+      width: 100%;
+      height: 38px;
+      padding: 0 11px;
+      border: 1px solid var(--line-strong);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--text);
+      outline: none;
+      font-size: 14px;
+    }
+
+    .input:focus,
+    .select:focus,
+    .upload-box input:focus {
+      border-color: #60a5fa;
+      box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.18);
+    }
+
+    button:focus-visible,
+    .input:focus-visible,
+    .select:focus-visible,
+    .upload-box input:focus-visible,
+    details.notice summary:focus-visible {
+      outline: 3px solid rgba(37, 99, 235, 0.35);
+      outline-offset: 3px;
+    }
+
+    .button-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    button,
+    .button {
+      border: 1px solid var(--line-strong);
+      background: #fff;
+      color: #344054;
+      border-radius: 10px;
+      padding: 8px 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: 0.16s ease;
+      white-space: nowrap;
+    }
+
+    button:hover,
+    .button:hover {
+      transform: translateY(-1px);
+      border-color: #93c5fd;
+      color: var(--primary);
+    }
+
+    button.primary {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+
+    button.primary:hover {
+      background: var(--primary-dark);
+      color: #fff;
+    }
+
+    button.danger {
+      color: var(--danger);
+      border-color: #fecaca;
+      background: #fffafa;
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .upload-box input:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .summary-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      box-shadow: 0 5px 14px rgba(15, 23, 42, 0.04);
+    }
+
+    .summary-card.attention {
+      border-color: #fde68a;
+      background: #fffbeb;
+    }
+
+    .summary-card .label {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 3px;
+    }
+
+    .summary-card .value {
+      font-size: 22px;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 18px 0 8px;
+    }
+
+    .section-title h2 {
+      margin: 0;
+      font-size: 19px;
+      letter-spacing: 0;
+    }
+
+    .section-title span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .panel {
+      padding: 14px;
+      overflow: hidden;
+    }
+
+
+    .file-check-accordion {
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .file-check-header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 12px 14px;
+      background: #fff;
+      border-bottom: 1px solid transparent;
+    }
+
+    .file-check-accordion.open .file-check-header {
+      border-bottom-color: var(--line);
+    }
+
+    .file-check-title-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .file-check-title {
+      font-size: 16px;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+
+    .file-check-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 13px;
+      min-width: 0;
+    }
+
+    .file-check-meta span {
+      max-width: 420px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 9px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .status-badge.normal {
+      background: #ecfdf5;
+      color: var(--good);
+      border: 1px solid #bbf7d0;
+    }
+
+    .status-badge.warning {
+      background: #fffbeb;
+      color: var(--warn);
+      border: 1px solid #fde68a;
+    }
+
+    .status-badge.danger {
+      background: #fef2f2;
+      color: var(--danger);
+      border: 1px solid #fecaca;
+    }
+
+    .file-check-desc {
+      color: var(--muted);
+      font-size: 13px;
+      margin-left: 2px;
+    }
+
+    .file-check-toggle {
+      min-width: 128px;
+    }
+
+    .file-check-body {
+      display: none;
+      padding: 14px;
+      background: #fff;
+    }
+
+    .file-check-accordion.open .file-check-body {
+      display: block;
+    }
+
+    .check-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .check-box {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      padding: 10px;
+      min-width: 0;
+    }
+
+    .check-box .k {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    .check-box .v {
+      font-weight: 900;
+      overflow-wrap: anywhere;
+    }
+
+    .preview-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .warning-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .warning-item {
+      border: 1px solid #fde68a;
+      background: #fffbeb;
+      color: #92400e;
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 13px;
+    }
+
+    .warning-item.danger {
+      border-color: #fecaca;
+      background: #fef2f2;
+      color: var(--danger);
+    }
+
+    .warning-item.good {
+      border-color: #bbf7d0;
+      background: #ecfdf5;
+      color: var(--good);
+    }
+
+    .shipping-overview {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .shipping-note {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .shipping-warning-summary {
+      display: grid;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .seller-list {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      align-items: start;
+    }
+
+    .seller-column {
+      display: grid;
+      gap: 10px;
+      align-content: start;
+      min-width: 0;
+    }
+
+    .seller-card {
+      display: block;
+      width: 100%;
+      overflow: hidden;
+      border-radius: 12px;
+      border-color: var(--seller-border, var(--line));
+      background:
+        linear-gradient(90deg, var(--seller-accent, #bfdbfe) 0 4px, transparent 4px),
+        var(--seller-tint, rgba(255, 255, 255, 0.94));
+    }
+
+    .seller-list > .empty {
+      grid-column: 1 / -1;
+    }
+
+    .seller-header {
+      width: 100%;
+      border: none;
+      border-radius: 0;
+      background: linear-gradient(90deg, var(--seller-tint, #fff), #fff 76%);
+      color: var(--text);
+      padding: 11px 12px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 8px;
+      text-align: left;
+    }
+
+    .seller-header:hover {
+      transform: none;
+      background: linear-gradient(90deg, var(--seller-hover, #f8fbff), #fff 78%);
+    }
+
+    .seller-name {
+      font-size: 15px;
+      font-weight: 900;
+      letter-spacing: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .seller-sub {
+      margin-top: 3px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: #f2f4f7;
+      color: #475467;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .pill.good {
+      background: #ecfdf5;
+      color: var(--good);
+    }
+
+    .pill.warn {
+      background: #fffbeb;
+      color: var(--warn);
+    }
+
+    .pill.danger {
+      background: #fef2f2;
+      color: var(--danger);
+    }
+
+    .seller-count {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-weight: 900;
+      color: var(--primary);
+      white-space: nowrap;
+    }
+
+    .chevron {
+      font-size: 16px;
+      color: #667085;
+      transition: transform 0.18s ease;
+    }
+
+    .seller-card.open .chevron {
+      transform: rotate(180deg);
+    }
+
+    .seller-body {
+      display: none;
+      padding: 10px 12px 12px;
+      border-top: 1px solid var(--seller-border, var(--line));
+      background: rgba(255, 255, 255, 0.78);
+    }
+
+    .seller-card.open .seller-body {
+      display: block;
+    }
+
+    .mini-summary {
+      display: none;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin: 14px 0;
+    }
+
+    .mini-box {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+    }
+
+    .mini-box div:first-child {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    .mini-box div:last-child {
+      font-size: 18px;
+      font-weight: 900;
+    }
+
+    .table-wrap {
+      width: 100%;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      min-width: 620px;
+    }
+
+    .seller-card table {
+      min-width: 0;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid var(--line);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+      font-size: 14px;
+    }
+
+    .seller-card th,
+    .seller-card td {
+      padding: 8px 9px;
+      font-size: 13px;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: #f8fafc;
+      color: #475467;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+
+    tr:last-child td { border-bottom: none; }
+
+    td.count,
+    th.count {
+      text-align: right;
+      width: 120px;
+      white-space: nowrap;
+      font-weight: 900;
+    }
+
+    .option-text {
+      white-space: normal;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+    }
+
+    .empty {
+      padding: 22px 14px;
+      text-align: center;
+      color: var(--muted);
+      border: 1px dashed var(--line-strong);
+      border-radius: 12px;
+      background: #fff;
+    }
+
+    .download-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .notice {
+      padding: 12px 14px;
+      color: #475467;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+
+    .notice strong { color: var(--text); }
+
+    details.notice summary {
+      cursor: pointer;
+      font-weight: 800;
+      color: var(--text);
+    }
+
+    .hidden { display: none !important; }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    @media (max-width: 1080px) {
+      .check-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 1520px) {
+      .seller-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 980px) {
+      .workspace-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .side-panel {
+        position: static;
+      }
+
+      .hero { grid-template-columns: 1fr; }
+
+      body.is-empty .hero { grid-template-columns: 1fr; }
+
+      .toolbar {
+        grid-template-columns: 1fr;
+        position: static;
+      }
+
+      .button-row { justify-content: flex-start; }
+
+      .seller-list { grid-template-columns: 1fr; }
+
+      .file-check-header {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+      }
+
+      .file-check-toggle {
+        width: 100%;
+      }
+
+      .file-check-meta span {
+        max-width: 100%;
+        white-space: normal;
+      }
+
+
+      .summary-grid { grid-template-columns: repeat(2, 1fr); }
+
+      .summary-card:last-child { grid-column: auto; }
+
+      .shipping-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+      .preview-grid { grid-template-columns: 1fr; }
+
+      .placeholder-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 640px) {
+      .app {
+        width: min(100% - 20px, 1280px);
+        padding-top: 14px;
+      }
+
+      .hero-card,
+      .upload-card,
+      .panel { padding: 16px; }
+
+      .mini-summary,
+      .check-grid,
+      .landing-steps,
+      .placeholder-grid { grid-template-columns: 1fr; }
+
+      .summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .shipping-overview { grid-template-columns: 1fr; }
+
+      .summary-card:last-child { grid-column: auto; }
+
+      .seller-header { grid-template-columns: 1fr; }
+
+      .seller-count { justify-content: space-between; }
+
+      button,
+      .button { white-space: normal; }
+
+      .button-row button,
+      .download-grid button { flex: 1 1 100%; }
+
+      table { min-width: 560px; }
+    }
+  </style>
+</head>
+<body class="is-empty">
+  <main class="app">
+    <div class="workspace-layout">
+      <aside class="side-panel" aria-label="파일 선택과 안내">
+        <section class="hero">
+          <div class="upload-card">
+            <div class="upload-heading">
+              <span class="upload-kicker">개인용 엑셀 주문 분석기</span>
+              <strong>엑셀 파일을 선택하면 바로 분석합니다</strong>
+              <p>판매자별 카테고리, 주문선택사항, 배송비를 한 화면에서 정리합니다.</p>
+            </div>
+            <div class="upload-box">
+              <label class="field-label" for="fileInput">엑셀 파일 선택</label>
+              <input id="fileInput" type="file" accept=".xlsx,.xls,.xlsm,.csv" aria-describedby="fileInputHelp statusBox" />
+              <div id="fileInputHelp" class="small" style="margin-top:10px;">파일을 선택하면 첫 번째 시트를 바로 분석합니다.</div>
+            </div>
+
+            <div class="privacy-note">
+              <b>로컬 처리</b>
+              <span>선택한 파일은 브라우저 안에서만 읽고, 원본 파일은 수정하지 않습니다.</span>
+            </div>
+
+            <div id="sheetSelectorWrap" class="hidden">
+              <label class="field-label" for="sheetSelect">분석할 시트 선택</label>
+              <select id="sheetSelect" class="select" aria-describedby="statusBox"></select>
+            </div>
+
+            <div id="statusBox" class="status" role="status" aria-live="polite">엑셀 파일을 선택하면 자동으로 분석됩니다.</div>
+          </div>
+
+          <div class="hero-card">
+            <h1>개인용 엑셀 주문 분석기</h1>
+            <p>H열 주문선택사항을 세고 C열·AA열 기준으로 판매자별 카테고리를 만듭니다.</p>
+            <details class="compact-help">
+              <summary>분석 기준 보기</summary>
+              <div class="rule-list">
+                <div class="rule"><b>✓</b><span>.xlsx / .xls / .xlsm / .csv 파일을 지원합니다.</span></div>
+                <div class="rule"><b>✓</b><span>상품명 안의 수량은 곱하지 않고 행 단위 주문 건수만 셉니다.</span></div>
+                <div class="rule"><b>✓</b><span>H열 문구가 다르면 서로 다른 주문선택사항으로 분리합니다.</span></div>
+                <div class="rule"><b>✓</b><span>AA열의 lkh5209, live_rock, lkh52009는 “lkh5209 통합판매자”로 묶습니다.</span></div>
+                <div class="rule"><b>✓</b><span>분석은 브라우저 안에서만 처리되며 원본 엑셀 파일은 수정하지 않습니다.</span></div>
+              </div>
+            </details>
+          </div>
+
+          <div class="landing-preview pre-analysis-only" aria-label="분석 전 안내">
+            <div class="landing-preview-header">
+              <strong>분석 전 준비 상태</strong>
+              <span>파일 선택 대기</span>
+            </div>
+            <div class="landing-steps">
+              <div class="step-card">
+                <span class="step-num">1</span>
+                <div><strong>엑셀 선택</strong><span>.xlsx, .xls, .xlsm, .csv 지원</span></div>
+              </div>
+              <div class="step-card">
+                <span class="step-num">2</span>
+                <div><strong>자동 분석</strong><span>첫 번째 시트를 바로 집계</span></div>
+              </div>
+              <div class="step-card">
+                <span class="step-num">3</span>
+                <div><strong>결과 확인</strong><span>판매자, 옵션, 배송비를 표로 확인</span></div>
+              </div>
+            </div>
+            <div class="placeholder-grid">
+              <div class="placeholder-card"><span>판매자별 카테고리</span><strong>분석 후 표시</strong></div>
+              <div class="placeholder-card"><span>주요 요약 숫자</span><strong>자동 집계</strong></div>
+              <div class="placeholder-card"><span>배송비 분석</span><strong>X열 기준</strong></div>
+              <div class="placeholder-card"><span>다운로드</span><strong>결과 생성 후</strong></div>
+            </div>
+          </div>
+        </section>
+      </aside>
+
+      <section id="resultArea" class="main-panel hidden" aria-labelledby="resultsTitle">
+      <h2 id="resultsTitle" class="sr-only">분석 결과</h2>
+      <div class="toolbar">
+        <label class="sr-only" for="sellerSearch">판매자 검색</label>
+        <input id="sellerSearch" class="input" type="search" placeholder="판매자 검색 예: 리본컴퍼니, 마루몰" autocomplete="off" />
+        <label class="sr-only" for="optionSearch">주문선택사항 검색</label>
+        <input id="optionSearch" class="input" type="search" placeholder="주문선택사항 검색 예: 브이콘, 20개" autocomplete="off" />
+        <div class="button-row">
+          <button id="expandAllBtn" type="button">전체 펼치기</button>
+          <button id="collapseAllBtn" type="button">전체 접기</button>
+          <button id="resetBtn" type="button" class="danger">초기화</button>
+        </div>
+      </div>
+
+      <div id="summaryGrid" class="summary-grid" aria-live="polite"></div>
+
+      <section>
+        <div id="fileCheckPanel" class="panel file-check-accordion"></div>
+      </section>
+
+      <section>
+        <div class="section-title">
+          <h2>배송비 분석</h2>
+          <span>X열 기준 / 0원 제외</span>
+        </div>
+        <div class="panel">
+          <div id="shippingFeePanel"></div>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-title">
+          <h2>판매자별 카테고리</h2>
+          <span id="sellerSectionHint">compact / 총 주문건수 순</span>
+        </div>
+        <div id="sellerList" class="seller-list"></div>
+      </section>
+
+      <section>
+        <div class="section-title">
+          <h2>전체 주문선택사항별 주문건수</h2>
+          <span>판매자 구분 없이 H열 기준 전체 집계</span>
+        </div>
+        <div class="panel">
+          <div id="overallOptionTable"></div>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-title">
+          <h2>확인 필요 목록</h2>
+          <span>빈 값, 판매자 확인 불가, 열 부족</span>
+        </div>
+        <div class="panel">
+          <div id="needReviewTable"></div>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-title">
+          <h2>다운로드</h2>
+          <span>현재 분석 결과 기준</span>
+        </div>
+        <div class="panel">
+          <div class="download-grid">
+            <button id="downloadXlsxBtn" class="primary" type="button">분석 결과 엑셀 다운로드</button>
+            <button id="downloadSellerDetailCsvBtn" type="button">판매자별 상세 CSV</button>
+            <button id="downloadSellerTotalCsvBtn" type="button">판매자별 총주문 CSV</button>
+            <button id="downloadOverallCsvBtn" type="button">전체 주문선택사항 CSV</button>
+          </div>
+        </div>
+      </section>
+
+      <details class="notice">
+        <summary>판매자 판정 기준 / .xls 사용 안내 / 오프라인 사용 안내</summary>
+        <p><strong>판매자 판정:</strong> AA열이 lkh5209, live_rock, lkh52009 중 하나이면 “lkh5209 통합판매자”로 최우선 묶습니다. 그 외에는 C열 값에서 괄호 안 판매자명 예: 쿠팡(마루몰) → 마루몰 을 우선 사용합니다. C열이 비어 있으면 AA열을 사용합니다.</p>
+        <p><strong>.xls 안내:</strong> 구형 엑셀 파일도 SheetJS로 읽습니다. 다만 일부 오래된 .xls는 한글/날짜/숫자 형식이 깨질 수 있습니다. 읽기 실패 시 엑셀에서 “다른 이름으로 저장 → .xlsx”로 다시 저장한 뒤 업로드해보세요.</p>
+        <p><strong>오프라인 사용:</strong> 인터넷 없이 쓰려면 <code>xlsx.full.min.js</code> 파일을 이 <code>index.html</code>과 같은 폴더에 저장하면 됩니다. 같은 폴더에 라이브러리가 없으면 CDN을 통해 불러옵니다.</p>
+      </details>
+      </section>
+    </div>
+  </main>
+
+  <script src="./xlsx.full.min.js"></script>
+  <script>
+    (function loadXlsxFallback() {
+      if (window.XLSX) return;
+
+      window.__xlsxFallbackRequested = true;
+      const script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+      script.crossOrigin = "anonymous";
+      script.referrerPolicy = "no-referrer";
+      script.onload = function () {
+        window.__xlsxFallbackLoaded = true;
+        window.dispatchEvent(new Event("xlsx-library-change"));
+      };
+      script.onerror = function () {
+        window.__xlsxFallbackFailed = true;
+        window.dispatchEvent(new Event("xlsx-library-change"));
+      };
+      document.head.appendChild(script);
+
+      window.setTimeout(function () {
+        if (!window.XLSX && !window.__xlsxFallbackLoaded) {
+          window.__xlsxFallbackTimedOut = true;
+          window.dispatchEvent(new Event("xlsx-library-change"));
+        }
+      }, 5000);
+    })();
+  </script>
+
+  <script>
+    const COL_C = 2;
+    const COL_H = 7;
+    const COL_X = 23;
+    const COL_AA = 26;
+    const SPECIAL_SELLER_IDS = new Set(["lkh5209", "live_rock", "lkh52009"]);
+    const SPECIAL_SELLER_NAME = "lkh5209 통합판매자";
+    const SUPPORTED_FILE_EXTS = new Set(["xlsx", "xls", "xlsm", "csv"]);
+    const SELLER_COLOR_PALETTE = [
+      { accent: "#93c5fd", border: "#bfdbfe", tint: "#f8fbff", hover: "#eff6ff" },
+      { accent: "#86efac", border: "#bbf7d0", tint: "#f6fef9", hover: "#ecfdf5" },
+      { accent: "#fcd34d", border: "#fde68a", tint: "#fffdf2", hover: "#fffbeb" },
+      { accent: "#fca5a5", border: "#fecaca", tint: "#fff8f8", hover: "#fef2f2" },
+      { accent: "#c4b5fd", border: "#ddd6fe", tint: "#fbf9ff", hover: "#f5f3ff" },
+      { accent: "#67e8f9", border: "#a5f3fc", tint: "#f2feff", hover: "#ecfeff" }
+    ];
+
+    const state = {
+      workbook: null,
+      sheetNames: [],
+      activeSheetName: "",
+      fileName: "",
+      fileExt: "",
+      summary: null,
+      sellerGroups: [],
+      sellerTotals: [],
+      sellerOptionRows: [],
+      overallOptionRows: [],
+      needReviewRows: [],
+      shippingFeeSummary: null,
+      shippingFeeRows: [],
+      shippingFeeWarnings: [],
+      expandedSellers: new Set(),
+      fileCheck: null,
+      warnings: [],
+      fileCheckStatus: null,
+      isFileCheckOpen: false
+    };
+
+    const el = {
+      fileInput: document.getElementById("fileInput"),
+      sheetSelectorWrap: document.getElementById("sheetSelectorWrap"),
+      sheetSelect: document.getElementById("sheetSelect"),
+      statusBox: document.getElementById("statusBox"),
+      resultArea: document.getElementById("resultArea"),
+      fileCheckPanel: document.getElementById("fileCheckPanel"),
+      sellerSearch: document.getElementById("sellerSearch"),
+      optionSearch: document.getElementById("optionSearch"),
+      expandAllBtn: document.getElementById("expandAllBtn"),
+      collapseAllBtn: document.getElementById("collapseAllBtn"),
+      resetBtn: document.getElementById("resetBtn"),
+      summaryGrid: document.getElementById("summaryGrid"),
+      sellerList: document.getElementById("sellerList"),
+      shippingFeePanel: document.getElementById("shippingFeePanel"),
+      overallOptionTable: document.getElementById("overallOptionTable"),
+      needReviewTable: document.getElementById("needReviewTable"),
+      downloadXlsxBtn: document.getElementById("downloadXlsxBtn"),
+      downloadSellerDetailCsvBtn: document.getElementById("downloadSellerDetailCsvBtn"),
+      downloadSellerTotalCsvBtn: document.getElementById("downloadSellerTotalCsvBtn"),
+      downloadOverallCsvBtn: document.getElementById("downloadOverallCsvBtn")
+    };
+
+    function clean(value) {
+      if (value === null || value === undefined) return "";
+      return String(value).replace(/\u00a0/g, " ").trim();
+    }
+
+    function lower(value) {
+      return clean(value).toLowerCase();
+    }
+
+    function formatNumber(value) {
+      return Number(value || 0).toLocaleString("ko-KR");
+    }
+
+    function formatCurrency(value) {
+      return `${formatNumber(value)}원`;
+    }
+
+    function cell(row, index) {
+      if (!Array.isArray(row)) return "";
+      return clean(row[index]);
+    }
+
+    function isRowNotEmpty(row) {
+      return Array.isArray(row) && row.some(value => clean(value) !== "");
+    }
+
+    function getFileExt(fileName) {
+      const match = clean(fileName).match(/\.([^.]+)$/);
+      return match ? match[1].toLowerCase() : "알 수 없음";
+    }
+
+    function extractSellerFromC(cValue) {
+      const c = clean(cValue);
+      if (!c) return "";
+      const parenMatch = c.match(/\(([^)]+)\)/);
+      if (parenMatch && clean(parenMatch[1])) return clean(parenMatch[1]);
+      return c;
+    }
+
+    function resolveSeller(cValue, aaValue, hasAAColumn) {
+      const c = clean(cValue);
+      const aa = hasAAColumn ? clean(aaValue) : "";
+      const aaKey = aa.toLowerCase();
+
+      if (aa && SPECIAL_SELLER_IDS.has(aaKey)) {
+        return { seller: SPECIAL_SELLER_NAME, source: "AA열 통합 규칙", reason: "" };
+      }
+
+      if (c) {
+        return { seller: extractSellerFromC(c), source: "C열", reason: "" };
+      }
+
+      if (aa) {
+        return { seller: aa, source: "AA열", reason: "" };
+      }
+
+      return {
+        seller: "",
+        source: "",
+        reason: hasAAColumn
+          ? "C열과 AA열 모두 비어 있음"
+          : "C열과 AA열 모두 비어 있음 / AA열 없음"
+      };
+    }
+
+    function sortByCountThenName(a, b, countKey = "주문건수", nameKey = "주문선택사항") {
+      return (b[countKey] - a[countKey]) || String(a[nameKey] || "").localeCompare(String(b[nameKey] || ""), "ko");
+    }
+
+    function getSellerColorStyle(seller) {
+      const text = clean(seller);
+      let hash = 0;
+      for (let index = 0; index < text.length; index += 1) {
+        hash = (hash * 31 + text.charCodeAt(index)) >>> 0;
+      }
+
+      const color = SELLER_COLOR_PALETTE[hash % SELLER_COLOR_PALETTE.length];
+      return `--seller-accent:${color.accent}; --seller-border:${color.border}; --seller-tint:${color.tint}; --seller-hover:${color.hover};`;
+    }
+
+    function parseShippingFeeValue(value) {
+      const raw = clean(value);
+      if (!raw) return { status: "empty", amount: 0, raw };
+
+      const normalized = raw
+        .replace(/,/g, "")
+        .replace(/원/g, "")
+        .replace(/₩/g, "")
+        .replace(/\s/g, "");
+
+      if (!normalized) return { status: "empty", amount: 0, raw };
+      if (normalized.includes(".")) return { status: "decimal", amount: 0, raw, reason: "소수점 금액" };
+      if (!/^-?\d+$/.test(normalized)) return { status: "invalid", amount: 0, raw, reason: "숫자로 해석 불가" };
+
+      const amount = Number(normalized);
+      if (amount < 0) return { status: "negative", amount, raw, reason: "음수 배송비" };
+      if (amount === 0) return { status: "zero", amount, raw };
+      return { status: "positive", amount, raw };
+    }
+
+    function analyzeShippingFees(dataRows, check) {
+      const amountMap = new Map();
+      const warnings = [];
+      const summary = {
+        chargedCount: 0,
+        totalAmount: 0,
+        distinctAmountCount: 0,
+        zeroCount: 0,
+        emptyCount: 0,
+        warningCount: 0,
+        missingColumn: !check.hasX
+      };
+
+      if (!check.hasX) {
+        warnings.push({
+          "원본 행 번호": "-",
+          "X열 배송비": "열 없음",
+          "사유": "X열 배송비를 찾지 못했습니다."
+        });
+        summary.warningCount = warnings.length;
+        return { summary, rows: [], warnings };
+      }
+
+      dataRows.forEach((row, index) => {
+        const sourceRowNumber = index + 2;
+        const parsed = parseShippingFeeValue(cell(row, COL_X));
+
+        if (parsed.status === "positive") {
+          const current = amountMap.get(parsed.amount) || { amount: parsed.amount, count: 0 };
+          current.count += 1;
+          amountMap.set(parsed.amount, current);
+          summary.chargedCount += 1;
+          summary.totalAmount += parsed.amount;
+          return;
+        }
+
+        if (parsed.status === "zero") {
+          summary.zeroCount += 1;
+          return;
+        }
+
+        if (parsed.status === "empty") {
+          summary.emptyCount += 1;
+          return;
+        }
+
+        warnings.push({
+          "원본 행 번호": sourceRowNumber,
+          "X열 배송비": parsed.raw,
+          "사유": parsed.reason
+        });
+      });
+
+      const rows = Array.from(amountMap.values())
+        .sort((a, b) => a.amount - b.amount)
+        .map(item => ({
+          "배송비 금액": formatCurrency(item.amount),
+          "건수": item.count,
+          "합계 금액": formatCurrency(item.amount * item.count)
+        }));
+
+      summary.distinctAmountCount = rows.length;
+      summary.warningCount = warnings.length;
+
+      return { summary, rows, warnings };
+    }
+
+    function setStatus(message, type = "") {
+      el.statusBox.className = `status ${type}`.trim();
+      el.statusBox.textContent = message;
+    }
+
+    function requireXlsx() {
+      if (!window.XLSX) {
+        throw new Error("엑셀 라이브러리 SheetJS를 불러오지 못했습니다. 인터넷 연결을 확인하거나 xlsx.full.min.js 파일을 index.html과 같은 폴더에 넣어주세요.");
+      }
+    }
+
+    function resetAnalysisOnly() {
+      state.summary = null;
+      state.sellerGroups = [];
+      state.sellerTotals = [];
+      state.sellerOptionRows = [];
+      state.overallOptionRows = [];
+      state.needReviewRows = [];
+      state.shippingFeeSummary = null;
+      state.shippingFeeRows = [];
+      state.shippingFeeWarnings = [];
+      state.expandedSellers = new Set();
+      state.fileCheck = null;
+      state.warnings = [];
+      state.fileCheckStatus = null;
+      state.isFileCheckOpen = false;
+      document.body.classList.add("is-empty");
+      el.sellerSearch.value = "";
+      el.optionSearch.value = "";
+      el.resultArea.classList.add("hidden");
+      el.summaryGrid.innerHTML = "";
+      el.sellerList.innerHTML = "";
+      el.shippingFeePanel.innerHTML = "";
+      el.overallOptionTable.innerHTML = "";
+      el.needReviewTable.innerHTML = "";
+      el.fileCheckPanel.innerHTML = "";
+    }
+
+    function resetAll() {
+      state.workbook = null;
+      state.sheetNames = [];
+      state.activeSheetName = "";
+      state.fileName = "";
+      state.fileExt = "";
+      el.fileInput.value = "";
+      el.sheetSelect.innerHTML = "";
+      el.sheetSelectorWrap.classList.add("hidden");
+      resetAnalysisOnly();
+      setStatus("초기화 완료. 새 엑셀 파일을 선택하면 다시 분석됩니다.");
+    }
+
+    function getRowsFromSheet(sheetName) {
+      const sheet = state.workbook.Sheets[sheetName];
+      return XLSX.utils.sheet_to_json(sheet, {
+        header: 1,
+        defval: "",
+        raw: false,
+        blankrows: false
+      });
+    }
+
+    function buildColumnCheck(rows) {
+      const maxColumns = rows.reduce((max, row) => Math.max(max, Array.isArray(row) ? row.length : 0), 0);
+      const dataRows = rows.slice(1).filter(isRowNotEmpty);
+      const firstDataRowIndex = rows.findIndex((row, index) => index > 0 && isRowNotEmpty(row));
+      const firstDataRow = firstDataRowIndex >= 0 ? rows[firstDataRowIndex] : [];
+
+      const hasC = maxColumns > COL_C;
+      const hasH = maxColumns > COL_H;
+      const hasX = maxColumns > COL_X;
+      const hasAA = maxColumns > COL_AA;
+
+      const hNonEmptyCount = dataRows.filter(row => cell(row, COL_H)).length;
+      const hEmptyCount = Math.max(0, dataRows.length - hNonEmptyCount);
+      const hNonEmptyRatio = dataRows.length ? hNonEmptyCount / dataRows.length : 0;
+
+      const warnings = [];
+      const dangerWarnings = [];
+
+      if (!hasC) dangerWarnings.push("C열을 찾지 못했습니다. 판매자 구분이 어려울 수 있습니다.");
+      if (!hasH) dangerWarnings.push("H열 주문선택사항을 찾지 못했습니다. 열 개수 부족 가능성이 큽니다.");
+      if (!hasAA) warnings.push("AA열을 찾지 못했습니다. C열 기준으로 가능한 만큼 분석합니다.");
+      if (dataRows.length === 0) dangerWarnings.push("첫 행 제목 아래에 분석할 데이터 행이 없습니다.");
+      if (hasH && dataRows.length > 0 && (hNonEmptyCount === 0 || hNonEmptyRatio < 0.1)) {
+        dangerWarnings.push("H열 주문선택사항을 찾지 못했을 수 있습니다. H열 값이 거의 비어 있습니다.");
+      }
+      if (state.fileExt === "xls") {
+        warnings.push(".xls는 구형 엑셀 형식입니다. 한글/날짜/숫자가 이상하면 엑셀에서 .xlsx로 다시 저장 후 업로드해보세요.");
+      }
+
+      return {
+        maxColumns,
+        dataRowCount: dataRows.length,
+        firstDataRowNumber: firstDataRowIndex >= 0 ? firstDataRowIndex + 1 : "",
+        preview: {
+          "C열": hasC ? cell(firstDataRow, COL_C) : "열 없음",
+          "H열": hasH ? cell(firstDataRow, COL_H) : "열 없음",
+          "X열": hasX ? cell(firstDataRow, COL_X) : "열 없음",
+          "AA열": hasAA ? cell(firstDataRow, COL_AA) : "열 없음"
+        },
+        hasC,
+        hasH,
+        hasX,
+        hasAA,
+        hNonEmptyCount,
+        hEmptyCount,
+        hNonEmptyRatio,
+        warnings,
+        dangerWarnings
+      };
+    }
+
+    function analyzeRows(rows) {
+      const check = buildColumnCheck(rows);
+      const dataRows = rows.slice(1).filter(isRowNotEmpty);
+      const validRows = [];
+      const needReviewRows = [];
+      const shippingFeeAnalysis = analyzeShippingFees(dataRows, check);
+
+      dataRows.forEach((row, index) => {
+        const sourceRowNumber = index + 2;
+        const cValue = check.hasC ? cell(row, COL_C) : "";
+        const hValue = check.hasH ? cell(row, COL_H) : "";
+        const aaValue = check.hasAA ? cell(row, COL_AA) : "";
+        const reasons = [];
+
+        if (!check.hasC || !check.hasH) {
+          reasons.push("열 개수 부족");
+        }
+
+        if (!check.hasAA) {
+          reasons.push("AA열 없음");
+        }
+
+        if (!hValue) {
+          reasons.push("H열 주문선택사항 비어 있음");
+        }
+
+        const sellerResult = resolveSeller(cValue, aaValue, check.hasAA);
+        if (!sellerResult.seller) {
+          reasons.push(sellerResult.reason || "판매자 확인 불가");
+        }
+
+        const shouldReview =
+          !hValue ||
+          !sellerResult.seller ||
+          !check.hasH ||
+          !check.hasC;
+
+        if (shouldReview) {
+          needReviewRows.push({
+            "원본 행 번호": sourceRowNumber,
+            "C열 값": cValue,
+            "AA열 값": check.hasAA ? aaValue : "AA열 없음",
+            "H열 주문선택사항": hValue,
+            "사유": unique(reasons).join(" / ")
+          });
+          return;
+        }
+
+        validRows.push({
+          rowNumber: sourceRowNumber,
+          seller: sellerResult.seller,
+          sellerSource: sellerResult.source,
+          option: hValue,
+          cValue,
+          aaValue
+        });
+      });
+
+      const sellerMap = new Map();
+      const optionMap = new Map();
+
+      validRows.forEach(item => {
+        if (!sellerMap.has(item.seller)) {
+          sellerMap.set(item.seller, { seller: item.seller, total: 0, optionMap: new Map() });
+        }
+
+        const sellerGroup = sellerMap.get(item.seller);
+        sellerGroup.total += 1;
+        sellerGroup.optionMap.set(item.option, (sellerGroup.optionMap.get(item.option) || 0) + 1);
+        optionMap.set(item.option, (optionMap.get(item.option) || 0) + 1);
+      });
+
+      const sellerGroups = Array.from(sellerMap.values()).map(group => {
+        const optionRows = Array.from(group.optionMap.entries())
+          .map(([option, count]) => ({
+            "판매자": group.seller,
+            "주문선택사항": option,
+            "주문건수": count
+          }))
+          .sort((a, b) => sortByCountThenName(a, b));
+
+        return {
+          seller: group.seller,
+          total: group.total,
+          uniqueOptionCount: optionRows.length,
+          optionRows
+        };
+      }).sort((a, b) => (b.total - a.total) || a.seller.localeCompare(b.seller, "ko"));
+
+      const sellerTotals = sellerGroups.map(group => ({
+        "판매자": group.seller,
+        "총 주문건수": group.total,
+        "고유 주문선택사항 수": group.uniqueOptionCount
+      }));
+
+      const sellerOptionRows = sellerGroups.flatMap(group => group.optionRows);
+
+      const overallOptionRows = Array.from(optionMap.entries())
+        .map(([option, count]) => ({
+          "주문선택사항": option,
+          "전체 주문건수": count
+        }))
+        .sort((a, b) => (b["전체 주문건수"] - a["전체 주문건수"]) || a["주문선택사항"].localeCompare(b["주문선택사항"], "ko"));
+
+      const sellerTotalSum = sellerTotals.reduce((sum, row) => sum + row["총 주문건수"], 0);
+      const overallOptionSum = overallOptionRows.reduce((sum, row) => sum + row["전체 주문건수"], 0);
+
+      const summary = {
+        "전체 데이터 행 수": dataRows.length,
+        "분석된 주문 수": validRows.length,
+        "판매자 수": sellerGroups.length,
+        "고유 주문선택사항 수": overallOptionRows.length,
+        "확인 필요 건수": needReviewRows.length,
+        "판매자별 총 주문건수 합계": sellerTotalSum,
+        "전체 주문선택사항별 주문건수 합계": overallOptionSum,
+        "검증 결과": sellerTotalSum === validRows.length && overallOptionSum === validRows.length ? "정상" : "불일치"
+      };
+
+      return {
+        summary,
+        sellerGroups,
+        sellerTotals,
+        sellerOptionRows,
+        overallOptionRows,
+        needReviewRows,
+        shippingFeeSummary: shippingFeeAnalysis.summary,
+        shippingFeeRows: shippingFeeAnalysis.rows,
+        shippingFeeWarnings: shippingFeeAnalysis.warnings,
+        fileCheck: check,
+        warnings: [...check.warnings, ...check.dangerWarnings.map(text => `위험: ${text}`)]
+      };
+    }
+
+    function unique(values) {
+      return [...new Set(values.filter(Boolean))];
+    }
+
+    async function handleFile(file) {
+      if (!file) return;
+      resetAnalysisOnly();
+      state.workbook = null;
+      state.sheetNames = [];
+      state.activeSheetName = "";
+      state.fileName = file.name;
+      state.fileExt = getFileExt(file.name);
+      el.sheetSelect.innerHTML = "";
+      el.sheetSelectorWrap.classList.add("hidden");
+
+      if (!SUPPORTED_FILE_EXTS.has(state.fileExt)) {
+        throw new Error("지원하지 않는 파일 형식입니다. .xlsx, .xls, .xlsm, .csv 파일만 선택해주세요.");
+      }
+
+      requireXlsx();
+      setStatus(`파일 읽는 중: ${file.name}`);
+
+      try {
+        const buffer = await file.arrayBuffer();
+        state.workbook = XLSX.read(buffer, {
+          type: "array",
+          raw: false,
+          cellDates: false,
+          WTF: false,
+          codepage: 949
+        });
+      } catch (error) {
+        console.error(error);
+        const extra = state.fileExt === "xls"
+          ? " .xls 파일은 구형 형식이라 일부 파일에서 깨질 수 있습니다. 엑셀에서 .xlsx로 다시 저장 후 업로드해보세요."
+          : "";
+        throw new Error(`파일 읽기 오류가 발생했습니다.${extra}`);
+      }
+
+      state.sheetNames = state.workbook.SheetNames || [];
+      if (state.sheetNames.length === 0) {
+        throw new Error("엑셀 파일 안에서 분석할 시트를 찾지 못했습니다.");
+      }
+
+      populateSheetSelector();
+      analyzeActiveSheet(state.sheetNames[0]);
+    }
+
+    function populateSheetSelector() {
+      el.sheetSelect.innerHTML = state.sheetNames
+        .map(name => `<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`)
+        .join("");
+
+      if (state.sheetNames.length > 1) {
+        el.sheetSelectorWrap.classList.remove("hidden");
+      } else {
+        el.sheetSelectorWrap.classList.add("hidden");
+      }
+    }
+
+    function analyzeActiveSheet(sheetName) {
+      requireXlsx();
+
+      if (!state.workbook || !sheetName) {
+        throw new Error("분석할 엑셀 파일 또는 시트를 찾지 못했습니다.");
+      }
+
+      resetAnalysisOnly();
+
+      state.activeSheetName = sheetName;
+      el.sheetSelect.value = sheetName;
+
+      let rows;
+      try {
+        rows = getRowsFromSheet(sheetName);
+      } catch (error) {
+        console.error(error);
+        throw new Error("시트 데이터를 읽는 중 오류가 발생했습니다.");
+      }
+
+      if (!rows || rows.length < 2) {
+        throw new Error("분석할 데이터가 없습니다. 첫 행은 제목, 두 번째 행부터 주문 데이터여야 합니다.");
+      }
+
+      const analyzed = analyzeRows(rows);
+      Object.assign(state, analyzed);
+      state.expandedSellers = new Set();
+      state.fileCheckStatus = getFileCheckStatus();
+      state.isFileCheckOpen = state.fileCheckStatus.level !== "normal";
+
+      renderAll();
+      el.resultArea.classList.remove("hidden");
+      document.body.classList.remove("is-empty");
+
+      const validationOk = state.summary["검증 결과"] === "정상";
+      const hasDanger = state.fileCheck.dangerWarnings.length > 0;
+
+      if (validationOk && !hasDanger) {
+        setStatus(`분석 완료: ${state.fileName} / 시트: ${state.activeSheetName} / 분석된 주문 ${formatNumber(state.summary["분석된 주문 수"])}건`, "good");
+      } else if (validationOk && hasDanger) {
+        setStatus(`분석은 완료됐지만 열 검증 경고가 있습니다. C/H/AA열 미리보기를 확인해주세요.`, "warn");
+      } else {
+        setStatus("분석은 완료됐지만 총합 검증이 일치하지 않습니다. 결과를 확인해주세요.", "danger");
+      }
+    }
+
+    function renderAll() {
+      renderFileCheck();
+      renderSummary();
+      renderShippingFeeAnalysis();
+      renderSellerCards();
+      renderOverallOptionTable();
+      renderNeedReviewTable();
+    }
+
+    function getFileCheckStatus() {
+      const s = state.summary;
+      const c = state.fileCheck;
+
+      if (!s || !c) {
+        return { level: "normal", label: "정상", description: "분석 전", badgeClass: "normal" };
+      }
+
+      const isTotalMismatch = s["검증 결과"] !== "정상";
+      const isDanger =
+        !c.hasC ||
+        !c.hasH ||
+        c.dangerWarnings.length > 0 ||
+        isTotalMismatch ||
+        s["분석된 주문 수"] === 0;
+
+      if (isDanger) {
+        let description = "검증 확인 필요";
+        if (!c.hasH || c.hNonEmptyRatio < 0.1) description = "H열 주문선택사항 확인 필요";
+        else if (!c.hasC) description = "C열 판매자 확인 필요";
+        else if (isTotalMismatch) description = "총합 불일치";
+        else if (s["분석된 주문 수"] === 0) description = "분석된 주문 0건";
+
+        return { level: "danger", label: "위험", description, badgeClass: "danger" };
+      }
+
+      const isWarning =
+        !c.hasAA ||
+        c.warnings.length > 0 ||
+        s["확인 필요 건수"] > 0 ||
+        state.fileExt === "xls";
+
+      if (isWarning) {
+        let description = "주의 필요";
+        if (s["확인 필요 건수"] > 0) description = `확인 필요 ${formatNumber(s["확인 필요 건수"])}건`;
+        else if (!c.hasAA) description = "AA열 없음";
+        else if (state.fileExt === "xls") description = ".xls 구형 형식";
+
+        return { level: "warning", label: "주의", description, badgeClass: "warning" };
+      }
+
+      return { level: "normal", label: "정상", description: "총합 일치", badgeClass: "normal" };
+    }
+
+    function renderFileCheck() {
+      const s = state.summary;
+      const c = state.fileCheck;
+      if (!s || !c) return;
+
+      const status = getFileCheckStatus();
+      state.fileCheckStatus = status;
+
+      const validationClass = s["검증 결과"] === "정상" ? "good" : "danger";
+      const validationText = s["검증 결과"] === "정상" ? "총합 일치" : "총합 불일치";
+
+      const warningHtml = [
+        ...c.dangerWarnings.map(text => `<div class="warning-item danger">⚠ ${escapeHtml(text)}</div>`),
+        ...c.warnings.map(text => `<div class="warning-item">주의: ${escapeHtml(text)}</div>`)
+      ].join("");
+
+      el.fileCheckPanel.className = `panel file-check-accordion ${state.isFileCheckOpen ? "open" : ""}`;
+
+      el.fileCheckPanel.innerHTML = `
+        <div class="file-check-header">
+          <div>
+            <div class="file-check-title-row">
+              <div class="file-check-title">파일 / 열 검증</div>
+              <span class="status-badge ${status.badgeClass}">${escapeHtml(status.label)}</span>
+              <span class="file-check-desc">${escapeHtml(status.description)}</span>
+            </div>
+            <div class="file-check-meta">
+              <span title="${escapeAttr(state.fileName)}">파일: ${escapeHtml(state.fileName)}</span>
+              <span title="${escapeAttr(state.activeSheetName)}">시트: ${escapeHtml(state.activeSheetName)}</span>
+            </div>
+          </div>
+          <button id="fileCheckToggleBtn" class="file-check-toggle" type="button" aria-expanded="${state.isFileCheckOpen ? "true" : "false"}" aria-controls="fileCheckBody">
+            ${state.isFileCheckOpen ? "검증 정보 접기" : "검증 정보 펼치기"}
+          </button>
+        </div>
+
+        <div id="fileCheckBody" class="file-check-body">
+          <div class="check-grid">
+            <div class="check-box"><div class="k">파일명</div><div class="v">${escapeHtml(state.fileName)}</div></div>
+            <div class="check-box"><div class="k">확장자</div><div class="v">.${escapeHtml(state.fileExt)}</div></div>
+            <div class="check-box"><div class="k">분석 시트</div><div class="v">${escapeHtml(state.activeSheetName)}</div></div>
+            <div class="check-box"><div class="k">전체 시트 수</div><div class="v">${formatNumber(state.sheetNames.length)}개</div></div>
+            <div class="check-box"><div class="k">감지된 최대 열 수</div><div class="v">${formatNumber(c.maxColumns)}개</div></div>
+            <div class="check-box"><div class="k">첫 데이터 행</div><div class="v">${c.firstDataRowNumber ? `${formatNumber(c.firstDataRowNumber)}행` : "없음"}</div></div>
+            <div class="check-box"><div class="k">H열 입력 비율</div><div class="v">${Math.round(c.hNonEmptyRatio * 100)}%</div></div>
+            <div class="check-box"><div class="k">총합 검증</div><div class="v"><span class="pill ${validationClass}">${validationText}</span></div></div>
+          </div>
+
+          <div class="preview-grid">
+            <div class="check-box"><div class="k">첫 데이터 행 C열 미리보기</div><div class="v">${escapeHtml(c.preview["C열"] || "빈 값")}</div></div>
+            <div class="check-box"><div class="k">첫 데이터 행 H열 미리보기</div><div class="v">${escapeHtml(c.preview["H열"] || "빈 값")}</div></div>
+            <div class="check-box"><div class="k">첫 데이터 행 X열 배송비</div><div class="v">${escapeHtml(c.preview["X열"] || "빈 값")}</div></div>
+            <div class="check-box"><div class="k">첫 데이터 행 AA열 미리보기</div><div class="v">${escapeHtml(c.preview["AA열"] || "빈 값")}</div></div>
+          </div>
+
+          <div class="check-grid" style="margin-top:12px;">
+            <div class="check-box"><div class="k">분석된 주문 수</div><div class="v">${formatNumber(s["분석된 주문 수"])}건</div></div>
+            <div class="check-box"><div class="k">판매자별 총합</div><div class="v">${formatNumber(s["판매자별 총 주문건수 합계"])}건</div></div>
+            <div class="check-box"><div class="k">전체 주문선택사항 총합</div><div class="v">${formatNumber(s["전체 주문선택사항별 주문건수 합계"])}건</div></div>
+            <div class="check-box"><div class="k">확인 필요</div><div class="v">${formatNumber(s["확인 필요 건수"])}건</div></div>
+          </div>
+
+          <div class="warning-list">
+            ${warningHtml || `<div class="warning-item good">열 검증에서 큰 문제를 찾지 못했습니다.</div>`}
+          </div>
+        </div>
+      `;
+
+      const toggleBtn = document.getElementById("fileCheckToggleBtn");
+      if (toggleBtn) {
+        toggleBtn.addEventListener("click", () => {
+          state.isFileCheckOpen = !state.isFileCheckOpen;
+          renderFileCheck();
+        });
+      }
+    }
+
+    function renderSummary() {
+      const s = state.summary;
+      if (!s) return;
+
+      const cards = [
+        ["전체 데이터 행 수", s["전체 데이터 행 수"]],
+        ["분석된 주문 수", s["분석된 주문 수"]],
+        ["확인 필요 건수", s["확인 필요 건수"]],
+        ["배송비 부과 건수", state.shippingFeeSummary?.chargedCount || 0],
+        ["배송비 총액", state.shippingFeeSummary?.totalAmount || 0, "원"],
+        ["판매자 수", s["판매자 수"]],
+        ["고유 주문선택사항 수", s["고유 주문선택사항 수"]]
+      ];
+
+      el.summaryGrid.innerHTML = cards.map(([label, value, suffix = ""]) => `
+        <div class="summary-card ${label === "확인 필요 건수" && value > 0 ? "attention" : ""}">
+          <div class="label">${escapeHtml(label)}</div>
+          <div class="value">${formatNumber(value)}${suffix}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderShippingFeeAnalysis() {
+      const summary = state.shippingFeeSummary;
+      if (!summary) return;
+
+      const overviewItems = [
+        ["배송비 부과 건수", `${formatNumber(summary.chargedCount)}건`],
+        ["배송비 총액", formatCurrency(summary.totalAmount)],
+        ["금액 종류", `${formatNumber(summary.distinctAmountCount)}개`],
+        ["경고", `${formatNumber(summary.warningCount)}건`]
+      ];
+
+      const overviewHtml = `
+        <div class="shipping-overview">
+          ${overviewItems.map(([label, value]) => `
+            <div class="check-box">
+              <div class="k">${escapeHtml(label)}</div>
+              <div class="v">${escapeHtml(value)}</div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+
+      const noteHtml = `
+        <p class="shipping-note">
+          X열에서 0보다 큰 정수 금액만 집계합니다. 0원 ${formatNumber(summary.zeroCount)}건, 빈 값 ${formatNumber(summary.emptyCount)}건은 정상 제외했습니다.
+        </p>
+      `;
+
+      const warningHtml = state.shippingFeeWarnings.length > 0
+        ? `
+          <div class="shipping-warning-summary">
+            <div class="warning-item">배송비 집계에서 제외된 확인 필요 값 ${formatNumber(state.shippingFeeWarnings.length)}건이 있습니다.</div>
+            ${renderRows(state.shippingFeeWarnings, ["원본 행 번호", "X열 배송비", "사유"], { label: "배송비 경고 목록" })}
+          </div>
+        `
+        : `<div class="warning-item good">배송비 경고 값이 없습니다.</div>`;
+
+      const rowsHtml = renderRows(state.shippingFeeRows, ["배송비 금액", "건수", "합계 금액"], {
+        countKey: "건수",
+        label: "배송비 금액별 분석"
+      });
+
+      el.shippingFeePanel.innerHTML = `
+        ${overviewHtml}
+        ${noteHtml}
+        ${rowsHtml}
+        ${warningHtml}
+      `;
+    }
+
+    function getFilters() {
+      return {
+        seller: lower(el.sellerSearch.value),
+        option: lower(el.optionSearch.value)
+      };
+    }
+
+    function getSellerColumnCount() {
+      if (window.matchMedia("(max-width: 980px)").matches) return 1;
+      if (window.matchMedia("(max-width: 1520px)").matches) return 2;
+      return 3;
+    }
+
+    function renderSellerCards() {
+      const filters = getFilters();
+
+      const filteredGroups = state.sellerGroups
+        .map(group => {
+          const sellerMatch = !filters.seller || lower(group.seller).includes(filters.seller);
+          const filteredRows = group.optionRows.filter(row => {
+            return !filters.option || lower(row["주문선택사항"]).includes(filters.option);
+          });
+
+          return {
+            ...group,
+            filteredRows,
+            filteredTotal: filteredRows.reduce((sum, row) => sum + row["주문건수"], 0),
+            sellerMatch
+          };
+        })
+        .filter(group => group.sellerMatch && group.filteredRows.length > 0);
+
+      if (filteredGroups.length === 0) {
+        el.sellerList.innerHTML = `<div class="empty">검색 조건에 맞는 판매자 또는 주문선택사항이 없습니다.</div>`;
+        return;
+      }
+
+      const renderSellerCard = group => {
+        const isOpen = state.expandedSellers.has(group.seller);
+        const filterActive = Boolean(filters.option);
+        const colorStyle = getSellerColorStyle(group.seller);
+        const rowsHtml = renderRows(group.filteredRows, ["주문선택사항", "주문건수"], {
+          countKey: "주문건수",
+          label: `${group.seller} 주문선택사항`
+        });
+
+        return `
+          <article class="seller-card ${isOpen ? "open" : ""}" data-seller="${escapeAttr(group.seller)}" style="${colorStyle}">
+            <button class="seller-header" type="button" data-toggle-seller="${escapeAttr(group.seller)}" aria-expanded="${isOpen ? "true" : "false"}" aria-label="${escapeAttr(`${group.seller} 상세 ${isOpen ? "접기" : "펼치기"}`)}">
+              <div>
+                <div class="seller-name">${escapeHtml(group.seller)}</div>
+                <div class="seller-sub">
+                  <span class="pill">총 주문 ${formatNumber(group.total)}건</span>
+                  <span class="pill">고유 옵션 ${formatNumber(group.uniqueOptionCount)}개</span>
+                  ${filterActive ? `<span class="pill">검색 결과 ${formatNumber(group.filteredTotal)}건</span>` : ""}
+                </div>
+              </div>
+              <div class="seller-count">
+                <span>${formatNumber(filterActive ? group.filteredTotal : group.total)}건</span>
+                <span class="chevron">⌄</span>
+              </div>
+            </button>
+            <div class="seller-body">
+              ${rowsHtml}
+            </div>
+          </article>
+        `;
+      };
+
+      const columnCount = Math.min(getSellerColumnCount(), filteredGroups.length);
+      const columns = Array.from({ length: columnCount }, () => []);
+      filteredGroups.forEach((group, index) => {
+        columns[index % columnCount].push(group);
+      });
+
+      el.sellerList.innerHTML = columns.map(columnGroups => `
+        <div class="seller-column">
+          ${columnGroups.map(renderSellerCard).join("")}
+        </div>
+      `).join("");
+
+      document.querySelectorAll("[data-toggle-seller]").forEach(button => {
+        button.addEventListener("click", () => {
+          const seller = button.getAttribute("data-toggle-seller");
+          if (state.expandedSellers.has(seller)) {
+            state.expandedSellers.delete(seller);
+          } else {
+            state.expandedSellers.add(seller);
+          }
+          renderSellerCards();
+        });
+      });
+    }
+
+    function renderOverallOptionTable() {
+      const filters = getFilters();
+      const rows = state.overallOptionRows.filter(row => {
+        return !filters.option || lower(row["주문선택사항"]).includes(filters.option);
+      });
+
+      el.overallOptionTable.innerHTML = renderRows(rows, ["주문선택사항", "전체 주문건수"], { countKey: "전체 주문건수" });
+    }
+
+    function renderNeedReviewTable() {
+      const filters = getFilters();
+      const rows = state.needReviewRows.filter(row => {
+        const optionOk = !filters.option || lower(row["H열 주문선택사항"]).includes(filters.option);
+        const sellerOk = !filters.seller || lower(row["C열 값"]).includes(filters.seller) || lower(row["AA열 값"]).includes(filters.seller);
+        return optionOk && sellerOk;
+      });
+
+      el.needReviewTable.innerHTML = renderRows(rows, ["원본 행 번호", "C열 값", "AA열 값", "H열 주문선택사항", "사유"], { countKey: "" });
+    }
+
+    function renderRows(rows, columns, options = {}) {
+      if (!rows || rows.length === 0) {
+        return `<div class="empty">표시할 데이터가 없습니다.</div>`;
+      }
+
+      const countKey = options.countKey || "";
+
+      return `
+        <div class="table-wrap">
+          <table aria-label="${escapeAttr(options.label || columns.join(" / "))}">
+            <thead>
+              <tr>
+                ${columns.map(col => `<th class="${col === countKey ? "count" : ""}">${escapeHtml(col)}</th>`).join("")}
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.map(row => `
+                <tr>
+                  ${columns.map(col => {
+                    const value = row[col];
+                    const isCount = col === countKey || typeof value === "number";
+                    return `<td class="${isCount ? "count" : "option-text"}">${isCount ? formatNumber(value) : escapeHtml(value)}</td>`;
+                  }).join("")}
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function rowsToWorksheet(rows, headers) {
+      const data = [headers, ...rows.map(row => headers.map(header => row[header] ?? ""))];
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      ws["!cols"] = headers.map(header => {
+        if (header.includes("주문선택사항")) return { wch: 54 };
+        if (header.includes("사유")) return { wch: 36 };
+        if (header.includes("판매자")) return { wch: 22 };
+        if (header.includes("파일") || header.includes("시트")) return { wch: 28 };
+        return { wch: 18 };
+      });
+      return ws;
+    }
+
+    function downloadXlsx() {
+      requireAnalyzed();
+      requireXlsx();
+
+      const wb = XLSX.utils.book_new();
+
+      const summaryRows = [
+        { "항목": "파일명", "값": state.fileName },
+        { "항목": "확장자", "값": state.fileExt },
+        { "항목": "분석 시트", "값": state.activeSheetName },
+        ...Object.entries(state.summary).map(([key, value]) => ({ "항목": key, "값": value }))
+      ];
+
+      const checkRows = [
+        { "항목": "파일명", "값": state.fileName },
+        { "항목": "확장자", "값": state.fileExt },
+        { "항목": "분석 시트", "값": state.activeSheetName },
+        { "항목": "전체 시트 수", "값": state.sheetNames.length },
+        { "항목": "감지된 최대 열 수", "값": state.fileCheck.maxColumns },
+        { "항목": "첫 데이터 행 번호", "값": state.fileCheck.firstDataRowNumber },
+        { "항목": "첫 데이터 행 C열 미리보기", "값": state.fileCheck.preview["C열"] },
+        { "항목": "첫 데이터 행 H열 미리보기", "값": state.fileCheck.preview["H열"] },
+        { "항목": "첫 데이터 행 AA열 미리보기", "값": state.fileCheck.preview["AA열"] },
+        { "항목": "H열 입력 비율", "값": `${Math.round(state.fileCheck.hNonEmptyRatio * 100)}%` },
+        { "항목": "경고", "값": [...state.fileCheck.dangerWarnings, ...state.fileCheck.warnings].join(" / ") || "없음" }
+      ];
+
+      XLSX.utils.book_append_sheet(wb, rowsToWorksheet(summaryRows, ["항목", "값"]), "요약");
+      XLSX.utils.book_append_sheet(wb, rowsToWorksheet(checkRows, ["항목", "값"]), "파일_열검증");
+      XLSX.utils.book_append_sheet(wb, rowsToWorksheet(state.sellerOptionRows, ["판매자", "주문선택사항", "주문건수"]), "판매자별_주문선택사항_주문건수");
+      XLSX.utils.book_append_sheet(wb, rowsToWorksheet(state.sellerTotals, ["판매자", "총 주문건수", "고유 주문선택사항 수"]), "판매자별_총주문건수");
+      XLSX.utils.book_append_sheet(wb, rowsToWorksheet(state.overallOptionRows, ["주문선택사항", "전체 주문건수"]), "주문선택사항별_전체주문건수");
+      XLSX.utils.book_append_sheet(wb, rowsToWorksheet(state.needReviewRows, ["원본 행 번호", "C열 값", "AA열 값", "H열 주문선택사항", "사유"]), "확인필요");
+
+      XLSX.writeFile(wb, buildFileName("주문분석결과", "xlsx"));
+    }
+
+    function csvEscape(value) {
+      const text = value === null || value === undefined ? "" : String(value);
+      return `"${text.replace(/"/g, '""')}"`;
+    }
+
+    function downloadCsv(rows, headers, baseName) {
+      requireAnalyzed();
+
+      const csv = "\ufeff" + [
+        headers.map(csvEscape).join(","),
+        ...rows.map(row => headers.map(header => csvEscape(row[header] ?? "")).join(","))
+      ].join("\r\n");
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = buildFileName(baseName, "csv");
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function buildFileName(baseName, ext) {
+      const now = new Date();
+      const stamp = [
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, "0"),
+        String(now.getDate()).padStart(2, "0"),
+        "_",
+        String(now.getHours()).padStart(2, "0"),
+        String(now.getMinutes()).padStart(2, "0")
+      ].join("");
+
+      const safeOriginalName = state.fileName
+        ? state.fileName.replace(/\.[^.]+$/, "").replace(/[\\/:*?"<>|]/g, "_")
+        : "uploaded";
+
+      return `${safeOriginalName}_${baseName}_${stamp}.${ext}`;
+    }
+
+    function requireAnalyzed() {
+      if (!state.summary) throw new Error("먼저 엑셀 파일을 업로드해서 분석해주세요.");
+    }
+
+    function escapeHtml(value) {
+      return clean(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replace(/`/g, "&#096;");
+    }
+
+    el.fileInput.addEventListener("change", async event => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      try {
+        await handleFile(file);
+      } catch (error) {
+        console.error(error);
+        resetAnalysisOnly();
+        setStatus(error.message || "파일 분석 중 오류가 발생했습니다.", "danger");
+      }
+    });
+
+    el.sheetSelect.addEventListener("change", () => {
+      try {
+        analyzeActiveSheet(el.sheetSelect.value);
+      } catch (error) {
+        console.error(error);
+        setStatus(error.message || "시트 분석 중 오류가 발생했습니다.", "danger");
+      }
+    });
+
+    el.sellerSearch.addEventListener("input", () => {
+      if (!state.summary) return;
+      renderSellerCards();
+      renderNeedReviewTable();
+    });
+
+    el.optionSearch.addEventListener("input", () => {
+      if (!state.summary) return;
+      renderSellerCards();
+      renderOverallOptionTable();
+      renderNeedReviewTable();
+    });
+
+    el.expandAllBtn.addEventListener("click", () => {
+      state.sellerGroups.forEach(group => state.expandedSellers.add(group.seller));
+      renderSellerCards();
+    });
+
+    el.collapseAllBtn.addEventListener("click", () => {
+      state.expandedSellers.clear();
+      renderSellerCards();
+    });
+
+    el.resetBtn.addEventListener("click", resetAll);
+
+    let sellerResizeTimer = null;
+    window.addEventListener("resize", () => {
+      if (!state.summary) return;
+      window.clearTimeout(sellerResizeTimer);
+      sellerResizeTimer = window.setTimeout(renderSellerCards, 120);
+    });
+
+    el.downloadXlsxBtn.addEventListener("click", () => {
+      try { downloadXlsx(); }
+      catch (error) { setStatus(error.message, "danger"); }
+    });
+
+    el.downloadSellerDetailCsvBtn.addEventListener("click", () => {
+      try { downloadCsv(state.sellerOptionRows, ["판매자", "주문선택사항", "주문건수"], "판매자별_주문선택사항_주문건수"); }
+      catch (error) { setStatus(error.message, "danger"); }
+    });
+
+    el.downloadSellerTotalCsvBtn.addEventListener("click", () => {
+      try { downloadCsv(state.sellerTotals, ["판매자", "총 주문건수", "고유 주문선택사항 수"], "판매자별_총주문건수"); }
+      catch (error) { setStatus(error.message, "danger"); }
+    });
+
+    el.downloadOverallCsvBtn.addEventListener("click", () => {
+      try { downloadCsv(state.overallOptionRows, ["주문선택사항", "전체 주문건수"], "주문선택사항별_전체주문건수"); }
+      catch (error) { setStatus(error.message, "danger"); }
+    });
+
+    function updateLibraryAvailability() {
+      if (!window.XLSX) {
+        el.fileInput.disabled = true;
+        const isWaitingForFallback =
+          window.__xlsxFallbackRequested &&
+          !window.__xlsxFallbackFailed &&
+          !window.__xlsxFallbackTimedOut;
+        const message = isWaitingForFallback
+          ? "엑셀 라이브러리 SheetJS를 불러오는 중입니다. 잠시 후 다시 시도해주세요."
+          : "엑셀 라이브러리 SheetJS를 불러오지 못했습니다. 인터넷 연결을 확인하거나 xlsx.full.min.js 파일을 이 HTML과 같은 폴더에 넣어주세요.";
+        setStatus(message, isWaitingForFallback ? "warn" : "danger");
+      } else {
+        const wasDisabled = el.fileInput.disabled;
+        el.fileInput.disabled = false;
+        if (!state.summary && wasDisabled) {
+          setStatus("엑셀 파일을 선택하면 자동으로 분석됩니다.");
+        }
+      }
+    }
+
+    window.addEventListener("xlsx-library-change", updateLibraryAvailability);
+    if (document.readyState === "complete") {
+      updateLibraryAvailability();
+    } else {
+      window.addEventListener("load", updateLibraryAvailability);
+    }
+    window.setTimeout(updateLibraryAvailability, 5000);
+  </script>
+</body>
+</html>
