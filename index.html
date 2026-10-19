@@ -8,10 +8,10 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <!-- Cache busting -->
-  <meta name="reborn-app-version" content="reborn-excel-margin-original-format-01" />
+  <meta name="reborn-app-version" content="reborn-accounting-evidence-batch-count-01" />
   <script>
     (function () {
-      var APP_VERSION = "reborn-excel-margin-original-format-01";
+      var APP_VERSION = "reborn-accounting-evidence-batch-count-01";
       var VERSION_PARAM = "v";
       var VERSION_STORAGE_KEY = "rebornAppVersion";
       var REFRESH_FLAG_KEY = "rebornCacheRepairReloaded:" + APP_VERSION;
@@ -193,12 +193,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>리본컴퍼니 관리 시스템</title>
-  <link rel="manifest" href="./manifest.json?v=reborn-excel-margin-original-format-01" />
+  <link rel="manifest" href="./manifest.json?v=reborn-accounting-evidence-batch-count-01" />
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="64x64" href="./favicon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
-  <link rel="stylesheet" href="./style.css?v=reborn-excel-margin-original-format-01" />
-  <link rel="stylesheet" href="./workspace-ui.css?v=reborn-excel-margin-original-format-01" />
+  <link rel="stylesheet" href="./style.css?v=reborn-accounting-evidence-batch-count-01" />
+  <link rel="stylesheet" href="./workspace-ui.css?v=reborn-accounting-evidence-batch-count-01" />
+  <link rel="stylesheet" href="./workflow-tools.css?v=reborn-accounting-evidence-batch-count-01" />
 </head>
 <body>
   <div id="appLaunchSplash" class="app-launch-splash" aria-hidden="true">
@@ -519,7 +520,7 @@
                   <summary>판매자 판정 기준 / .xls 사용 안내 / 오프라인 사용 안내</summary>
                   <p><strong>판매자 판정:</strong> AA열이 lkh5209, live_rock, lkh52009 중 하나이면 “lkh5209 통합판매자”로 최우선 묶습니다. 그 외에는 C열 값에서 괄호 안 판매자명 예: 쿠팡(마루몰) → 마루몰 을 우선 사용합니다. C열이 비어 있으면 AA열을 사용합니다.</p>
                   <p><strong>.xls 안내:</strong> 구형 엑셀 파일도 SheetJS로 읽습니다. 다만 일부 오래된 .xls는 한글/날짜/숫자 형식이 깨질 수 있습니다. 읽기 실패 시 엑셀에서 “다른 이름으로 저장 → .xlsx”로 다시 저장한 뒤 업로드해보세요.</p>
-                  <p><strong>오프라인 사용:</strong> 인터넷 없이 쓰려면 <code>xlsx.full.min.js</code> 파일을 이 <code>index.html</code>과 같은 폴더에 저장하면 됩니다. 같은 폴더에 라이브러리가 없으면 CDN을 통해 불러옵니다.</p>
+                  <p><strong>파일 처리:</strong> Excel은 포함된 라이브러리로 브라우저에서 분석합니다. 회계자료 사진 조회·등록은 인터넷 연결이 필요합니다.</p>
                 </details>
                 </section>
               </div>
@@ -919,23 +920,10 @@
                   <p id="skuOrderRankBasis">최근 30일 주문처리 기록 기준으로 많이 나간 품목과 적게 나간 품목을 표시합니다.</p>
                 </div>
               </div>
-              <div class="sku-order-rank-grid">
-                <article class="sku-rank-panel top-rank">
-                  <div class="sku-rank-panel-head">
-                    <strong>주문 많은 품목 TOP 3</strong>
-                    <span>30일 기준</span>
-                  </div>
-                  <div class="sku-rank-list" id="skuOrderTopList"></div>
-                </article>
-                <article class="sku-rank-panel low-rank">
-                  <div class="sku-rank-panel-head">
-                    <strong>주문 적은 품목 TOP 3</strong>
-                    <span>30일 기준</span>
-                  </div>
-                  <div class="sku-rank-list" id="skuOrderLowList"></div>
-                </article>
-              </div>
+              <div class="rank-tools"><label>상품 검색<input id="skuRankSearch" type="search" placeholder="상품명"></label><label>정렬<select id="skuRankSort"><option value="high">주문 많은 순</option><option value="low">주문 적은 순</option><option value="name">상품명 순</option></select></label></div>
+              <div id="skuOrderAllList" class="rank-table-wrap" role="region" aria-label="전체 상품 주문 순위" tabindex="0"></div>
             </section>
+            <section id="evidenceCard" class="card evidence-card" aria-label="회계자료"></section>
 
 
             <section class="card product-cost-card" id="productCostEditorCard" data-admin-only="true" hidden data-collapsible data-collapse-key="product-cost-editor" data-collapse-default="closed">
@@ -1163,12 +1151,15 @@
   </div>
 
 
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="./xlsx.full.min.js?v=reborn-accounting-evidence-batch-count-01"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./workspace-icons.js?v=reborn-excel-margin-original-format-01"></script>
-  <script src="./workspace-ui.js?v=reborn-excel-margin-original-format-01"></script>
-  <script src="./original-order.js?v=reborn-excel-margin-original-format-01"></script>
-  <script src="./script.js?v=reborn-excel-margin-original-format-01"></script>
+  <script src="./workspace-icons.js?v=reborn-accounting-evidence-batch-count-01"></script>
+  <script src="./workspace-ui.js?v=reborn-accounting-evidence-batch-count-01"></script>
+  <script src="./original-order.js?v=reborn-accounting-evidence-batch-count-01"></script>
+  <script src="./excel-count-core.js?v=reborn-accounting-evidence-batch-count-01"></script>
+  <script src="./excel-count-ui.js?v=reborn-accounting-evidence-batch-count-01"></script>
+  <script src="./accounting-evidence.js?v=reborn-accounting-evidence-batch-count-01"></script>
+  <script src="./script.js?v=reborn-accounting-evidence-batch-count-01"></script>
   <script>
     (function () {
       var expectedVersion = window.__REBORN_APP_VERSION__;

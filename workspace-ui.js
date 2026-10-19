@@ -9,6 +9,7 @@
     ['labor', '용역비', 'CalendarDays', '정산·계산'],
     ['margin', '마진계산기', 'Calculator', '정산·계산'],
     ['excel-count', '엑셀 건수 계산기', 'ListOrdered', '정산·계산'],
+    ['evidence', '회계자료', 'FileSpreadsheet', '정산·계산'],
     ['management', '데이터·관리', 'Settings2', '관리']
   ];
   const byId = id => document.getElementById(id);
@@ -85,6 +86,7 @@
     move('stockMoveCard','movement'); move('excelOrderCard','orders'); move('orderResultCard','orders');
     move('orderChartCard','statistics'); move('skuOrderRankCard','statistics');
     move('laborCostCard','labor');
+    move('evidenceCard','evidence');
     for (const id of ['adminLoginRevealButton','syncCard','productCostEditorCard','backupCard','adminActionLogCard','outboundDiagnosticsCard']) move(id,'management');
     const cumulative = document.createElement('button'); cumulative.type = 'button'; cumulative.className = 'ghost-btn';
     cumulative.textContent = '월별 총 주문건수'; cumulative.addEventListener('click', () => byId('cumulativeSalesCard').click());
@@ -155,6 +157,7 @@
       if (write && !authRedirect() && location.hash !== '#' + currentView) history.pushState(null,'','#' + currentView);
       setDrawer(false);
       if (currentView === 'statistics') requestAnimationFrame(callbacks.renderOrderChart);
+      document.dispatchEvent(new CustomEvent('reborn-workspace-view',{detail:{view:currentView}}));
       if (focus) {
         (panels[currentView]?.querySelector('h1') || byId('page-' + route)?.querySelector('h1') || main).focus({preventScroll:true});
         window.scrollTo({top:0,behavior:'instant'});

@@ -4,8 +4,10 @@
 
 ## Current baseline
 
-- Latest imported ZIP: `reborn_margin_wms_inventory_manual_adjust_log_fix.zip`
-- Current app version: `reborn-inventory-manual-adjust-log-fix-01`
+- Source baseline: `reborn_margin_wms_excel_margin_original_format_01.zip`
+- Current package: `reborn_margin_wms_accounting_evidence_batch_count_01.zip`
+- Current app version: `reborn-accounting-evidence-batch-count-01`
+- 적용·공개 범위·사진 저장소·검증 한계: [APPLY_GUIDE.md](APPLY_GUIDE.md)
 - Production reference URL: `https://reborn-margin-web.vercel.app/#wms`
 
 ## Main files
