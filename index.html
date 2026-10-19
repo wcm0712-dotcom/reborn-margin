@@ -8,10 +8,10 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <!-- Cache busting -->
-  <meta name="reborn-app-version" content="reborn-nurungji-box-12-units-01" />
+  <meta name="reborn-app-version" content="reborn-add-candy-five-01" />
   <script>
     (function () {
-      var APP_VERSION = "reborn-nurungji-box-12-units-01";
+      var APP_VERSION = "reborn-add-candy-five-01";
       var VERSION_PARAM = "v";
       var VERSION_STORAGE_KEY = "rebornAppVersion";
       var REFRESH_FLAG_KEY = "rebornCacheRepairReloaded:" + APP_VERSION;
@@ -193,11 +193,12 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>리본컴퍼니 관리 시스템</title>
-  <link rel="manifest" href="./manifest.json?v=reborn-nurungji-box-12-units-01" />
+  <link rel="manifest" href="./manifest.json?v=reborn-add-candy-five-01" />
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="64x64" href="./favicon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
-  <link rel="stylesheet" href="./style.css?v=reborn-nurungji-box-12-units-01" />
+  <link rel="stylesheet" href="./style.css?v=reborn-add-candy-five-01" />
+  <link rel="stylesheet" href="./workspace-ui.css?v=reborn-add-candy-five-01" />
 </head>
 <body>
   <div id="appLaunchSplash" class="app-launch-splash" aria-hidden="true">
@@ -1009,7 +1010,7 @@
               </div>
             </section>
 
-            <section class="card pallet-card" id="palletCard" data-collapsible data-collapse-key="pallet-stock" data-collapse-default="closed">
+            <section class="card pallet-card" id="palletCard" hidden data-admin-only="true" data-collapsible data-collapse-key="pallet-stock" data-collapse-default="closed">
               <div class="card-title-row">
                 <div>
                   <h2>파렛 보유 현황</h2>
@@ -1020,7 +1021,7 @@
               <div class="pallet-grid" id="palletGrid"></div>
             </section>
 
-            <section class="card box-stock-card" id="boxStockCard" data-collapsible data-collapse-key="box-stock" data-collapse-default="closed">
+            <section class="card box-stock-card" id="boxStockCard" hidden data-admin-only="true" data-collapsible data-collapse-key="box-stock" data-collapse-default="closed">
               <div class="card-title-row">
                 <div>
                   <h2>박스 재고 현황</h2>
@@ -1146,7 +1147,9 @@
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./script.js?v=reborn-nurungji-box-12-units-01"></script>
+  <script src="./workspace-icons.js?v=reborn-add-candy-five-01"></script>
+  <script src="./workspace-ui.js?v=reborn-add-candy-five-01"></script>
+  <script src="./script.js?v=reborn-add-candy-five-01"></script>
   <script>
     (function () {
       var expectedVersion = window.__REBORN_APP_VERSION__;

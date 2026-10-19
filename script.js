@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-nurungji-box-12-units-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-add-candy-five-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -130,6 +130,11 @@
     { name: "논두렁", cost: 250 },
     { name: "밭두렁", cost: 287.5 },
     { name: "블랙 하몽 크래커(294g)", cost: 2500.3 },
+    { name: "커피캔디 175g", cost: 1250 },
+    { name: "커피캔디 통 612.5g", cost: 4600 },
+    { name: "비타캔디 100g", cost: 1500 },
+    { name: "엘반 트러플초콜렛 500g", cost: 3500 },
+    { name: "커피캔디 210g", cost: 3000 },
     { name: "꾀돌이", cost: 275 },
     { name: "라멘뽀식이", cost: 510 },
     { name: "바베큐맛스낵", cost: 500 },
@@ -201,6 +206,11 @@
     "논두렁": { group: "과자", boxesPerPallet: 180, unitsPerBox: 40, structure: "1파렛=180완박스 / 1완박스=40개 / 1파렛=7,200개", cost: 250, safetyStock: { pallets: 1 } },
     "밭두렁": { group: "과자", boxesPerPallet: 150, unitsPerBox: 40, structure: "1파렛=150완박스 / 1완박스=40개 / 1파렛=6,000개", cost: 287.5, safetyStock: { pallets: 1 } },
     "블랙 하몽 크래커(294g)": { group: "과자", boxesPerPallet: 48, unitsPerBox: 12, structure: "1파렛=48완박스 / 1완박스=12개 / 1파렛=576개", cost: 2500.3, safetyStock: { pallets: 3 } },
+    "커피캔디 175g": { group: "과자", boxesPerPallet: null, unitsPerBox: 24, structure: "파렛 미정 / 1완박스=24낱개", cost: 1250, palletUnknown: true },
+    "커피캔디 통 612.5g": { group: "과자", boxesPerPallet: null, unitsPerBox: 6, structure: "파렛 미정 / 1완박스=6낱개", cost: 4600, palletUnknown: true },
+    "비타캔디 100g": { group: "과자", boxesPerPallet: null, unitsPerBox: 72, unitsPerInnerBox: 6, structure: "파렛 미정 / 1완박스=12내부박스 / 1내부박스=6낱개 / 1완박스=72낱개", cost: 1500, palletUnknown: true, unitLabels: { pallet: "완박스", box: "내부박스", each: "낱개" } },
+    "엘반 트러플초콜렛 500g": { group: "과자", boxesPerPallet: null, unitsPerBox: 10, structure: "파렛 미정 / 1완박스=10낱개", cost: 3500, palletUnknown: true },
+    "커피캔디 210g": { group: "과자", boxesPerPallet: null, unitsPerBox: 12, structure: "파렛 미정 / 1완박스=12낱개", cost: 3000, palletUnknown: true },
     "명가 참깨": { group: "명가", boxesPerPallet: 45, unitsPerBox: 16, structure: "1파렛=45완박스 / 1완박스=16개", cost: 4200, safetyStock: { pallets: 2 } },
     "명가 흑당": { group: "명가", boxesPerPallet: 45, unitsPerBox: 16, structure: "1파렛=45완박스 / 1완박스=16개", cost: 4200, safetyStock: { pallets: 2 } },
     "코디 3겹": { group: "휴지", boxesPerPallet: 48, unitsPerBox: 1, structure: "1파렛=48개 / 박스 사용 없음", cost: 8500, safetyStock: { pallets: 6 } },
@@ -213,6 +223,10 @@
 
   function getActiveInventorySkus() {
     return Object.keys(INVENTORY_DEFS).filter((sku) => !isInactiveProductSku(sku));
+  }
+
+  function isCandyFiveSku(sku) {
+    return ["커피캔디 175g", "커피캔디 통 612.5g", "비타캔디 100g", "엘반 트러플초콜렛 500g", "커피캔디 210g"].includes(canonicalSku(sku));
   }
 
   const INITIAL_STOCK_INPUT = {
@@ -308,6 +322,11 @@
     const pallets = cleanNumber(input?.pallets);
     const boxes = cleanNumber(input?.boxes);
     const eaches = cleanNumber(input?.eaches);
+    if (isCandyFiveSku(sku)) {
+      if (def.unitsPerInnerBox) return pallets * def.unitsPerBox + boxes * def.unitsPerInnerBox + eaches;
+      if (pallets) return NaN;
+      return boxes * def.unitsPerBox + eaches;
+    }
     return (pallets * def.boxesPerPallet * def.unitsPerBox) + (boxes * def.unitsPerBox) + eaches;
   }
 
@@ -317,6 +336,13 @@
     if (!def) return { pallets: 0, boxes: 0, eaches: 0 };
     const sign = totalUnits < 0 ? -1 : 1;
     const abs = Math.abs(Math.round(totalUnits || 0));
+    if (isCandyFiveSku(sku)) {
+      const completeBoxes = Math.floor(abs / def.unitsPerBox);
+      const remainder = abs % def.unitsPerBox;
+      return def.unitsPerInnerBox
+        ? { pallets: completeBoxes * sign, boxes: Math.floor(remainder / def.unitsPerInnerBox) * sign, eaches: (remainder % def.unitsPerInnerBox) * sign }
+        : { pallets: 0, boxes: completeBoxes * sign, eaches: remainder * sign };
+    }
     const unitsPerPallet = def.boxesPerPallet * def.unitsPerBox;
     const pallets = Math.floor(abs / unitsPerPallet);
     const afterPallet = abs % unitsPerPallet;
@@ -337,7 +363,7 @@
 
   function formatStock(sku, units) {
     sku = canonicalSku(sku);
-    if (isNurungjiBox12Sku(sku) && units < 0) return `-(${formatStock(sku, Math.abs(units))})`;
+    if ((isNurungjiBox12Sku(sku) || isCandyFiveSku(sku)) && units < 0) return `-(${formatStock(sku, Math.abs(units))})`;
     const n = normalizeUnits(sku, units);
     const labels = getUnitLabels(sku);
     const parts = [];
@@ -1494,6 +1520,11 @@
     return !ADMIN_AUTH_CONFIG.enabled || !ADMIN_AUTH_CONFIG.lockWmsEditingUntilLogin || isAllowedAdminUser();
   }
 
+  function canViewInventorySku(sku) {
+    const def = INVENTORY_DEFS[sku];
+    return Boolean(def) && !isInactiveProductSku(sku) && (!def.isBox || isEditorSession());
+  }
+
   function findCardByTitle(titleText) {
     const headings = Array.from(document.querySelectorAll(".card h2"));
     const heading = headings.find((item) => item.textContent.trim() === titleText);
@@ -1505,7 +1536,8 @@
       document.querySelector(".stock-move-card"),
       findCardByTitle("엑셀 주문 처리"),
       document.getElementById("orderResultCard"),
-      // 파렛/박스 현황은 일반 이용자도 조회 가능해야 하므로 숨기지 않습니다.
+      document.getElementById("palletCard"),
+      document.getElementById("boxStockCard"),
       document.getElementById("backupCard")
     ].filter(Boolean);
 
@@ -1664,15 +1696,17 @@
       node.setAttribute("aria-hidden", String(!editable));
     });
 
-    // 조회용 카드: 일반 이용자는 볼 수만 있고, 입력/저장 기능은 아래에서 잠급니다.
-    ["palletCard", "boxStockCard"].forEach((id) => {
-      const node = $(id);
-      if (!node) return;
-      node.hidden = false;
-      node.removeAttribute("aria-hidden");
-      node.classList.remove("admin-only-section");
-      delete node.dataset.adminOnly;
-    });
+    if (!editable) {
+      $("palletGrid")?.replaceChildren();
+      $("boxStockGrid")?.replaceChildren();
+      if (activeInventoryDetailSku && !canViewInventorySku(activeInventoryDetailSku)) {
+        closeInventoryItemDetail();
+        $("inventoryItemBody")?.replaceChildren();
+        setText("inventoryItemTitle", "품목 상세");
+        setText("inventoryItemMeta", "");
+      }
+    }
+    window.RebornWorkspaceUI?.refreshStockAccess();
 
     const syncCard = $("syncCard");
     if (syncCard) {
@@ -1705,6 +1739,14 @@
     document.querySelectorAll(lockSelectors.join(",")).forEach((node) => {
       node.disabled = !editable;
       node.setAttribute("aria-disabled", String(!editable));
+    });
+    document.querySelectorAll("#stockMoveRows .movePallets").forEach((input) => {
+      const sku = input.closest(".move-row")?.querySelector(".moveSku")?.value;
+      if (isCandyFiveSku(sku) && !INVENTORY_DEFS[sku]?.unitsPerInnerBox) {
+        input.disabled = true;
+        input.value = "0";
+        input.setAttribute("aria-disabled", "true");
+      }
     });
 
     document.querySelectorAll(".file-trigger, .import-label").forEach((label) => {
@@ -2385,6 +2427,10 @@
   }
 
   function initRouting() {
+    if (window.RebornWorkspaceUI) {
+      window.RebornWorkspaceUI.init({ setWmsMainView, renderOrderChart, isEditorSession });
+      return;
+    }
     const routes = ["home", "margin", "wms", "excel-count"];
     const buttons = [...document.querySelectorAll("[data-route]")];
     const routeTo = (route) => {
@@ -4528,6 +4574,10 @@ function refreshActiveOrderAnalysisSummary() {
   function renderPalletInputs(rebuild = true) {
     const grid = $("palletGrid");
     if (!grid) return;
+    if (!isEditorSession()) {
+      grid.replaceChildren();
+      return;
+    }
     if (!rebuild && grid.children.length) {
       Object.entries(state.pallets).forEach(([key, value]) => {
         const input = grid.querySelector(`[data-pallet-key="${cssEscape(key)}"]`);
@@ -4549,6 +4599,10 @@ function refreshActiveOrderAnalysisSummary() {
   function renderBoxStockInputs(rebuild = true) {
     const grid = $("boxStockGrid");
     if (!grid) return;
+    if (!isEditorSession()) {
+      grid.replaceChildren();
+      return;
+    }
 
     if (!rebuild && grid.children.length) {
       boxSkus().forEach((sku) => {
@@ -4708,13 +4762,22 @@ function refreshActiveOrderAnalysisSummary() {
     wrap.appendChild(row);
     enhanceNativeSelects(row);
     const syncRowUnitLabels = () => {
-      const labels = getUnitLabels(row.querySelector(".moveSku")?.value);
+      const sku = row.querySelector(".moveSku")?.value;
+      const labels = getUnitLabels(sku);
       const palletLabel = row.querySelector(".unit-label-pallet");
       const boxLabel = row.querySelector(".unit-label-box");
       const eachLabel = row.querySelector(".unit-label-each");
       if (palletLabel) palletLabel.textContent = labels.pallet;
       if (boxLabel) boxLabel.textContent = labels.box;
       if (eachLabel) eachLabel.textContent = labels.each;
+      const palletInput = row.querySelector(".movePallets");
+      const palletUnavailable = isCandyFiveSku(sku) && !INVENTORY_DEFS[sku]?.unitsPerInnerBox;
+      if (palletInput) {
+        palletInput.disabled = palletUnavailable || !isEditorSession();
+        palletInput.setAttribute("aria-disabled", String(palletInput.disabled));
+        if (palletUnavailable) palletInput.value = "0";
+      }
+      if (palletUnavailable && palletLabel) palletLabel.textContent = "파렛 미정";
     };
     syncRowUnitLabels();
     row.querySelectorAll("input, select").forEach((el) => {
@@ -4787,6 +4850,11 @@ function refreshActiveOrderAnalysisSummary() {
     const direction = getStockMoveDirection();
     const actionLabel = direction === "out" ? "직접 출고 예정" : "입고 예정";
     const assetValue = calcMovementAssetValue(rows.map((row) => ({ sku: row.sku, units: row.units })), { includeBoxes: true });
+    if (rows.some((row) => isCandyFiveSku(row.sku))) {
+      const quantities = rows.map((row) => `${escapeHtml(row.sku)} ${escapeHtml(formatStock(row.sku, row.units))}`).join(" / ");
+      summary.innerHTML = `${actionLabel} <strong>${number(rows.length)}개 품목</strong> · ${quantities} · 총 환산 <strong>${number(inputTotals.units)}개</strong> · 재고자산 ${direction === "out" ? "차감" : "증가"} 예상 <strong>${money(assetValue)}</strong>`;
+      return;
+    }
     summary.innerHTML = `${actionLabel} <strong>${number(rows.length)}개 품목</strong> · 파렛 <strong>${number(inputTotals.pallets)}</strong> · 박스/묶음 <strong>${number(inputTotals.boxes)}</strong> · 낱개 <strong>${number(inputTotals.eaches)}</strong> · 총 환산 <strong>${number(inputTotals.units)}개</strong> · 재고자산 ${direction === "out" ? "차감" : "증가"} 예상 <strong>${money(assetValue)}</strong>`;
   }
 
@@ -4814,7 +4882,7 @@ function refreshActiveOrderAnalysisSummary() {
     if (!tbody) return;
     const rawKeyword = ($("inventorySearch")?.value || "").trim();
     const keyword = normalizeInventorySearchText(rawKeyword);
-    const allSkus = getActiveInventorySkus();
+    const allSkus = getActiveInventorySkus().filter(canViewInventorySku);
     const matchedSkus = allSkus
       .filter((sku) => {
         if (!keyword) return true;
@@ -4840,7 +4908,7 @@ function refreshActiveOrderAnalysisSummary() {
         const safety = safetyStatus(sku, item.units);
         const isZeroOrNegative = item.units <= 0;
         const unitsClass = item.units < 0 ? "negative" : item.units === 0 ? "zero-stock-number" : "";
-        const stockKind = isZeroOrNegative ? "danger" : safety?.isLow ? "low" : "safe";
+        const stockKind = isZeroOrNegative ? "danger" : safety?.isLow ? "low" : isCandyFiveSku(sku) && !safety ? "unset" : "safe";
         const stockLabel = item.units < 0
           ? "마이너스 재고"
           : item.units === 0
@@ -4849,7 +4917,7 @@ function refreshActiveOrderAnalysisSummary() {
         const stockRatio = safety?.threshold ? Math.min(100, Math.max(0, Math.round(((item.units || 0) / safety.threshold) * 100))) : (item.units <= 0 ? 0 : 100);
         const safetyText = item.units <= 0 ? `
           <div class="danger-stock-badge">재고 없음</div>
-          ${safety?.thresholdText ? `<div class="danger-stock-detail">기준 ${escapeHtml(safety.thresholdText)}</div>` : ""}
+          ${safety?.thresholdText ? `<div class="danger-stock-detail">기준 ${escapeHtml(safety.thresholdText)}</div>` : isCandyFiveSku(sku) ? '<span class="muted">안전재고 미설정</span>' : ""}
         ` : safety?.isLow ? `
           <div class="low-stock-badge">안전재고 부족</div>
           <div class="low-stock-detail">기준 ${escapeHtml(safety.thresholdText)} · 부족 ${escapeHtml(safety.shortageText)}</div>
@@ -4857,7 +4925,7 @@ function refreshActiveOrderAnalysisSummary() {
           <div class="safe-stock-badge">안전권</div>
           <div class="safe-stock-detail">기준 ${escapeHtml(safety.thresholdText)}</div>
         ` : `<span class="muted">안전재고 미설정</span>`;
-        const rowKindClass = isZeroOrNegative ? "danger-stock-row" : safety?.isLow ? "low-stock-row" : "safe-stock-row";
+        const rowKindClass = isZeroOrNegative ? "danger-stock-row" : safety?.isLow ? "low-stock-row" : isCandyFiveSku(sku) && !safety ? "unset-stock-row" : "safe-stock-row";
         return `
           <tr class="inventory-click-row ${rowKindClass}" data-inventory-sku="${escapeHtml(sku)}" tabindex="0" role="button" aria-label="${escapeHtml(sku)} 재고 상세 보기">
             <td data-label="품목"><strong>${escapeHtml(sku)}</strong><br><span class="muted">${escapeHtml(def.group)}</span></td>
@@ -6378,7 +6446,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-nurungji-box-12-units-01",
+    cacheVersion: "reborn-add-candy-five-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -8755,7 +8823,7 @@ function bindInventoryManualAdjustEvents() {
 
 function openInventoryItemDetail(sku) {
     sku = canonicalSku(sku);
-    if (isInactiveProductSku(sku)) return;
+    if (!canViewInventorySku(sku)) return;
     const def = INVENTORY_DEFS[sku];
     const item = state.stock[sku];
     if (!def || !item) return;
@@ -8770,6 +8838,9 @@ function openInventoryItemDetail(sku) {
     setText("inventoryItemMeta", `${def.group || "분류 없음"} · ${def.structure || "구조 정보 없음"}`);
 
     const unitCost = getSkuCost(sku);
+    const safetyUnset = isCandyFiveSku(sku) && !safety;
+    const safetyLabel = safetyUnset ? "안전재고 미설정" : safety?.isLow ? "안전재고 주의" : "안전재고 정상";
+    const safetyDetail = safetyUnset ? "안전재고 미설정" : safety?.isLow ? `부족 · ${stockPercentText(sku)}` : `정상 · ${stockPercentText(sku)}`;
     const rows = [
       ["현재 재고", formatStock(sku, units)],
       ["총 낱개 환산", `${number(units)}개`],
@@ -8781,14 +8852,14 @@ function openInventoryItemDetail(sku) {
 
     body.innerHTML = `
       <div class="inventory-detail-overview">
-        <article class="inventory-detail-primary-card ${safety?.isLow ? "is-low" : "is-safe"}">
+        <article class="inventory-detail-primary-card ${safetyUnset ? "is-unset" : safety?.isLow ? "is-low" : "is-safe"}">
           <span>현재 재고</span>
           <strong>${escapeHtml(formatStock(sku, units))}</strong>
-          <em>${escapeHtml(number(units))}개 · ${escapeHtml(safety?.isLow ? "안전재고 주의" : "안전재고 정상")}</em>
+          <em>${escapeHtml(number(units))}개 · ${escapeHtml(safetyLabel)}</em>
         </article>
         <div class="inventory-detail-stat-grid">
           <article><span>안전재고</span><strong>${escapeHtml(safety?.threshold ? safety.thresholdText : "미설정")}</strong></article>
-          <article><span>재고 상태</span><strong>${escapeHtml(safety?.isLow ? `부족 · ${stockPercentText(sku)}` : `정상 · ${stockPercentText(sku)}`)}</strong></article>
+          <article><span>재고 상태</span><strong>${escapeHtml(safetyDetail)}</strong></article>
           <article><span>낱개 원가</span><strong>${escapeHtml(Number.isFinite(unitCost) ? money(unitCost) : "원가 미입력")}</strong></article>
           <article><span>재고 자산</span><strong>${escapeHtml(Number.isFinite(unitCost) ? money(units * unitCost) : "원가 미입력")}</strong></article>
         </div>
@@ -9064,7 +9135,9 @@ function openInventoryItemDetail(sku) {
       if (!productName || isLikelyHeaderRow(cols)) return;
 
       orderRows += 1;
-      const orderedQty = Math.max(1, cleanNumber(cols.qty) || 1);
+      const hasCandy = isCandyOrderText(productName);
+      const candyQty = String(cols.qty ?? "").trim() === "" ? 1 : parseCandyPositiveQuantity(cols.qty);
+      const orderedQty = hasCandy && candyQty !== null ? candyQty : Math.max(1, cleanNumber(cols.qty) || 1);
       const unitsInName = extractUnitsFromName(productName);
       const lineUnits = Math.max(1, unitsInName || 1) * orderedQty;
       const compoundMatch = matchCompoundOrderLine(productName, orderedQty);
@@ -9091,6 +9164,11 @@ function openInventoryItemDetail(sku) {
         duplicatePaymentRowCount += 1;
       }
 
+      if (hasCandy && candyQty === null) {
+        needs.push({ row: index + 1, productName, qty: cols.qty, reason: "신규 캔디 상품 주문수량은 안전한 양의 정수여야 합니다." });
+        return;
+      }
+
       if (compoundMatch) {
         if (compoundMatch.needs?.length) {
           compoundMatch.needs.forEach((reason) => needs.push({ row: index + 1, productName, qty: orderedQty, reason }));
@@ -9107,6 +9185,10 @@ function openInventoryItemDetail(sku) {
           return;
         }
 
+        if (hasCandy && compoundMatch.items.some(({ sku, units }) => !Number.isSafeInteger((deductions.get(sku) || 0) + units))) {
+          needs.push({ row: index + 1, productName, qty: orderedQty, reason: "복합 주문 누적 수량 안전 정수 범위 초과 / 행 전체 차감 보류" });
+          return;
+        }
         const rowSkus = new Set();
         let compoundUnits = 0;
         compoundMatch.items.forEach(({ sku, units }) => {
@@ -9142,6 +9224,10 @@ function openInventoryItemDetail(sku) {
       const inactiveSkus = getInactiveProductSkusFromOrderItems(match.items);
       if (inactiveSkus.length) {
         inactiveSkus.forEach((sku) => needs.push({ row: index + 1, productName, qty: lineUnits, reason: `비활성 상품 포함: ${sku} / 차감 보류` }));
+        return;
+      }
+      if (hasCandy && match.items.some(({ sku, units }) => !Number.isSafeInteger((deductions.get(sku) || 0) + units))) {
+        needs.push({ row: index + 1, productName, qty: lineUnits, reason: "신규 캔디 상품 누적 수량 안전 정수 범위 초과 / 차감 보류" });
         return;
       }
       match.items.forEach(({ sku, units }) => {
@@ -9281,6 +9367,7 @@ function openInventoryItemDetail(sku) {
 
     const hasMyeonggaContext = /^\s*\[명가\]/.test(segments[0]);
     const hasEnakContext = /^\s*\[에낙\]/.test(segments[0]);
+    const hasCandy = isCandyOrderText(rawName);
     const combinedItems = new Map();
 
     for (let index = 0; index < segments.length; index += 1) {
@@ -9310,11 +9397,15 @@ function openInventoryItemDetail(sku) {
 
       for (const item of match.items) {
         const units = Number(item.units);
-        if (!item.sku || !Number.isFinite(units) || units <= 0) {
+        if (!item.sku || !Number.isFinite(units) || units <= 0 || (hasCandy && !Number.isSafeInteger(units))) {
           return { needs: [`복합 주문 ${index + 1}번째 상품 수량 확인 필요`] };
         }
         const sku = canonicalSku(item.sku);
-        combinedItems.set(sku, (combinedItems.get(sku) || 0) + units);
+        const combinedUnits = (combinedItems.get(sku) || 0) + units;
+        if (hasCandy && !Number.isSafeInteger(combinedUnits)) {
+          return { needs: [`복합 주문 ${index + 1}번째 상품 합산 수량 안전 정수 범위 초과`] };
+        }
+        combinedItems.set(sku, combinedUnits);
       }
     }
 
@@ -9327,7 +9418,43 @@ function openInventoryItemDetail(sku) {
     return String(text || "").toLowerCase().replace(/\s+/g, "");
   }
 
+  function isCandyOrderText(name) {
+    return /커피|candy|truffle|비타캔디|엘반트러플/.test(normalizedText(name));
+  }
+
+  function parseCandyPositiveQuantity(value) {
+    const text = String(value ?? "").trim();
+    if (!/^(?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+)$/.test(text)) return null;
+    const units = Number(text.replaceAll(",", ""));
+    return Number.isSafeInteger(units) && units > 0 ? units : null;
+  }
+
+  function matchCandyOrderLine(name, units) {
+    if (!isCandyOrderText(name)) return null;
+    const text = normalizedText(name);
+    const patterns = [
+      [/^커피\(175g\)x((?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+))(?:개)?$/, "커피캔디 175g"],
+      [/^커피통\(612\.5g\)x((?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+))(?:개)?$/, "커피캔디 통 612.5g"],
+      [/^candy\(100g\)x((?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+))(?:개)?$/, "비타캔디 100g"],
+      [/^\[elvan\]trufflex((?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+))(?:개)?$/, "엘반 트러플초콜렛 500g"],
+      [/^커피\(210g\)x((?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+))(?:개)?$/, "커피캔디 210g"]
+    ];
+    for (const [pattern, sku] of patterns) {
+      const match = text.match(pattern);
+      if (!match) continue;
+      const rawQuantity = String(name || "").match(/x\s*((?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+))\s*(?:개)?\s*$/i);
+      const namedUnits = parseCandyPositiveQuantity(match[1]);
+      if (!rawQuantity || namedUnits === null || !Number.isSafeInteger(units) || units <= 0 || units % namedUnits !== 0) {
+        return { needs: ["신규 캔디 상품 수량 또는 최종 수량 안전 정수 범위 확인 필요"] };
+      }
+      return { items: [{ sku, units }] };
+    }
+    return { needs: ["신규 캔디 상품명/중량/x 양의 정수 수량 확인 필요"] };
+  }
+
   function matchOrderLine(name, units) {
+    const candyMatch = matchCandyOrderLine(name, units);
+    if (candyMatch) return candyMatch;
     const text = normalizedText(name);
     const needs = [];
     const miniChakaniOriginalPattern = /^\[mini\]차카니x(?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+)(?:개)?$/;
@@ -9438,6 +9565,19 @@ function openInventoryItemDetail(sku) {
     sku = canonicalSku(sku);
     const def = INVENTORY_DEFS[sku];
     if (!def || def.isBox || sku === "코디 3겹") return { size: "none" };
+    if (isCandyFiveSku(sku)) {
+      if (!Number.isSafeInteger(units) || units <= 0) return { size: "none", needCheck: "신규 캔디 상품 포장 수량 확인 필요" };
+      if (units % def.unitsPerBox === 0) return { size: "none" };
+      if (sku === "비타캔디 100g") {
+        if (units <= 6) return { size: "small" };
+        if (units <= 18) return { size: "medium" };
+        if (units <= 71) return { size: "large" };
+        return { size: "none" };
+      }
+      if (sku === "엘반 트러플초콜렛 500g") return { size: units <= 6 ? "small" : units <= 9 ? "medium" : "large" };
+      const mediumLimit = sku === "커피캔디 175g" ? 23 : sku === "커피캔디 통 612.5g" ? 5 : 11;
+      return { size: units <= mediumLimit ? "medium" : "large" };
+    }
     const cookieBoxUsage = getCookieChocoPackagingBoxUsage(sku, units);
     if (cookieBoxUsage) return cookieBoxUsage;
     if (isCookieChocoSku(sku)) return { size: "none" };
