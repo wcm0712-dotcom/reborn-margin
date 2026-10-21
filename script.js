@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-ui-sizing-order-margin-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-add-elvan-truffle-900g-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -134,6 +134,7 @@
     { name: "커피캔디 통 612.5g", cost: 4600 },
     { name: "비타캔디 100g", cost: 1500 },
     { name: "엘반 트러플초콜렛 500g", cost: 3500 },
+    { name: "엘반 트러플초콜렛 900g", cost: 6500 },
     { name: "커피캔디 210g", cost: 3000 },
     { name: "꾀돌이", cost: 275 },
     { name: "라멘뽀식이", cost: 510 },
@@ -210,6 +211,7 @@
     "커피캔디 통 612.5g": { group: "과자", boxesPerPallet: null, unitsPerBox: 6, structure: "파렛 미정 / 1완박스=6낱개", cost: 4600, palletUnknown: true },
     "비타캔디 100g": { group: "과자", boxesPerPallet: null, unitsPerBox: 72, unitsPerInnerBox: 6, structure: "파렛 미정 / 1완박스=12내부박스 / 1내부박스=6낱개 / 1완박스=72낱개", cost: 1500, palletUnknown: true, unitLabels: { pallet: "완박스", box: "내부박스", each: "낱개" } },
     "엘반 트러플초콜렛 500g": { group: "과자", boxesPerPallet: null, unitsPerBox: 10, structure: "파렛 미정 / 1완박스=10낱개", cost: 3500, palletUnknown: true },
+    "엘반 트러플초콜렛 900g": { group: "과자", boxesPerPallet: null, unitsPerBox: 8, structure: "파렛 미정 / 1완박스=8낱개", cost: 6500, palletUnknown: true },
     "커피캔디 210g": { group: "과자", boxesPerPallet: null, unitsPerBox: 12, structure: "파렛 미정 / 1완박스=12낱개", cost: 3000, palletUnknown: true },
     "명가 참깨": { group: "명가", boxesPerPallet: 45, unitsPerBox: 16, structure: "1파렛=45완박스 / 1완박스=16개", cost: 4200, safetyStock: { pallets: 2 } },
     "명가 흑당": { group: "명가", boxesPerPallet: 45, unitsPerBox: 16, structure: "1파렛=45완박스 / 1완박스=16개", cost: 4200, safetyStock: { pallets: 2 } },
@@ -226,7 +228,7 @@
   }
 
   function isCandyFiveSku(sku) {
-    return ["커피캔디 175g", "커피캔디 통 612.5g", "비타캔디 100g", "엘반 트러플초콜렛 500g", "커피캔디 210g"].includes(canonicalSku(sku));
+    return ["커피캔디 175g", "커피캔디 통 612.5g", "비타캔디 100g", "엘반 트러플초콜렛 500g", "엘반 트러플초콜렛 900g", "커피캔디 210g"].includes(canonicalSku(sku));
   }
 
   const INITIAL_STOCK_INPUT = {
@@ -6447,7 +6449,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-ui-sizing-order-margin-01",
+    cacheVersion: "reborn-add-elvan-truffle-900g-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -9161,7 +9163,8 @@ function openInventoryItemDetail(sku) {
       "500뻥이요(35g)": ["[red]뻥이요(35g)"], "뻥이요 골드(60g)": ["[red]뻥이요(60g)"], "허니뻥이요(50g)": ["[yellow]뻥이요(50g)"],
       "블랙 하몽 크래커(294g)": ["[black]크래커(294g)"],
       "커피캔디 175g": ["커피(175g)"], "커피캔디 통 612.5g": ["커피통(612.5g)"], "커피캔디 210g": ["커피(210g)"],
-      "비타캔디 100g": ["candy(100g)"], "엘반 트러플초콜렛 500g": ["[elvan]truffle"]
+      "비타캔디 100g": ["candy(100g)"], "엘반 트러플초콜렛 500g": ["[elvan]truffle"],
+      "엘반 트러플초콜렛 900g": ["[elvan](900g)"]
     };
     return base === normalizedText(sku) || (aliases[sku] || []).includes(base);
   }
@@ -9556,7 +9559,7 @@ function openInventoryItemDetail(sku) {
   }
 
   function isCandyOrderText(name) {
-    return /커피|candy|truffle|비타캔디|엘반트러플/.test(normalizedText(name));
+    return /커피|candy|truffle|elvan|비타캔디|엘반트러플/.test(normalizedText(name));
   }
 
   function parseCandyPositiveQuantity(value) {
@@ -9574,6 +9577,7 @@ function openInventoryItemDetail(sku) {
       [/^커피통\(612\.5g\)x((?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+))(?:개)?$/, "커피캔디 통 612.5g"],
       [/^candy\(100g\)x((?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+))(?:개)?$/, "비타캔디 100g"],
       [/^\[elvan\]trufflex((?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+))(?:개)?$/, "엘반 트러플초콜렛 500g"],
+      [/^\[elvan\]\(900g\)x((?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+))(?:개)?$/, "엘반 트러플초콜렛 900g"],
       [/^커피\(210g\)x((?:[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+))(?:개)?$/, "커피캔디 210g"]
     ];
     for (const [pattern, sku] of patterns) {
@@ -9704,6 +9708,7 @@ function openInventoryItemDetail(sku) {
     if (!def || def.isBox || sku === "코디 3겹") return { size: "none" };
     if (isCandyFiveSku(sku)) {
       if (!Number.isSafeInteger(units) || units <= 0) return { size: "none", needCheck: "신규 캔디 상품 포장 수량 확인 필요" };
+      if (sku === "엘반 트러플초콜렛 900g") return { size: units <= 7 ? "small" : units === 8 ? "none" : units <= 16 ? "medium" : "large" };
       if (units % def.unitsPerBox === 0) return { size: "none" };
       if (sku === "비타캔디 100g") {
         if (units <= 6) return { size: "small" };

@@ -1,4 +1,4 @@
-import {inspectImage,MAX_BYTES,MAX_PIXELS} from './backend/image-guard.mjs?v=reborn-ui-sizing-order-margin-01';
+import {inspectImage,MAX_BYTES,MAX_PIXELS} from './backend/image-guard.mjs?v=reborn-add-elvan-truffle-900g-01';
 
 export const MAX_SOURCE_PIXELS=24000000;
 const MAX_DECODE_BYTES=112*1024*1024;
