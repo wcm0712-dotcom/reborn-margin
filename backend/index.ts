@@ -3,6 +3,7 @@ import jpeg from 'npm:jpeg-js@0.4.4';
 import { PNG } from 'npm:pngjs@7.0.0';
 import { Buffer } from 'node:buffer';
 import {inspectImage,reduceImage,MAX_BYTES} from './image-guard.mjs';
+import {readImageOrientation,orientImage} from './image-orientation.mjs';
 const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info,x-supabase-client-platform,x-supabase-client-platform-version,x-supabase-client-runtime,x-supabase-client-runtime-version','Access-Control-Allow-Methods':'POST,OPTIONS','Cache-Control':'no-store','Content-Type':'application/json'};
 const json=(status:number,value:unknown)=>new Response(JSON.stringify(value),{status,headers:cors});
 const digest=async(bytes:Uint8Array)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),value=>value.toString(16).padStart(2,'0')).join('');
@@ -27,10 +28,14 @@ Deno.serve(async request=>{
   const id=String(form.get('id')||'');if(!/^[0-9a-f-]{36}$/i.test(id))return json(400,{error:'INVALID_ID'});
   const metadata=fields({business_date:form.get('business_date'),partner:form.get('partner'),document_type:form.get('document_type'),note:form.get('note')});
   const bytes=new Uint8Array(await original.arrayBuffer()),info=inspectImage(bytes);
+  const existing=await client.from('reborn_evidence_files').select('id').eq('id',id).maybeSingle();
+  if(existing.error)throw new Error('LOOKUP_FAILED');
+  if(existing.data){const {data,error}=await client.rpc('reborn_evidence_commit',{p_item:{id,...metadata},p_file:{original_sha256:await digest(bytes)},p_actor:auth.user.id});if(error)return json(409,{error:'SAVE_CONFLICT'});return json(200,{item:data});}
   const decoded=info.mime==='image/jpeg'?jpeg.decode(bytes,{useTArray:true,formatAsRGBA:true,tolerantDecoding:false,maxResolutionInMP:12,maxMemoryUsageInMB:128}):PNG.sync.read(Buffer.from(bytes),{checkCRC:true});
   if(decoded.width!==info.width||decoded.height!==info.height)throw new Error('IMAGE_CORRUPT');
-  const preview=jpeg.encode(reduceImage(decoded,1800),82).data,thumbnail=jpeg.encode(reduceImage(decoded,360),78).data;
-  const paths={original_path:id+'/original.'+(info.mime==='image/png'?'png':'jpg'),preview_path:id+'/preview.jpg',thumbnail_path:id+'/thumbnail.jpg'};
+  const oriented=orientImage(decoded,readImageOrientation(bytes));
+  const preview=jpeg.encode(reduceImage(oriented,1800),82).data,thumbnail=jpeg.encode(reduceImage(oriented,360),78).data;
+  const paths={original_path:id+'/original.'+(info.mime==='image/png'?'png':'jpg'),preview_path:id+'/preview-oriented-02.jpg',thumbnail_path:id+'/thumbnail-oriented-02.jpg'};
   async function ensure(path:string,body:Uint8Array,mime:string){const bucket=client.storage.from('reborn-accounting-evidence');const {error}=await bucket.upload(path,body,{contentType:mime,cacheControl:'0',upsert:false});if(!error)return;const existing=await bucket.download(path);if(!existing.data||await digest(new Uint8Array(await existing.data.arrayBuffer()))!==await digest(body))throw new Error('UPLOAD_FAILED');}
   await ensure(paths.original_path,bytes,info.mime);await ensure(paths.preview_path,preview,'image/jpeg');await ensure(paths.thumbnail_path,thumbnail,'image/jpeg');
   const {data,error}=await client.rpc('reborn_evidence_commit',{p_item:{id,...metadata,preview_path:paths.preview_path,thumbnail_path:paths.thumbnail_path},p_file:{...paths,original_name:original.name.slice(0,250),original_sha256:await digest(bytes),bytes:bytes.length,mime:info.mime},p_actor:auth.user.id});

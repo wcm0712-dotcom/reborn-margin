@@ -1,6 +1,8 @@
 # 회계자료·전체 순위·Excel 일괄 분석 적용 안내
 
-버전: `reborn-evidence-partner-categories-01`
+현재 버전: `reborn-full-audit-inventory-bar-fix-01`
+
+이 문서는 회계자료 기능의 기존 안내를 포함합니다. 이번 수정·배포·보안 한계·롤백은 `START_HERE.md`를 우선하세요. 아래 과거 설치/검증 기록은 이번 단계에서 다시 실행했다는 뜻이 아닙니다.
 
 ## 이번 결과물
 

@@ -8,10 +8,10 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <!-- Cache busting -->
-  <meta name="reborn-app-version" content="reborn-add-elvan-truffle-900g-01" />
+  <meta name="reborn-app-version" content="reborn-full-audit-inventory-bar-fix-01" />
   <script>
     (function () {
-      var APP_VERSION = "reborn-add-elvan-truffle-900g-01";
+      var APP_VERSION = "reborn-full-audit-inventory-bar-fix-01";
       var VERSION_PARAM = "v";
       var VERSION_STORAGE_KEY = "rebornAppVersion";
       var REFRESH_FLAG_KEY = "rebornCacheRepairReloaded:" + APP_VERSION;
@@ -20,7 +20,11 @@
 
       function sameOriginServiceWorker(registration) {
         try {
-          return new URL(registration.scope).origin === window.location.origin;
+          var base = new URL("./", window.location.href);
+          var worker = registration.active || registration.waiting || registration.installing;
+          if (!worker || !worker.scriptURL) return false;
+          var script = new URL(worker.scriptURL);
+          return registration.scope === base.href && script.origin === base.origin && script.pathname === base.pathname + "reborn-wms-service-worker.js";
         } catch (error) {
           return false;
         }
@@ -34,8 +38,8 @@
         for (var i = 0; i < names.length; i += 1) {
           var name = String(names[i] || "");
 
-          // Cache Storage is only used for app shell/static files here.
-          // Keep the current version cache if it exists, remove older/unversioned app-file caches.
+          var ownedPrefix = "reborn-wms-app-shell:" + new URL("./", window.location.href).pathname + ":";
+          if (name.indexOf(ownedPrefix) !== 0) continue;
           if (name.indexOf(APP_VERSION) !== -1) continue;
 
           try {
@@ -193,14 +197,14 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>리본컴퍼니 관리 시스템</title>
-  <link rel="manifest" href="./manifest.json?v=reborn-add-elvan-truffle-900g-01" />
+  <link rel="manifest" href="./manifest.json?v=reborn-full-audit-inventory-bar-fix-01" />
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="64x64" href="./favicon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
-  <link rel="stylesheet" href="./style.css?v=reborn-add-elvan-truffle-900g-01" />
-  <link rel="stylesheet" href="./workspace-ui.css?v=reborn-add-elvan-truffle-900g-01" />
-  <link rel="stylesheet" href="./workflow-tools.css?v=reborn-add-elvan-truffle-900g-01" />
-  <link rel="stylesheet" href="./content-sizing.css?v=reborn-add-elvan-truffle-900g-01" />
+  <link rel="stylesheet" href="./style.css?v=reborn-full-audit-inventory-bar-fix-01" />
+  <link rel="stylesheet" href="./workspace-ui.css?v=reborn-full-audit-inventory-bar-fix-01" />
+  <link rel="stylesheet" href="./workflow-tools.css?v=reborn-full-audit-inventory-bar-fix-01" />
+  <link rel="stylesheet" href="./content-sizing.css?v=reborn-full-audit-inventory-bar-fix-01" />
 </head>
 <body>
   <div id="appLaunchSplash" class="app-launch-splash" aria-hidden="true">
@@ -981,6 +985,7 @@
                 <div class="sync-actions">
                   <button id="syncNow" type="button" class="primary-btn sync-now-btn">지금 동기화</button>
                   <button id="retrySupabaseSave" type="button" class="secondary-btn sync-retry-btn" hidden>DB 저장 재시도</button>
+                  <button id="reloadRemoteState" type="button" class="secondary-btn sync-retry-btn" hidden>백업 후 DB 최신값 불러오기</button>
                   <label class="sync-select-label">
                     자동 동기화
                     <select id="syncIntervalSelect">
@@ -1153,17 +1158,17 @@
   </div>
 
 
-  <script src="./xlsx.full.min.js?v=reborn-add-elvan-truffle-900g-01"></script>
+  <script src="./xlsx.full.min.js?v=reborn-full-audit-inventory-bar-fix-01"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./workspace-icons.js?v=reborn-add-elvan-truffle-900g-01"></script>
-  <script src="./workspace-ui.js?v=reborn-add-elvan-truffle-900g-01"></script>
-  <script src="./original-order.js?v=reborn-add-elvan-truffle-900g-01"></script>
-  <script src="./excel-count-core.js?v=reborn-add-elvan-truffle-900g-01"></script>
-  <script src="./excel-count-ui.js?v=reborn-add-elvan-truffle-900g-01"></script>
-  <script src="./vendor/fflate-0.8.2.min.js?v=reborn-add-elvan-truffle-900g-01"></script>
-  <script src="./evidence-categories-core.js?v=reborn-add-elvan-truffle-900g-01"></script>
-  <script src="./accounting-evidence.js?v=reborn-add-elvan-truffle-900g-01"></script>
-  <script src="./script.js?v=reborn-add-elvan-truffle-900g-01"></script>
+  <script src="./workspace-icons.js?v=reborn-full-audit-inventory-bar-fix-01"></script>
+  <script src="./workspace-ui.js?v=reborn-full-audit-inventory-bar-fix-01"></script>
+  <script src="./original-order.js?v=reborn-full-audit-inventory-bar-fix-01"></script>
+  <script src="./excel-count-core.js?v=reborn-full-audit-inventory-bar-fix-01"></script>
+  <script src="./excel-count-ui.js?v=reborn-full-audit-inventory-bar-fix-01"></script>
+  <script src="./vendor/fflate-0.8.2.min.js?v=reborn-full-audit-inventory-bar-fix-01"></script>
+  <script src="./evidence-categories-core.js?v=reborn-full-audit-inventory-bar-fix-01"></script>
+  <script src="./accounting-evidence.js?v=reborn-full-audit-inventory-bar-fix-01"></script>
+  <script src="./script.js?v=reborn-full-audit-inventory-bar-fix-01"></script>
   <script>
     (function () {
       var expectedVersion = window.__REBORN_APP_VERSION__;

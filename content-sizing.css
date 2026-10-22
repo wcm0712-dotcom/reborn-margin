@@ -24,12 +24,20 @@ body.workspace-ui #workspace-orders .order-finance-metrics dt { min-width: 0; ov
 body.workspace-ui #workspace-orders .order-finance-metrics dd { min-width: 0; white-space: normal; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 body.workspace-ui #workspace-orders #orderFinanceCoverage { max-width: 90ch; }
 body.workspace-ui #workspace-orders .order-finance-basis p { max-width: 90ch; }
+body.workspace-ui #page-wms #inventoryTable .stock-meter { display: block !important; height: 4px; min-height: 4px; margin-top: 6px; }
+body.workspace-ui #page-wms #inventoryTable .stock-meter.basis-unknown { background: #cbd2d0; }
+body.workspace-ui #page-wms #inventoryTable .stock-meter.basis-unknown i { display: none; }
+body.workspace-ui #page-wms #inventoryTable .stock-status.danger .stock-meter.basis-unknown { background: #e4b4b4; }
+body.workspace-ui #page-wms #inventoryTable .stock-status-top { min-width: 0; flex-wrap: wrap; }
+body.workspace-ui #page-wms #inventoryTable .stock-status-top strong { overflow-wrap: anywhere; }
+body.workspace-ui #page-wms #inventoryTable .stock-status-top span { white-space: normal; }
 @media (max-width: 960px) {
   body.workspace-ui #page-wms #stockMoveCard .move-control-panel { grid-template-columns: 110px 140px minmax(160px,1fr); }
   body.workspace-ui #page-wms #stockMoveCard .move-memo-field { grid-column: 1 / -1; }
   body.workspace-ui #page-wms #stockMoveCard .move-row { grid-template-columns: minmax(150px,2fr) repeat(3,minmax(65px,1fr)) minmax(90px,1fr) 36px; }
 }
 @media (max-width: 760px) {
+  body.workspace-ui { min-width: 0; }
   body.workspace-ui #workspace-orders .order-finance-columns { grid-template-columns: minmax(0,1fr); }
   body.workspace-ui #page-wms #stockMoveCard .move-control-panel { grid-template-columns: repeat(2,minmax(0,1fr)); }
   body.workspace-ui #page-wms #stockMoveCard .inbound-badge { grid-column: 1 / -1; }

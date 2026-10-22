@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-add-elvan-truffle-900g-01";
+  window.__REBORN_LOADED_SCRIPT_VERSION__ = "reborn-full-audit-inventory-bar-fix-01";
 
   const STORAGE_KEY = "reborn.wms.state.v4.safe";
   const BACKUP_KEY = "reborn.wms.backups.v3";
@@ -504,6 +504,8 @@
   }
 
   let localStateLoadFailed = false;
+  let lastLocalSaveOk = true;
+  let localBackupSaveOk = true;
   let state = loadState();
   let lastOrderAnalysis = null;
   let orderWorkbookSession = null;
@@ -873,12 +875,14 @@
   function setLocalStorageItem(key, value, context = "") {
     try {
       localStorage.setItem(key, value);
+      if (key === STORAGE_KEY) lastLocalSaveOk = true;
       return true;
     } catch (error) {
+      if (key === STORAGE_KEY) lastLocalSaveOk = false;
       console.warn("[Reborn storage] localStorage write failed; data was not cleared.", {
         key,
         context,
-        message: error?.message || String(error)
+        failed: true
       });
       return false;
     }
@@ -893,12 +897,19 @@
     if (localStateLoadFailed) {
       console.warn("[Reborn storage] state save skipped because saved state failed to load. Existing browser data was preserved.");
     } else {
-      setLocalStorageItem(STORAGE_KEY, JSON.stringify(state), reason || "saveState");
-      addBackup(reason, { cloud });
+      lastLocalSaveOk = setLocalStorageItem(STORAGE_KEY, JSON.stringify(state), reason || "saveState");
+      localBackupSaveOk = addBackup(reason, { cloud });
     }
     renderAll();
     refreshInventoryItemOrderTrendIfOpen();
     if (cloud && !localStateLoadFailed) queueSupabaseAppStateSave(reason);
+    if (localStateLoadFailed || !lastLocalSaveOk) {
+      setSyncStatus("bad", "브라우저 미저장", "현재 변경은 메모리에만 있습니다. 창을 닫지 말고 JSON 백업을 내려받은 뒤 저장을 재시도하세요.");
+      alert("브라우저에 변경 내용을 저장하지 못했습니다. 창을 닫기 전에 JSON 백업을 내려받아 주세요. DB 저장 여부는 동기화 상태를 확인하세요.");
+    } else if (!localBackupSaveOk) {
+      setSyncStatus("warn", "복구 백업 실패", "현재 상태는 브라우저에 저장됐지만 자동 복구 백업은 실패했습니다. JSON 백업을 내려받아 주세요.");
+    }
+    return { localSaved: !localStateLoadFailed && lastLocalSaveOk, backupSaved: localBackupSaveOk, cloudQueued: cloud && !localStateLoadFailed };
   }
 
   function addBackup(reason, options = {}) {
@@ -906,8 +917,9 @@
     const backup = { at: new Date().toISOString(), reason, state: safeClone(state) };
     const backups = loadBackups();
     backups.unshift(backup);
-    setLocalStorageItem(BACKUP_KEY, JSON.stringify(backups.slice(0, 30)), reason || "addBackup");
+    const saved = setLocalStorageItem(BACKUP_KEY, JSON.stringify(backups.slice(0, 30)), reason || "addBackup");
     if (cloud) queueSupabaseBackupSave(backup);
+    return saved;
   }
 
   function loadBackups() {
@@ -1449,6 +1461,7 @@
   }
 
   function restoreLatestInventoryChange() {
+    if (!requireEditor("최근 작업 되돌리기")) return;
     const candidate = getLatestInventoryUndoCandidate();
     if (!candidate) {
       alert("되돌릴 최근 작업이 없습니다. 정확한 직전 백업을 찾을 수 없어 되돌릴 수 없습니다.");
@@ -1456,38 +1469,35 @@
       return;
     }
     const summary = summarizeOneStepUndoCandidate(candidate);
+    try { validateBackupState(candidate.previousState); } catch { alert("직전 백업이 불완전해 되돌리지 않았습니다. JSON 백업을 대조하세요."); return; }
     if (!confirm(`가장 최근 재고 변경 작업 1건만 되돌립니다.\n\n${summary}\n\n계속할까요?`)) return;
     addBackup("최근 작업 1단계 되돌리기 전 백업");
     saveUndoSnapshots(candidate.snapshots.slice(1));
     state = normalizeState(candidate.previousState);
     applyLaborCostRecordsAfterStateReplace(candidate.previousState, "restoreLatestInventoryChange labor sync");
-    state.updatedAt = new Date().toISOString();
     localStateLoadFailed = false;
-    setLocalStorageItem(STORAGE_KEY, JSON.stringify(state), "restoreLatestInventoryChange");
-    addBackup("최근 작업 1단계 되돌리기");
-    renderAll();
-    refreshInventoryItemOrderTrendIfOpen();
-    queueSupabaseAppStateSave("최근 작업 1단계 되돌리기");
+    saveState("최근 작업 1단계 되돌리기", { trackUndo: false });
     alert(`최근 작업 1단계를 되돌렸습니다.\n${summary}`);
   }
 
   function restorePreviousState() {
+    if (!requireEditor("이전값 복구")) return;
     const snapshots = loadUndoSnapshots();
     if (!snapshots.length) {
       alert("복구할 이전값이 없습니다.");
       return;
     }
-    const snapshot = snapshots.shift();
+    const snapshot = snapshots[0];
+    try { validateBackupState(snapshot.state); } catch { alert("이전값 백업이 불완전해 복구하지 않았습니다. JSON 백업을 대조하세요."); return; }
+    if (!confirm("이전값으로 현재 자료를 교체합니다. 계속할까요?")) return;
+    snapshots.shift();
     saveUndoSnapshots(snapshots);
     addBackup("이전값 복구 전 백업");
     state = normalizeState(snapshot.state);
     applyLaborCostRecordsAfterStateReplace(snapshot.state, "restorePreviousState labor sync");
     addAdminActionLog("데이터 복구/import", { itemName: "이전값 복구", memo: snapshot.reason || "저장 전 상태", source: "restorePreviousState" });
-    state.updatedAt = new Date().toISOString();
     localStateLoadFailed = false;
-    setLocalStorageItem(STORAGE_KEY, JSON.stringify(state), "restorePreviousState");
-    addBackup("이전값 복구");
-    renderAll();
+    saveState("이전값 복구", { trackUndo: false });
     alert(`이전값을 불러왔습니다.\n${formatDateTime(snapshot.at)} · ${snapshot.reason || "저장 전 상태"}`);
   }
 
@@ -1507,6 +1517,11 @@
   let supabaseBusy = false;
   let lastFailedSupabaseReason = "";
   let lastSupabaseSavePromise = Promise.resolve();
+  let remoteStateToken = null;
+  let cloudDirty = false;
+  let cloudConflict = false;
+  let stateEditGeneration = 0;
+  let pendingCloudWrite = null;
 
 
   function getAdminUser() {
@@ -1727,7 +1742,7 @@
     }
 
     const lockSelectors = [
-      "#syncNow", "#retrySupabaseSave", "#syncIntervalSelect",
+      "#syncNow", "#retrySupabaseSave", "#reloadRemoteState", "#syncIntervalSelect",
       "#savePallets", "#saveBoxStock",
       "#exportBackup", "#restorePreviousWms", "#undoLatestInventoryChange", "#resetWms",
       "#orderFile", "#parseOrderFile", "#applyOrderDeductions",
@@ -2016,16 +2031,17 @@
       adminLoginPanelOpen = true;
       setAdminAuthStatus("관리자 수정 권한이 확인되었습니다.", "success");
       refreshUiAfterAdminAuthChange();
-      syncFromSupabase({ forcePull: true, silent: true });
+      syncFromSupabase({ silent: true });
     });
 
     $("adminLogout")?.addEventListener("click", async () => {
+      if ((cloudDirty || cloudConflict || !lastLocalSaveOk) && !confirm("미반영 변경이 있습니다. 로그아웃 전 JSON 백업을 내려받으세요. 현재 화면을 유지한 채 로그아웃할까요?")) return;
       await client.auth.signOut();
       adminSession = null;
       adminLoginPanelOpen = false;
       setAdminAuthStatus("로그아웃되었습니다. 수정 기능은 숨겨집니다.", "muted");
       refreshUiAfterAdminAuthChange();
-      syncFromSupabase({ forcePull: true, silent: true });
+      syncFromSupabase({ silent: true });
     });
 
     const { data } = await client.auth.getSession();
@@ -2082,6 +2098,8 @@
     if (label) label.textContent = text || "동기화 대기";
     if (desc) desc.textContent = detail || "";
     if (retryButton) retryButton.hidden = !(kind === "bad" && isEditorSession());
+    const reloadButton = $("reloadRemoteState");
+    if (reloadButton) reloadButton.hidden = !(cloudConflict && isEditorSession());
   }
 
   function setSyncBusy(isBusy) {
@@ -2093,6 +2111,8 @@
     }
     const retryButton = $("retrySupabaseSave");
     if (retryButton) retryButton.disabled = isBusy;
+    const reloadButton = $("reloadRemoteState");
+    if (reloadButton) reloadButton.disabled = isBusy;
   }
 
   function setSyncTimes({ lastAt, remoteAt } = {}) {
@@ -2150,30 +2170,73 @@
       setSyncStatus("warn", "브라우저 저장", "Supabase 라이브러리 또는 설정을 찾지 못해 localStorage로 작동 중입니다.");
       return false;
     }
-
-    const now = new Date().toISOString();
+    if (supabaseBusy) {
+      queueSupabaseAppStateSave(reason);
+      return false;
+    }
+    if (cloudConflict || !remoteStateToken) {
+      cloudConflict = true;
+      lastFailedSupabaseReason = reason;
+      setSyncStatus("bad", "저장 보류", "DB 기준값을 먼저 확인해야 합니다. 현재 변경은 유지됩니다. JSON 백업 후 DB 최신값 불러오기를 선택하세요.");
+      return false;
+    }
+    const now = new Date(Math.max(Date.now(), toTimeValue(remoteStateToken) + 1)).toISOString();
     setSyncStatus("saving", "저장 중", `${reason} 내용을 Supabase에 저장하고 있습니다.`);
     setSyncBusy(true);
 
     try {
+      if (pendingCloudWrite) {
+        const previous = await client.from(SUPABASE_CONFIG.appStateTable).select("data,updated_at").eq("id", SUPABASE_CONFIG.appStateRowId).maybeSingle();
+        if (previous.error) throw previous.error;
+        if (previous.data?.data?.cloudMeta?.writeId === pendingCloudWrite.id) {
+          remoteStateToken = previous.data.updated_at;
+          if (pendingCloudWrite.generation === stateEditGeneration) cloudDirty = false;
+          pendingCloudWrite = null;
+          if (!cloudDirty) {
+            setSyncStatus(lastLocalSaveOk ? "ok" : "warn", "DB 저장 확인", lastLocalSaveOk ? "이전 요청의 저장 완료를 확인했습니다." : "DB에는 저장됐지만 브라우저 저장은 실패했습니다. JSON 백업을 내려받아 주세요.");
+            return true;
+          }
+        } else if (previous.data?.updated_at !== remoteStateToken) {
+          cloudConflict = true;
+          pendingCloudWrite = null;
+          setSyncStatus("bad", "동시 수정 충돌", "다른 PC의 변경이 있습니다. 자동 덮어쓰기를 중단했습니다. 현재 내용을 JSON 백업 후 DB 최신값과 대조하세요.");
+          return false;
+        } else pendingCloudWrite = null;
+      }
       const payload = buildAppStatePayload(reason);
-      const { error } = await client
+      const writeId = crypto.randomUUID();
+      payload.cloudMeta.writeId = writeId;
+      const generation = stateEditGeneration;
+      pendingCloudWrite = { id: writeId, generation };
+      const writeAt = new Date(Math.max(Date.now(), toTimeValue(remoteStateToken) + 1)).toISOString();
+      const { data, error } = await client
         .from(SUPABASE_CONFIG.appStateTable)
-        .upsert({
-          id: SUPABASE_CONFIG.appStateRowId,
+        .update({
           data: payload,
-          updated_at: now
-        }, { onConflict: "id" });
-
+          updated_at: writeAt
+        })
+        .eq("id", SUPABASE_CONFIG.appStateRowId)
+        .eq("updated_at", remoteStateToken)
+        .select("updated_at")
+        .maybeSingle();
       if (error) throw error;
-      setSyncTimes({ lastAt: now, remoteAt: now });
+      if (!data?.updated_at) {
+        cloudConflict = true;
+        pendingCloudWrite = null;
+        setSyncStatus("bad", "동시 수정 충돌", "DB 기준이 바뀌었거나 저장 권한이 없습니다. 현재 변경은 유지하고 덮어쓰기는 중단했습니다. JSON 백업 후 최신값과 대조하세요.");
+        return false;
+      }
+      pendingCloudWrite = null;
+      remoteStateToken = data.updated_at;
+      if (generation === stateEditGeneration) cloudDirty = false;
+      setSyncTimes({ lastAt: now, remoteAt: remoteStateToken });
       lastFailedSupabaseReason = "";
-      setSyncStatus("ok", "최신 상태", "Supabase와 브라우저 저장값이 동기화되었습니다.");
+      setSyncStatus(cloudDirty || !lastLocalSaveOk ? "warn" : "ok", cloudDirty ? "추가 변경 저장 대기" : "DB 저장 완료", !lastLocalSaveOk ? "DB에는 저장됐지만 브라우저 저장은 실패했습니다. JSON 백업을 내려받아 주세요." : !localBackupSaveOk ? "현재 상태는 저장됐지만 자동 복구 백업은 실패했습니다." : cloudDirty ? "저장 요청 뒤의 추가 변경은 다음 저장에서 반영됩니다." : "DB 저장을 확인했습니다.");
       return true;
     } catch (error) {
-      console.warn("Supabase app_state 저장 실패", error);
+      console.warn("Supabase app_state 저장 실패");
       lastFailedSupabaseReason = reason || "저장 재시도";
-      setSyncStatus("bad", "DB 저장 실패", "Supabase 저장에 실패했습니다. localStorage에는 현재 화면 상태가 보존되어 있으며, 관리자 화면에서 다시 저장을 시도할 수 있습니다.");
+      setSyncStatus("bad", "DB 저장 확인 실패", lastLocalSaveOk ? "브라우저에는 저장됐습니다. DB 반영 여부는 아직 확정할 수 없습니다. 다시 시도하면 이전 요청부터 확인합니다." : "브라우저 저장도 실패했습니다. 메모리에만 남아 있을 수 있으니 창을 닫지 말고 JSON 백업을 내려받아 주세요.");
       return false;
     } finally {
       setSyncBusy(false);
@@ -2183,10 +2246,13 @@
   function queueSupabaseAppStateSave(reason = "저장") {
     if (!SUPABASE_CONFIG.enabled) return;
     if (ADMIN_AUTH_CONFIG.enabled && !isEditorSession()) return;
+    cloudDirty = true;
+    stateEditGeneration += 1;
     supabaseSaveReason = reason || supabaseSaveReason || "저장";
     clearTimeout(supabaseSaveTimer);
     supabaseSaveTimer = setTimeout(() => {
-      lastSupabaseSavePromise = lastSupabaseSavePromise.finally(() => saveSupabaseAppState(supabaseSaveReason));
+      const queuedReason = supabaseSaveReason;
+      lastSupabaseSavePromise = lastSupabaseSavePromise.finally(() => saveSupabaseAppState(queuedReason));
     }, 450);
   }
 
@@ -2195,15 +2261,16 @@
     const client = getSupabaseClient();
     if (!client || !tableName) return false;
     try {
-      const { error } = await client.from(tableName).insert(fullRecord);
+      const id = crypto.randomUUID();
+      const { error } = await client.from(tableName).insert({ ...fullRecord, id });
       if (!error) return true;
-
+      if (!["PGRST204", "42703"].includes(error.code)) throw error;
       const fallback = minimalRecord || { data: fullRecord };
-      const retry = await client.from(tableName).insert(fallback);
+      const retry = await client.from(tableName).insert({ ...fallback, id });
       if (retry.error) throw retry.error;
       return true;
     } catch (error) {
-      console.warn(`${tableName} Supabase 기록 실패`, error);
+      console.warn("Supabase 보조 기록 저장 실패");
       return false;
     }
   }
@@ -2235,7 +2302,7 @@
           data: record,
           created_at: record.at || new Date().toISOString()
         },
-        { data: record }
+        { type: record.type || "기록", items: record.details || [], memo: record.memo || "", created_at: record.at || new Date().toISOString() }
       );
     }, 0);
   }
@@ -2252,7 +2319,7 @@
           data: record,
           created_at: record.at || new Date().toISOString()
         },
-        { data: record }
+        { date: dateKey(record.at || new Date()), order_count: record.orderRows, created_at: record.at || new Date().toISOString() }
       );
     }, 0);
   }
@@ -2260,6 +2327,10 @@
   async function syncFromSupabase(options = {}) {
     const { forcePull = false, silent = false } = options;
     if (supabaseBusy) return;
+    if ((cloudDirty || cloudConflict || pendingCloudWrite) && !forcePull) {
+      setSyncStatus(cloudConflict ? "bad" : "warn", cloudConflict ? "저장 충돌 보류" : "변경 저장 대기", "현재 변경을 자동 조회로 덮어쓰지 않습니다. 저장 상태를 확인하세요.");
+      return;
+    }
 
     const client = getSupabaseClient();
     if (!client) {
@@ -2269,6 +2340,7 @@
 
     if (!silent) setSyncStatus("checking", "확인 중", "Supabase에 저장된 최신 재고를 확인하고 있습니다.");
     setSyncBusy(true);
+    const generation = stateEditGeneration;
 
     try {
       const { data, error } = await client
@@ -2278,6 +2350,10 @@
         .maybeSingle();
 
       if (error) throw error;
+      if (generation !== stateEditGeneration) {
+        setSyncStatus("warn", "조회 보류", "조회 중 변경된 입력을 보존했습니다. 저장을 재시도하세요.");
+        return;
+      }
 
       const remoteState = extractRemoteState(data);
       const remoteLaborCostShare = getRemoteLaborCostShareStatus(data);
@@ -2285,26 +2361,28 @@
       const localAt = state?.updatedAt || "";
 
       if (!remoteState) {
-        if (isEditorSession()) {
-          setSyncStatus("saving", "DB 초기 저장", "Supabase에 아직 유효한 재고 상태가 없어 현재 브라우저 값을 올립니다.");
-          setSyncBusy(false);
-          await saveSupabaseAppState("DB 초기 저장");
-        } else {
-          setSyncStatus("warn", "읽기 전용", "DB에 아직 유효한 재고가 없습니다. 관리자 로그인 후 초기 저장이 가능합니다.");
-        }
+        setSyncStatus("bad", "유효한 DB 상태 없음", "초기 재고를 자동 업로드하지 않습니다. DB 상태와 백업을 확인하세요.");
         return;
       }
-
-      const shouldApplyRemote = forcePull || !hasLocalSavedState() || toTimeValue(remoteAt) > toTimeValue(localAt) || (ADMIN_AUTH_CONFIG.enabled && !isEditorSession());
+      if (!forcePull && isEditorSession() && hasLocalSavedState() && !remoteStateToken && toTimeValue(localAt) > toTimeValue(remoteAt)) {
+        cloudConflict = true;
+        setSyncStatus("bad", "로컬 변경 대조 필요", "브라우저의 더 최신 자료를 자동 업로드하지 않습니다. JSON 백업 후 DB 최신값과 대조하세요.");
+        return;
+      }
+      const shouldApplyRemote = forcePull || !hasLocalSavedState() || !remoteStateToken || remoteAt !== remoteStateToken || (ADMIN_AUTH_CONFIG.enabled && !isEditorSession());
 
       if (shouldApplyRemote) {
         state = normalizeState(remoteState);
         applyLaborCostRecordsAfterStateReplace(remoteLaborCostShare.isAuthoritative ? remoteState : null, "syncFromSupabase labor sync");
         localStateLoadFailed = false;
         setLocalStorageItem(STORAGE_KEY, JSON.stringify(state), "syncFromSupabase");
+        remoteStateToken = data.updated_at;
+        cloudDirty = false;
+        cloudConflict = false;
+        pendingCloudWrite = null;
         renderAll();
         setSyncTimes({ lastAt: new Date().toISOString(), remoteAt: remoteAt || state.updatedAt });
-        setSyncStatus("ok", "최신 상태", "Supabase의 최신 재고를 불러와 화면에 반영했습니다.");
+        setSyncStatus(lastLocalSaveOk ? "ok" : "warn", "DB 조회 완료", lastLocalSaveOk ? "Supabase의 최신 재고를 불러왔습니다." : "조회는 완료됐지만 브라우저 저장은 실패했습니다. JSON 백업을 내려받아 주세요.");
         if (!remoteLaborCostShare.isAuthoritative && Object.keys(laborCostRecords).length && isEditorSession()) {
           setSyncBusy(false);
           await saveSupabaseAppState("용역비 기록 공유 동기화");
@@ -2324,15 +2402,10 @@
           await saveSupabaseAppState("용역비 기록 공유 동기화");
           return;
         }
-        if (toTimeValue(localAt) > toTimeValue(remoteAt) && isEditorSession()) {
-          setSyncBusy(false);
-          await saveSupabaseAppState("로컬 최신 상태 동기화");
-          return;
-        }
       }
     } catch (error) {
-      console.warn("Supabase 동기화 실패", error);
-      setSyncStatus("bad", "동기화 실패", "Supabase 연결에 실패했습니다. 현재 화면은 브라우저 저장값으로 계속 작동합니다.");
+      console.warn("Supabase 동기화 실패");
+      setSyncStatus("bad", "동기화 실패", lastLocalSaveOk ? "DB 조회에 실패했습니다. 화면과 브라우저 저장값을 유지합니다." : "DB 조회와 브라우저 저장을 확인할 수 없습니다. 창을 닫지 말고 JSON 백업을 내려받아 주세요.");
     } finally {
       setSyncBusy(false);
     }
@@ -2368,6 +2441,18 @@
 
     $("syncNow")?.addEventListener("click", () => syncFromSupabase({ forcePull: false }));
     $("retrySupabaseSave")?.addEventListener("click", () => saveSupabaseAppState(lastFailedSupabaseReason || "저장 재시도"));
+    $("reloadRemoteState")?.addEventListener("click", async () => {
+      if (!requireEditor("DB 최신값 불러오기")) return;
+      if (!confirm("현재 화면을 JSON 백업으로 내려받은 뒤 DB 최신값을 불러옵니다. 현재의 미반영 변경은 자동 병합되지 않습니다. 계속할까요?")) return;
+      exportBackup();
+      clearTimeout(supabaseSaveTimer);
+      await syncFromSupabase({ forcePull: true });
+    });
+    window.addEventListener("beforeunload", event => {
+      if (!isEditorSession() || (lastLocalSaveOk && !localStateLoadFailed && !cloudDirty && !cloudConflict)) return;
+      event.preventDefault();
+      event.returnValue = "";
+    });
 
     if (!getSupabaseClient()) {
       setSyncStatus("warn", "브라우저 저장", "Supabase 라이브러리를 아직 불러오지 못해 localStorage로 작동 중입니다.");
@@ -3112,7 +3197,7 @@ function refreshActiveOrderAnalysisSummary() {
       name,
       qty: cleanNumber(item.qty),
       unit: String(item.unit || "unit"),
-      unitPrice: cleanNumber(item.unitPrice || def?.cost || 0),
+      unitPrice: cleanNumber(item.unitPrice ?? def?.cost ?? 0),
       status: String(item.status || "발주중"),
       memo: String(item.memo || ""),
       orderDate,
@@ -3952,6 +4037,7 @@ function refreshActiveOrderAnalysisSummary() {
   }
 
   function completePurchaseGroup(groupKey) {
+    if (!requireEditor("처리완료 내역 저장")) return;
     // Step 5: save the completed-record copy and hide only the matching rendered purchase group. Do not mutate original purchase rows.
     const formKey = String(groupKey || purchaseCompleteDraftKey || "");
     purchaseCompleteDraftKey = formKey;
@@ -4015,10 +4101,7 @@ function refreshActiveOrderAnalysisSummary() {
       hiddenEligible
     );
     console.info("[purchaseComplete:step5:record-saved-and-hidden]", {
-      groupKey: formKey,
-      stableId: sourcePurchaseId || null,
       duplicateCount: stableInfo.duplicateCount,
-      record,
       originalPurchaseMutated: false,
       hiddenEligible,
       hiddenAdded,
@@ -4045,7 +4128,6 @@ function refreshActiveOrderAnalysisSummary() {
     renderPurchaseStatus();
     showWmsStatus("처리완료 내역 1건을 삭제했습니다. 발주현황 숨김 상태는 유지됩니다.", true);
     console.info("[purchaseComplete:step6:record-removed]", {
-      recordId: id,
       hiddenIdsKept: true,
       originalPurchaseMutated: false,
     });
@@ -4089,6 +4171,7 @@ function refreshActiveOrderAnalysisSummary() {
   }
 
   function downloadPurchaseCompletedCsv() {
+    if (!requireEditor("처리완료 내역 다운로드")) return;
     const records = Array.isArray(state.purchaseCompletedRecords)
       ? state.purchaseCompletedRecords.map(normalizePurchaseCompletedRecord).filter(Boolean)
       : [];
@@ -4836,9 +4919,9 @@ function refreshActiveOrderAnalysisSummary() {
       const sku = row.querySelector(".moveSku")?.value || "";
       const priceValue = row.querySelector(".moveUnitPrice")?.value?.trim() ?? "";
       const input = {
-        pallets: cleanNumber(row.querySelector(".movePallets")?.value),
-        boxes: cleanNumber(row.querySelector(".moveBoxes")?.value),
-        eaches: cleanNumber(row.querySelector(".moveEaches")?.value)
+        pallets: Number(row.querySelector(".movePallets")?.value || 0),
+        boxes: Number(row.querySelector(".moveBoxes")?.value || 0),
+        eaches: Number(row.querySelector(".moveEaches")?.value || 0)
       };
       return { sku, input, units: sku ? unitsFromInput(sku, input) : 0, unitPriceRaw: priceValue, unitPrice: priceValue === "" ? null : cleanNumber(priceValue) };
     });
@@ -4916,13 +4999,14 @@ function refreshActiveOrderAnalysisSummary() {
         const safety = safetyStatus(sku, item.units);
         const isZeroOrNegative = item.units <= 0;
         const unitsClass = item.units < 0 ? "negative" : item.units === 0 ? "zero-stock-number" : "";
-        const stockKind = isZeroOrNegative ? "danger" : safety?.isLow ? "low" : isCandyFiveSku(sku) && !safety ? "unset" : "safe";
+        const hasStockBasis = Number.isFinite(safety?.threshold) && safety.threshold > 0;
+        const stockKind = isZeroOrNegative ? "danger" : !hasStockBasis ? "unset" : safety?.isLow ? "low" : "safe";
         const stockLabel = item.units < 0
           ? "마이너스 재고"
           : item.units === 0
             ? "재고 0개"
             : safety ? (safety.isLow ? "안전재고 미만" : "안전재고 이상") : "현재 재고";
-        const stockRatio = safety?.threshold ? Math.min(100, Math.max(0, Math.round(((item.units || 0) / safety.threshold) * 100))) : (item.units <= 0 ? 0 : 100);
+        const stockRatio = hasStockBasis ? Math.min(100, Math.max(0, Math.round(((item.units || 0) / safety.threshold) * 100))) : 0;
         const safetyText = item.units <= 0 ? `
           <div class="danger-stock-badge">재고 없음</div>
           ${safety?.thresholdText ? `<div class="danger-stock-detail">기준 ${escapeHtml(safety.thresholdText)}</div>` : isCandyFiveSku(sku) ? '<span class="muted">안전재고 미설정</span>' : ""}
@@ -4944,7 +5028,7 @@ function refreshActiveOrderAnalysisSummary() {
                   <strong>${escapeHtml(formatStock(sku, item.units))}</strong>
                   <span>${escapeHtml(stockLabel)}</span>
                 </div>
-                <div class="stock-meter" aria-hidden="true"><i style="width:${stockRatio}%"></i></div>
+                <div class="stock-meter${hasStockBasis ? "" : " basis-unknown"}" aria-hidden="true"><i style="width:${stockRatio}%"></i></div>
               </div>
             </td>
             <td data-label="총 낱개" class="${unitsClass}">${number(item.units)}</td>
@@ -4994,7 +5078,8 @@ function refreshActiveOrderAnalysisSummary() {
     setText("unknownCostInfo", `상품/박스 원가 미입력 ${unknown}개 품목 제외`);
     const lowItems = lowSafetyItems();
     setText("lowStockCount", `${number(lowItems.length)}개`);
-    setText("lowStockInfo", lowItems.length ? `${lowItems.slice(0, 2).map((item) => item.sku).join(", ")}${lowItems.length > 2 ? " 외" : ""}` : "모든 품목 안전권");
+    const unsetSafetyCount = getActiveInventorySkus().filter(sku => !INVENTORY_DEFS[sku]?.isBox && !safetyStatus(sku, state.stock[sku]?.units || 0)).length;
+    setText("lowStockInfo", lowItems.length ? `${lowItems.slice(0, 2).map((item) => item.sku).join(", ")}${lowItems.length > 2 ? " 외" : ""}` : unsetSafetyCount ? `기준 설정 품목 안전권 · 미설정 ${number(unsetSafetyCount)}품목` : "모든 품목 안전권");
 
     const now = new Date();
     const dayMs = 24 * 60 * 60 * 1000;
@@ -6215,7 +6300,28 @@ function refreshActiveOrderAnalysisSummary() {
     const isOutbound = direction === "out";
     const memo = ($("moveMemo")?.value || "").trim();
     const at = buildStockMoveAt($("moveDate")?.value || todayKey());
-    const rows = getStockMoveRows().filter((row) => row.sku && INVENTORY_DEFS[row.sku] && row.units > 0);
+    const enteredRows = getStockMoveRows();
+    const invalidRow = enteredRows.findIndex(row => {
+      const values = Object.values(row.input);
+      if (!values.some(value => value !== 0)) return false;
+      return !row.sku || !INVENTORY_DEFS[row.sku] || values.some(value => !Number.isSafeInteger(value) || value < 0) || !Number.isSafeInteger(row.units) || row.units <= 0;
+    });
+    if (invalidRow !== -1) {
+      alert(`${invalidRow + 1}행 수량을 확인하세요. 파렛·완박스·낱개는 0 이상의 안전한 정수만 입력할 수 있습니다. 전체 입력을 보류했습니다.`);
+      return;
+    }
+    const rows = enteredRows.filter(row => row.sku && row.units > 0);
+    const totals = new Map();
+    for (const row of rows) {
+      const sku = canonicalSku(row.sku);
+      const total = (totals.get(sku) || 0) + row.units;
+      const current = Number(state.stock[sku]?.units || 0);
+      if (!Number.isSafeInteger(total) || !Number.isSafeInteger(current) || !Number.isSafeInteger(current + (isOutbound ? -total : total))) {
+        alert("합산 수량 또는 적용 후 재고가 안전한 정수 범위를 벗어납니다. 전체 입력을 보류했습니다.");
+        return;
+      }
+      totals.set(sku, total);
+    }
 
     if (!rows.length) {
       alert(stockMoveDirectionLabel(direction) + "할 수량을 한 줄 이상 넣어주세요.");
@@ -6449,7 +6555,7 @@ let outboundTrendDiagnostics = createEmptyOutboundTrendDiagnostics();
 function createEmptyOutboundTrendDiagnostics() {
   return {
     generatedAt: new Date().toISOString(),
-    cacheVersion: "reborn-add-elvan-truffle-900g-01",
+    cacheVersion: "reborn-full-audit-inventory-bar-fix-01",
     functionCalled: {
       collect: false,
       stockout: false,
@@ -9709,6 +9815,7 @@ function openInventoryItemDetail(sku) {
     if (isCandyFiveSku(sku)) {
       if (!Number.isSafeInteger(units) || units <= 0) return { size: "none", needCheck: "신규 캔디 상품 포장 수량 확인 필요" };
       if (sku === "엘반 트러플초콜렛 900g") return { size: units <= 7 ? "small" : units === 8 ? "none" : units <= 16 ? "medium" : "large" };
+      if (sku === "엘반 트러플초콜렛 500g") return { size: units <= 6 ? "small" : units <= 9 ? "medium" : units === 10 ? "none" : "large" };
       if (units % def.unitsPerBox === 0) return { size: "none" };
       if (sku === "비타캔디 100g") {
         if (units <= 6) return { size: "small" };
@@ -9716,7 +9823,6 @@ function openInventoryItemDetail(sku) {
         if (units <= 71) return { size: "large" };
         return { size: "none" };
       }
-      if (sku === "엘반 트러플초콜렛 500g") return { size: units <= 6 ? "small" : units <= 9 ? "medium" : "large" };
       const mediumLimit = sku === "커피캔디 175g" ? 23 : sku === "커피캔디 통 612.5g" ? 5 : 11;
       return { size: units <= mediumLimit ? "medium" : "large" };
     }
@@ -9980,8 +10086,8 @@ function openInventoryItemDetail(sku) {
       try { return JSON.parse(localStorage.getItem(ORDER_CACHE_KEY) || "null"); } catch { return null; }
     })());
     if (!analysis) return;
-    if (!lastOrderAnalysis && analysis.deductions.some(({ sku }) => isNurungjiBox12Sku(sku))) {
-      const message = "누룽지 완박스 규격이 12개입으로 변경되었습니다. 저장된 분석 결과는 적용할 수 없습니다. 아직 적용하지 않은 엑셀 파일을 현재 버전에서 다시 분석해주세요. 이미 적용한 파일은 재적용하지 마세요.";
+    if (!lastOrderAnalysis && analysis.deductions.some(({ sku }) => isNurungjiBox12Sku(sku) || sku === "엘반 트러플초콜렛 500g")) {
+      const message = "누룽지 규격 또는 500g 포장 기준이 변경되었습니다. 저장된 분석 결과는 적용할 수 없습니다. 아직 적용하지 않은 엑셀 파일을 현재 버전에서 다시 분석해주세요. 이미 적용한 파일은 재적용하지 마세요.";
       setText("excelNotice", message);
       alert(message);
       return;
@@ -10042,7 +10148,7 @@ function openInventoryItemDetail(sku) {
 
   function exportBackup() {
     if (!requireEditor("백업 파일 받기")) return;
-    const payload = { exportedAt: new Date().toISOString(), state };
+    const payload = { exportedAt: new Date().toISOString(), appVersion: window.__REBORN_LOADED_SCRIPT_VERSION__, backupFormat: 1, state };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -10054,6 +10160,26 @@ function openInventoryItemDetail(sku) {
     URL.revokeObjectURL(url);
   }
 
+  function validateBackupState(imported) {
+    const object = value => value && typeof value === "object" && !Array.isArray(value);
+    if (!object(imported) || !object(imported.stock) || !object(imported.pallets) || !Array.isArray(imported.history)) throw new Error("재고·파렛·이력이 포함된 전체 백업만 복구할 수 있습니다.");
+    if (imported.version !== undefined && ![1, 2].includes(imported.version)) throw new Error("지원하지 않는 상태 버전입니다.");
+    const missing = Object.keys(INVENTORY_DEFS).filter(sku => !object(imported.stock[sku]));
+    if (missing.length) throw new Error(`품목 ${missing.length}개의 재고가 누락됐습니다. 구버전·부분 백업은 자동 복구하지 않습니다.`);
+    for (const [sku, item] of Object.entries(imported.stock)) {
+      if (!INVENTORY_DEFS[sku]) throw new Error("알 수 없는 품목이 포함됐습니다. 별도 대조가 필요합니다.");
+      const fields = ["units", "pallets", "boxes", "eaches"].filter(key => Object.hasOwn(item, key));
+      if (!fields.length || fields.some(key => typeof item[key] !== "number" || !Number.isSafeInteger(item[key])) || !Number.isSafeInteger(storedStockUnitsForSku(sku, item))) throw new Error("유효하지 않은 재고 수량이 있습니다.");
+    }
+    if (Object.keys(INITIAL_PALLETS).some(key => !Object.hasOwn(imported.pallets, key))) throw new Error("파렛 값이 누락됐습니다.");
+    if (Object.values(imported.pallets).some(value => typeof value !== "number" || !Number.isSafeInteger(value))) throw new Error("파렛 수량을 확인해야 합니다.");
+    for (const key of ["orderStatus", "purchaseCompletedRecords", "purchaseCompletedHiddenIds", "returnAdjustments", "appliedOrderFiles", "adminActionLogs", "orderStats"]) {
+      if (Object.hasOwn(imported, key) && !Array.isArray(imported[key])) throw new Error("이력 목록 형식이 올바르지 않습니다.");
+    }
+    if (imported.productCosts && (!object(imported.productCosts) || Object.values(imported.productCosts).some(value => typeof value !== "number" || !Number.isFinite(value) || value < 0))) throw new Error("원가 형식이 올바르지 않습니다.");
+    return imported;
+  }
+
   async function importBackup(event) {
     if (!requireEditor("백업 파일 불러오기")) {
       if (event?.target) event.target.value = "";
@@ -10062,18 +10188,22 @@ function openInventoryItemDetail(sku) {
     const file = event.target.files?.[0];
     if (!file) return;
     try {
+      if (file.size > 20 * 1024 * 1024) throw new Error("백업 파일은 20MB 이하로 선택하세요.");
       const text = await file.text();
       const parsed = JSON.parse(text);
-      const imported = parsed.state || parsed;
-      if (!imported.stock || !imported.pallets) throw new Error("invalid backup");
-      addBackup("백업 불러오기 전 자동 백업");
-      state = normalizeState({ ...createInitialState(), ...imported });
+      const imported = validateBackupState(parsed.state || parsed);
+      const changed = Object.keys(INVENTORY_DEFS).filter(sku => state.stock[sku]?.units !== storedStockUnitsForSku(sku, imported.stock[sku])).length;
+      if (!confirm(`전체 백업 복구: 재고 변경 ${changed}품목 · 이력 ${imported.history.length}건\n현재 데이터를 교체합니다. 사진 파일은 이 백업으로 복구되지 않습니다. 계속할까요?`)) return;
+      if (!addBackup("백업 불러오기 전 자동 백업", { cloud: false })) throw new Error("복구 전 로컬 백업에 실패했습니다. 현재 자료를 JSON으로 내려받고 저장 공간을 확인하세요.");
+      state = normalizeState(imported);
       applyLaborCostRecordsAfterStateReplace(imported, "importBackup labor sync");
       addAdminActionLog("데이터 복구/import", { itemName: file.name || "백업 파일", memo: "백업 파일 불러오기", source: "importBackup" });
       saveState("백업 파일 불러오기");
       event.target.value = "";
-    } catch {
-      alert("백업 파일 형식이 올바르지 않습니다.");
+    } catch (error) {
+      alert("백업을 불러오지 않았습니다. " + (error instanceof SyntaxError ? "JSON 형식이 올바르지 않습니다." : error.message || "파일을 확인하세요."));
+    } finally {
+      event.target.value = "";
     }
   }
 
