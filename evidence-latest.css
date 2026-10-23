@@ -1,0 +1,68 @@
+body.workspace-ui #workspace-evidence { max-width: none; }
+#evidenceCard .evidence-toolbar { gap: 12px; }
+#evidenceCard .evidence-toolbar > div { gap: 8px; }
+#evidenceCard .evidence-viewbar { display: flex; justify-content: space-between; align-items: end; flex-wrap: wrap; gap: 12px; margin: 18px 0; border-bottom: 1px solid #d9e1de; padding-bottom: 12px; }
+#evidenceCard [role="tablist"] { display: flex; gap: 4px; flex-wrap: wrap; }
+#evidenceCard [role="tab"] { border-color: transparent; border-radius: 4px; }
+#evidenceCard [role="tab"][aria-selected="true"] { background: #e7f0ec; color: #164e3a; border-color: #8aa99a; font-weight: 700; }
+#evidenceCard .evidence-viewbar > label { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+#evidenceCard .evidence-viewbar select { padding: 8px; border: 1px solid #b7c7c0; border-radius: 4px; background: #fff; color: #234338; }
+#evidenceCard .evidence-category-heading { margin: 12px 0; }
+#evidenceCard .evidence-latest-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
+#evidenceCard .evidence-latest-filters > label { flex: 0 1 145px; min-width: 0; }
+#evidenceCard .evidence-latest-filters > label:has(select[name="type"]), #evidenceCard .evidence-latest-filters > label:has(select[name="review"]) { flex-basis: 120px; }
+#evidenceCard .evidence-latest-filters #evidenceSearchField { flex: 1 1 170px; max-width: 260px; }
+#evidenceCard .evidence-latest-filters > button { min-height: 40px; }
+#evidenceCard #evidenceStatus { font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+#evidenceCard .evidence-reading-layout { display: grid; grid-template-columns: minmax(340px,.85fr) minmax(0,1.5fr); gap: 22px; align-items: start; }
+#evidenceCard .evidence-list-pane { min-width: 0; }
+#evidenceCard .evidence-latest-list { display: grid; grid-template-columns: minmax(0,1fr); gap: 0; margin: 0; max-height: min(900px,calc(100dvh - 400px)); min-height: 160px; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; border-top: 1px solid #d9e1de; border-bottom: 1px solid #d9e1de; }
+#evidenceCard .evidence-latest-list .evidence-item { display: grid; grid-template-columns: 64px minmax(0,1fr); align-items: start; padding: 12px 8px; gap: 12px; border: 0; border-bottom: 1px solid #e0e7e4; border-radius: 0; min-width: 0; background: #fff; }
+#evidenceCard .evidence-latest-list .evidence-item:hover { background: #f4f7f6; }
+#evidenceCard .evidence-latest-list .evidence-item[aria-current="true"] { background: #edf4f0; box-shadow: inset 3px 0 #286851; }
+#evidenceCard .evidence-latest-list .evidence-thumb { width: 64px; height: 82px; aspect-ratio: auto; border: 1px solid #e1e7e4; }
+#evidenceCard .evidence-latest-list .evidence-thumb span { padding: 5px; font-size: 10px; text-align: center; }
+#evidenceCard .evidence-latest-list .evidence-item > div:last-child { padding: 0; gap: 4px; }
+#evidenceCard .evidence-latest-list strong { font-size: 14px; line-height: 1.5; }
+#evidenceCard .evidence-latest-list time { font-size: 13px; font-weight: 600; }
+#evidenceCard .evidence-latest-list small { font-size: 11px; color: #66776e; overflow-wrap: anywhere; }
+#evidenceCard .evidence-item-note { white-space: pre-wrap; line-height: 1.5; max-height: 3em; overflow: hidden; }
+#evidenceCard .evidence-pagination { margin-top: 12px; gap: 10px; }
+#evidenceCard .evidence-pagination span { font-size: 12px; }
+#evidenceCard .evidence-reader { position: sticky; top: 20px; min-width: 0; border-left: 1px solid #d9e1de; padding-left: 22px; }
+#evidenceReaderEmpty { min-height: 460px; margin: 0; display: grid; place-items: center; color: #68786e; font-size: 14px; background: #f3f6f4; }
+.evidence-detail-dialog .evidence-reader-navigation { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 8px 0 12px; }
+.evidence-detail-dialog .evidence-reader-navigation button { width: 38px; height: 38px; padding: 8px; display: grid; place-items: center; }
+.evidence-detail-dialog .evidence-reader-navigation span { min-width: 90px; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; }
+.evidence-detail-dialog #evidenceDetailDates { margin: 6px 0 0; color: #65746d; font-size: 12px; }
+.evidence-detail-dialog { width: min(1120px,calc(100% - 28px)); }
+.evidence-detail-dialog.is-embedded[open] { display: block; position: static; width: 100%; max-width: none; margin: 0; padding: 0 10px 6px 0; border: 0; border-radius: 0; max-height: calc(100dvh - 100px); overflow: auto; background: transparent; }
+.evidence-detail-dialog.is-embedded .evidence-dialog-heading { margin-bottom: 8px; }
+.evidence-detail-dialog.is-embedded h2 { font-size: 17px; }
+.evidence-detail-dialog .evidence-image-stage { height: min(64dvh,760px); min-height: 280px; display: block; }
+.evidence-detail-dialog .evidence-image-surface { position: relative; margin: auto; }
+.evidence-detail-dialog .evidence-image-surface img { position: absolute; left: 50%; top: 50%; max-width: none; max-height: none; transform-origin: center; }
+.evidence-detail-dialog .evidence-fields { margin-top: 16px; grid-template-columns: repeat(2,minmax(0,1fr)); }
+#evidenceCard #evidenceCategories, #evidenceCard #evidencePartnerTools { max-width: 920px; }
+@media (max-width: 1199px) {
+  #evidenceCard .evidence-latest-filters { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); }
+  #evidenceCard .evidence-latest-filters #evidenceSearchField { max-width: none; }
+  #evidenceCard .evidence-latest-filters > button { justify-self: start; }
+}
+@media (max-width: 1199px) {
+  #evidenceCard .evidence-reading-layout { display: block; }
+  #evidenceCard .evidence-reader { display: none; }
+  #evidenceCard .evidence-latest-list { max-height: none; overflow: visible; }
+  #evidenceCard .evidence-latest-list .evidence-item { grid-template-columns: 76px minmax(0,1fr); scroll-margin-top: 76px; }
+  #evidenceCard .evidence-latest-list .evidence-thumb { width: 76px; height: 94px; }
+}
+@media (max-width: 700px) {
+  #evidenceCard .evidence-latest-filters { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  #evidenceCard #evidenceSearchField { grid-column: 1 / -1; }
+  #evidenceCard .evidence-latest-filters input, #evidenceCard .evidence-latest-filters select { font-size: 13px; padding: 8px 6px; }
+  #evidenceCard .evidence-toolbar > div { gap: 7px; }
+  #evidenceCard .evidence-toolbar button { font-size: 12px; white-space: normal; }
+  #evidenceCard .evidence-latest-list .evidence-item { gap: 10px; padding: 12px 4px; }
+  #evidenceCard .evidence-pagination { gap: 8px; }
+  .evidence-detail-dialog .evidence-image-stage { min-height: 240px; height: 52dvh; }
+}
