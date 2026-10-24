@@ -45,3 +45,11 @@ body.workspace-ui #page-wms #inventoryTable .stock-status-top span { white-space
   body.workspace-ui #page-wms #stockMoveCard .move-row .field:first-child { grid-column: 1 / -1; }
   body.workspace-ui #page-wms #stockMoveCard .move-row .icon-btn { justify-self: end; }
 }
+body.workspace-ui.admin-active #workspace-management #syncCard:not(.sync-login-only) .sync-grid {
+  display: grid !important;
+  min-width: 0;
+}
+#workspace-management #retryLocalPersistence {
+  min-height: 40px;
+  padding: 10px 12px;
+}
